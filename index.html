@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<link rel="icon" href="data:," />
+<title>USS Tenacity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="mode-info view-deck">
+<div id="app">
+  <header id="stats"></header>
+  <div id="topbar">
+    <button id="alertPill" class="alert-pill"></button>
+    <div class="seg"><button id="btnWindow" class="on">WINDOW</button><button id="btnFull">FULL</button></div>
+    <button id="btnView" class="lcars">SPACE ▸</button>
+  </div>
+  <main id="stage">
+    <canvas id="deck"></canvas>
+    <canvas id="space"></canvas>
+    <div id="sceneTag"></div>
+    <div id="deckTag"></div>
+    <div id="taskPill" hidden></div>
+    <div id="redBanner" hidden><span>RED ALERT</span><button id="watchBattle">WATCH BATTLE ▸</button></div>
+    <div id="battleHud" hidden><div class="row"><span>JEM'HADAR FIGHTER</span><b id="enemyPct"></b></div><div class="bar"><i id="enemyBar"></i></div><div id="bridgeOrders"></div></div>
+    <div id="toasts"></div>
+    <div id="zoomCtl"><button data-z="+">+</button><button data-z="-">−</button></div>
+    <div id="liftPanel" class="modal" hidden><div class="card"><h3>TURBOLIFT</h3><div id="liftList"></div><button class="close" data-close="liftPanel">CLOSE</button></div></div>
+    <div id="loading"><div>USS TENACITY · NCC-31671</div><div class="bar"><i id="loadBar"></i></div><small>Loading deck plates…</small></div>
+  </main>
+  <nav id="playbar">
+    <div id="chipsPlay" class="chips"></div>
+    <div class="sheetBtns"><button data-sheet="orders">ORDERS</button><button data-sheet="duty">DUTY <b id="dutyBadge"></b></button><button data-sheet="crew">CREW</button><button data-sheet="log">LOG</button></div>
+  </nav>
+  <section id="panels">
+    <div class="sheetHead"><span id="sheetTitle"></span><button id="sheetClose">✕</button></div>
+    <div class="panel" id="p-orders"><h4>CAPTAIN'S ORDERS</h4><div id="ordersHead"></div><div class="prog"><i id="ordersProg"></i></div><p id="ordersWhy"></p></div>
+    <div class="panel" id="p-status"><p id="statusTxt"></p></div>
+    <div class="panel" id="p-chips"><h4>STATIONS · <span id="deckName"></span></h4><div id="chipsInfo" class="chips"></div></div>
+    <div class="panel" id="p-duty"><h4>DUTY LIST</h4><div id="dutyBody"></div></div>
+    <div class="panel" id="p-crew"><h4>COMMAND CREW <small id="crewState"></small></h4><div id="crewBar"></div><div id="supBadge"></div></div>
+    <div class="panel" id="p-log"><h4>SHIFT LOG</h4><ol id="log"></ol></div>
+  </section>
+</div>
+<div id="report" class="modal" hidden><div class="card"><h3>SHIFT REPORT</h3><div id="reportBody"></div><button class="close" data-close="report">RESUME DUTY</button></div></div>
+<div id="debug" hidden></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
