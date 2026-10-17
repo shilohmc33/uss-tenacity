@@ -76,13 +76,10 @@ function drawLt(ctx, t) {
   }
   const px = L.x * DW, py = L.y * DH;
   ctx.fillStyle = "rgba(20,10,0,0.38)"; ctx.beginPath(); ctx.ellipse(px, py - 1, 13, 4.2, 0, 0, 6.29); ctx.fill();
-  const repairing = L.mode === "repair", seated = L.mode === "use" && L.node === "mess";
+  const repairing = L.mode === "repair";
   const working = repairing || (L.mode === "use" && nd && !nd.rest);
   const dir = L.dir, ab = Math.floor(t / 0.45) % 2 === 0 ? "-a" : "-b";
-  if (seated && IMG["crew-social"]) {
-    const sp = socialPose(t), f = SOCIAL_FRAMES[(dir === "up" ? "up" : "down") + "-" + sp.loop + "-" + sp.frame];
-    drawFrame(ctx, IMG["crew-social"], f, px, py, FIG_H / f.refH); return;
-  }
+  // Seated / eating / talking poses removed for now: standing animations only.
   if (repairing && IMG["crew-repair"]) { const f = REPAIR_FRAMES[dir + ab]; drawFrame(ctx, IMG["crew-repair"], f, px, py, FIG_H / f.refH); return; }
   if (working && IMG["crew-work"]) { const f = WORK_FRAMES[dir + ab]; drawFrame(ctx, IMG["crew-work"], f, px, py, FIG_H / f.refH); return; }
   const idle = !L.moving;
@@ -93,7 +90,6 @@ function drawLt(ctx, t) {
   const s = FIG_H / f.refH, bob = -Math.abs(Math.cos(L.walkPhase)) * 1.2 * L.swingAmp;
   const breath = idle ? Math.sin(t * 1.7) * 0.7 : 0, sway = idle ? Math.sin(t * 0.45) * 0.8 : 0;
   drawFrame(ctx, IMG["crew-atlas"], f, px + sway, py + bob + breath, s);
-  if (L.node === "bar" && L.mode === "use") speech(ctx, px + 14, py - 74, t);
 }
 function zzz(ctx, x, y, t) { ctx.fillStyle = "rgba(200,220,255,0.8)"; ctx.font = "bold 11px Antonio, sans-serif"; for (let i = 0; i < 3; i++) { const p = (t * 0.5 + i / 3) % 1; ctx.globalAlpha = 1 - p; ctx.fillText("z", x + p * 10, y - p * 26); } ctx.globalAlpha = 1; }
 function speech(ctx, x, y, t) { if ((t % 6) > 3.5) return; ctx.fillStyle = "rgba(255,240,210,0.92)"; rr(ctx, x, y, 26, 14, 6); ctx.fill(); ctx.fillStyle = "#333"; const n = 1 + Math.floor(t * 3) % 3; ctx.fillText("•".repeat(n), x + 6, y + 11); }

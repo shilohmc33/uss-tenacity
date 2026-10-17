@@ -184,6 +184,6 @@ export function socialPose(t) {
   const k = cyc - 6; return { loop: "talk", frame: k < 1.2 ? 0 : k < 2.4 ? 1 : k < 3.8 ? 2 : k < 4.8 ? 1 : 0 };
 }
 export const IMAGES = ["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
-  "crew-atlas", "crew-work", "crew-repair", "crew-social", "crew-captain", "crew-engineer", "crew-science", "crew-security",
+  "crew-atlas", "crew-work", "crew-repair", "crew-captain", "crew-engineer", "crew-science", "crew-security",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
   "ship-tenacity", "ship-jemhadar"];
