@@ -1,21 +1,33 @@
 // Boot, main loop (delta time, pause when hidden), input, view modes, save/load, debug.
 import { G, resetState, saveGame, loadGame, wipeSave } from "./state.js";
-import { preload, missing } from "./assets.js";
-import { on, log, setStatus } from "./bus.js";
+import { preload, missing, IMG } from "./assets.js";
+import { applyWalkMasks, snapToFloor } from "./path.js";
+import { PACE_RT, playerInput } from "./pacing.js";
+import { on, log, shipNews } from "./bus.js";
+import { ltNote } from "./crew.js";
 import { stepSim, catchUp } from "./sim.js";
+import { tickTren, tren, trenTo } from "./npc.js";
 import { drawDeck, resizeCam, hitTest, screenToDeck, setZoom, panBy, cam, deckFx } from "./render/deck.js";
 import { drawSpace } from "./render/space.js";
-import { buildHud, wireHud, updateHud, openLiftPanel, showReport, closeSheet, renderLog } from "./ui/hud.js";
+import { buildHud, wireHud, updateHud, openLiftPanel, closeLiftPanel, showReport, closeSheet, renderLog } from "./ui/hud.js";
 import { sendTo, sendUse, sendRepair, sendLiftPanel, retrigger } from "./crew.js";
 import { setupDebug } from "./debug.js";
+import { settleInflightTorps } from "./battle.js";
 
 const $ = s => document.querySelector(s);
 const deckCv = $("#deck"), spaceCv = $("#space"), dctx = deckCv.getContext("2d"), sctx = spaceCv.getContext("2d");
 export const app = { view: "deck", mode: "info", timeScale: 1, paused: false };
+const PLAY_ZOOM = 1.8, INFO_ZOOM = 1.45, LAND_ZOOM = 1.6;
+// landscape phone (NEW-04): the stage is now ~360 px tall; frame a little wider so the 2x Lt is ~1/3 of it
+const landPhone = () => matchMedia("(orientation: landscape) and (max-height: 500px)").matches;
+const modeZoom = () => app.mode === "play" ? (landPhone() ? LAND_ZOOM : PLAY_ZOOM) : INFO_ZOOM;
+// any real input counts as the player being present (the night crew stands down)
+for (const ev of ["pointerdown", "keydown", "wheel"]) window.addEventListener(ev, () => playerInput(), { passive: true, capture: true });
 
 function resize() {
   const st = $("#stage"), w = st.clientWidth, h = st.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
   for (const c of [deckCv, spaceCv]) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  if (cam.prefZoom != null) cam.prefZoom = modeZoom();
   resizeCam(w, h);
   document.documentElement.style.setProperty('--pb', $("#playbar").offsetHeight + 'px');
 }
@@ -29,7 +41,7 @@ function setMode(m) {
   document.body.classList.toggle("mode-info", m === "info"); document.body.classList.toggle("mode-play", m === "play");
   $("#btnWindow").classList.toggle("on", m === "info"); $("#btnFull").classList.toggle("on", m === "play");
   closeSheet();
-  cam.zoom = m === "play" ? 2.3 : 2.0; cam.snap = true;
+  cam.prefZoom = modeZoom(); cam.zoom = cam.prefZoom; cam.snap = true;   // 2x characters: frame a wider slice of deck
   requestAnimationFrame(resize);
 }
 // ---------- input: tap / drag-pan / pinch / wheel ----------
@@ -79,13 +91,13 @@ $("#zoomCtl").onclick = e => { const b = e.target.closest("[data-z]"); if (b) se
 document.querySelectorAll("[data-sheet]").forEach(b => b.onclick = () => {
   const name = b.dataset.sheet, open = document.body.classList.contains("sheet-" + name);
   closeSheet();
-  if (!open) { document.body.classList.add("sheet-open", "sheet-" + name); $("#sheetTitle").textContent = b.textContent.replace(/\d+/g, "").trim(); }
+  if (!open) { document.body.classList.add("sheet-open", "sheet-" + name); $("#sheetTitle").textContent = name.toUpperCase(); }
 });
 $("#sheetClose").onclick = closeSheet;
 window.addEventListener("resize", resize);
 document.addEventListener("gesturestart", e => e.preventDefault());
 document.addEventListener("touchmove", e => { if (!e.target.closest("#panels,.chips,.card")) e.preventDefault(); }, { passive: false });
-on("fx", (k, d) => { if (k === "openLift") openLiftPanel(); else deckFx(k, d); });
+on("fx", (k, d) => { if (k === "openLift") openLiftPanel(); else if (k === "closeLift") closeLiftPanel(); else deckFx(k, d); });
 
 // ---------- loop ----------
 let last = performance.now(), saveT = 0, hudT = 0, rt = 0;
@@ -96,7 +108,7 @@ function frame(now) {
   let dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
   rt += dt;
   let simDt = dt * app.timeScale;
-  while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); simDt -= s; }
+  while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); simDt -= s; }
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }
   saveT += dt; if (saveT > 5) { saveT = 0; saveGame(); }
@@ -108,6 +120,8 @@ document.addEventListener("visibilitychange", () => {
   else {
     const gap = (Date.now() - hiddenAt) / 1000;
     if (hiddenAt && gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }
+    if (hiddenAt && gap > 600) PACE_RT.sessionT = 0;   // back after a real break = a new session (calm opening again)
+    playerInput();
     app.paused = false; last = performance.now();
   }
 });
@@ -116,24 +130,35 @@ window.addEventListener("pagehide", () => { if (!window.__noSave) saveGame(); })
 async function boot() {
   resize();
   await preload(p => { $("#loadBar").style.width = Math.round(p * 100) + "%"; });
+  const masks = applyWalkMasks(IMG);
   const params = new URLSearchParams(location.search);
-  if (params.has("reset")) wipeSave();
+  if (params.has("reset")) {
+    wipeSave();
+    // strip ?reset=1 so a refresh doesn't wipe the save again (keep ?debug=1)
+    const keep = new URLSearchParams(location.search); keep.delete("reset");
+    history.replaceState(null, "", location.pathname + (keep.toString() ? "?" + keep : "") + location.hash);
+  }
   const had = loadGame();
   if (!had) {
     resetState();
     log("Shift begins. The Lieutenant reports to Main Engineering — CDR Okafor's deck. The bridge has the ship; your post is below.", "comm");
-    setStatus("You are a junior engineer aboard the <b>USS Tenacity</b>. Tap consoles, faults, or open floor to send the Lieutenant. The officers run the ship.");
+    shipNews("Shift begins. The bridge officers have the ship; your post is the <b>deck</b>.");
+    ltNote("Reporting to <b>Main Engineering</b>. Tap a console, a fault, or open floor to send him.");
   }
+  if (had) settleInflightTorps();   // BUG-17
+  if (!G.lt.path && !G.lt.lift && G.lt.mode !== "use") snapToFloor(G.lt);   // saves from older walk grids
   buildHud(); wireHud();
   setMode(innerWidth >= 900 ? "info" : "play"); setView("deck");
   if (had && G.savedAt) {
     const gap = (Date.now() - G.savedAt) / 1000;
     if (gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }
   }
+  PACE_RT.sessionT = 0; PACE_RT.idleT = 0;   // a new session starts after any catch-up
   if (missing.length) log("Missing art (placeholders drawn): " + missing.join(", "), "fault");
+  if (masks.length < 5) console.warn("Walk masks missing for some decks; using fallback rects.");
   $("#loading").classList.add("done");
   if (params.has("debug")) setupDebug(app, { setView, setMode });
-  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger };
+  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger, PACE_RT, tren, trenTo };
   updateHud();
   requestAnimationFrame(t => { last = t; frame(t); });
 }

@@ -1,5 +1,8 @@
 // Static game data, ported from the Muse prototype (reference/game.html).
 // All deck coordinates are fractions of a 960x640 design plate.
+// Walkable floor comes from the painted walk masks assets/walk-<deck>.png (see tools/make-walk-masks.py, sampled into the
+// 60x40 grid by path.js). The base/blocks rectangles below are only a coarse fallback if a mask fails to load.
+// Node x,y = where the Lt's feet stand (always on mask floor); mx,my = what he faces / where markers sit.
 export const DW = 960, DH = 640;
 export const COLS = 60, ROWS = 40;
 const R = (x0, y0, x1, y1) => [x0, y0, x1, y1];
@@ -8,18 +11,18 @@ export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "loun
 export const DECKS = {
   bridge: {
     name: "Bridge", plate: "deck-bridge", glow: [0.50, 0.255, "140,180,255"],
-    lift: { x: 0.50, y: 0.165, mx: 0.50, my: 0.105 },
+    lift: { x: 0.49, y: 0.1625, mx: 0.49, my: 0.105 },
     base: [R(0.105, 0.055, 0.895, 0.60)],
     blocks: [R(0.40, 0.185, 0.60, 0.32), R(0.44, 0.345, 0.55, 0.455), R(0.27, 0.46, 0.44, 0.645), R(0.56, 0.46, 0.72, 0.645),
       R(0.06, 0.235, 0.225, 0.665), R(0.765, 0.235, 0.94, 0.65), R(0.315, 0.05, 0.385, 0.16), R(0.615, 0.05, 0.685, 0.16)],
     nodes: {
-      msd: { name: "Master Systems Display", chip: "Master Systems", x: 0.50, y: 0.333, mx: 0.50, my: 0.255 },
-      chair: { name: "Captain's Chair", chip: "Captain's Chair", x: 0.495, y: 0.485, mx: 0.495, my: 0.395 },
+      msd: { name: "Master Systems Display", chip: "Master Systems", x: 0.425, y: 0.3375, mx: 0.47, my: 0.26 },
+      chair: { name: "Captain's Chair", chip: "Captain's Chair", x: 0.495, y: 0.49, mx: 0.495, my: 0.395 },
     },
   },
   engineering: {
     name: "Engineering", plate: "deck-engineering", glow: [0.45, 0.30, "120,200,255"],
-    lift: { x: 0.875, y: 0.875, mx: 0.87, my: 0.795 },
+    lift: { x: 0.86, y: 0.875, mx: 0.855, my: 0.79 },
     base: [R(0.06, 0.03, 0.275, 0.30), R(0.095, 0.255, 0.79, 0.775), R(0.03, 0.775, 0.755, 0.975), R(0.755, 0.725, 0.98, 0.975)],
     blocks: [R(0.265, 0.115, 0.64, 0.44), R(0.315, 0.44, 0.615, 0.585), R(0.19, 0.31, 0.295, 0.60), R(0.615, 0.31, 0.715, 0.595),
       R(0.775, 0.055, 0.95, 0.725), R(0.695, 0.125, 0.765, 0.275), R(0.10, 0.11, 0.25, 0.20), R(0.06, 0.03, 0.275, 0.085),
@@ -27,59 +30,71 @@ export const DECKS = {
       R(0.69, 0.64, 0.78, 0.765), R(0.05, 0.38, 0.125, 0.76), R(0.06, 0.235, 0.115, 0.275), R(0.205, 0.235, 0.275, 0.275),
       R(0.03, 0.755, 0.29, 0.79), R(0.37, 0.755, 0.755, 0.79)],
     nodes: {
-      core: { name: "Warp Core Console", chip: "Warp Core", x: 0.45, y: 0.62, mx: 0.45, my: 0.50, system: "warpcore" },
-      shield: { name: "Shield Console", chip: "Shields", x: 0.305, y: 0.47, mx: 0.245, my: 0.47, system: "shields" },
-      torpbay: { name: "Torpedo Bay", chip: "Torpedo Bay", x: 0.745, y: 0.42, mx: 0.86, my: 0.42, system: "phasers" },
-      locker: { name: "Parts Locker", chip: "Parts Locker", x: 0.58, y: 0.945, mx: 0.58, my: 0.855 },
-      pads: { name: "Transporter Pads", chip: "Transporter", x: 0.175, y: 0.29, mx: 0.175, my: 0.19 },
+      core: { name: "Warp Core Console", chip: "Warp Core", x: 0.455, y: 0.59, mx: 0.455, my: 0.505, system: "warpcore" },
+      shield: { name: "Shield Console", chip: "Shields", x: 0.335, y: 0.50, mx: 0.29, my: 0.50, system: "shields" },
+      torpbay: { name: "Torpedo Bay", chip: "Torpedo Bay", x: 0.755, y: 0.42, mx: 0.86, my: 0.42, system: "phasers" },
+      locker: { name: "Parts Locker", chip: "Parts Locker", x: 0.58, y: 0.92, mx: 0.58, my: 0.85 },
+      pads: { name: "Transporter Pads", chip: "Transporter", x: 0.16, y: 0.27, mx: 0.16, my: 0.20 },
     },
   },
   medical: {
     name: "Medical", plate: "deck-medical", glow: [0.185, 0.475, "120,255,215"],
-    lift: { x: 0.495, y: 0.795, mx: 0.495, my: 0.85 },
+    lift: { x: 0.51, y: 0.7625, mx: 0.51, my: 0.83 },
     base: [R(0.105, 0.23, 0.35, 0.845), R(0.35, 0.44, 0.665, 0.775), R(0.665, 0.44, 0.875, 0.815), R(0.55, 0.23, 0.79, 0.315),
       R(0.595, 0.295, 0.67, 0.445), R(0.105, 0.76, 0.875, 0.865)],
     blocks: [R(0.115, 0.235, 0.295, 0.315), R(0.115, 0.335, 0.29, 0.41), R(0.11, 0.435, 0.28, 0.515), R(0.105, 0.55, 0.27, 0.64),
       R(0.10, 0.685, 0.255, 0.775), R(0.345, 0.29, 0.605, 0.695), R(0.685, 0.315, 0.875, 0.51), R(0.69, 0.575, 0.805, 0.695),
       R(0.86, 0.46, 0.96, 0.815), R(0.535, 0.03, 0.815, 0.225)],
     nodes: {
-      biobed: { name: "Biobed", chip: "Biobed", x: 0.305, y: 0.475, mx: 0.185, my: 0.475, lie: [0.185, 0.475], lieRot: -Math.PI / 2, rest: 10 },
+      biobed: { name: "Biobed", chip: "Biobed", x: 0.308, y: 0.4375, mx: 0.205, my: 0.435, lie: [0.205, 0.433], lieRot: -Math.PI / 2, lieLen: 150, rest: 10 },
     },
   },
   berthing: {
     name: "Berthing", plate: "deck-berthing", glow: [0.80, 0.16, "255,196,110"],
-    lift: { x: 0.615, y: 0.885, mx: 0.615, my: 0.815 },
+    lift: { x: 0.555, y: 0.89, mx: 0.555, my: 0.79 },
     base: [R(0.045, 0.385, 0.96, 0.515), R(0.735, 0.045, 0.955, 0.29), R(0.79, 0.29, 0.965, 0.905), R(0.44, 0.83, 0.80, 0.97)],
     blocks: [R(0.775, 0.095, 0.825, 0.235), R(0.835, 0.095, 0.925, 0.185), R(0.855, 0.315, 0.935, 0.405), R(0.875, 0.535, 0.94, 0.64),
       R(0.445, 0.82, 0.51, 0.94), R(0.705, 0.82, 0.775, 0.94)],
     nodes: {
-      bunk: { name: "Bunk", chip: "Bunk", x: 0.752, y: 0.16, mx: 0.80, my: 0.16, lie: [0.80, 0.165], rest: 6.5 },
+      bunk: { name: "Bunk", chip: "Bunk", x: 0.80, y: 0.2625, mx: 0.80, my: 0.16, lie: [0.80, 0.162], lieLen: 96, rest: 6.5 },
     },
   },
   lounge: {
     name: "Mess & Bar", plate: "deck-lounge", glow: [0.42, 0.27, "255,190,110"],
-    lift: { x: 0.145, y: 0.64, mx: 0.145, my: 0.555 },
+    lift: { x: 0.145, y: 0.6625, mx: 0.145, my: 0.555 },
     base: [R(0.25, 0.20, 0.815, 0.945), R(0.035, 0.45, 0.235, 0.745), R(0.235, 0.615, 0.285, 0.685)],
     blocks: [R(0.225, 0.205, 0.625, 0.36), R(0.25, 0.015, 0.645, 0.205), R(0.365, 0.415, 0.43, 0.485), R(0.495, 0.415, 0.56, 0.485),
       R(0.62, 0.41, 0.685, 0.48), R(0.37, 0.585, 0.435, 0.655), R(0.515, 0.58, 0.58, 0.65), R(0.66, 0.575, 0.725, 0.645),
       R(0.485, 0.73, 0.855, 0.955)],
     nodes: {
-      mess: { name: "Mess Table", chip: "Mess Table", x: 0.527, y: 0.515, mx: 0.527, my: 0.45, rest: 5, seatN: { x: 0.527, y: 0.408 } },
-      bar: { name: "Bar Counter", chip: "Bar Counter", x: 0.42, y: 0.345, mx: 0.42, my: 0.265, rest: 2.5 },
+      // standing high-top tables (v2 art): the Lt eats standing just north of the middle top-row table, facing it
+      mess: { name: "Mess Table", chip: "Mess Table", x: 0.525, y: 0.4125, mx: 0.521, my: 0.448, rest: 5, face: "down" },
+      bar: { name: "Bar Counter", chip: "Bar Counter", x: 0.4425, y: 0.3375, mx: 0.4425, my: 0.27, rest: 2.5 },
     },
   },
+};
+// Per-deck light on the crew (playtest-02 NEW-08 / S6). Retune here when the new deck art lands.
+//   tint:  "r,g,b" multiplied into crew sprites at strength a (0.10-0.15 = subtle cast of the room's light)
+//   The low-power darkening (power < 20) is applied after the characters, so it dims them with the deck.
+export const DECK_LIGHT = {
+  bridge:      { tint: "190,205,255", a: 0.10 },   // cool console light
+  engineering: { tint: "120,200,255", a: 0.12 },   // warp-core blue
+  medical:     { tint: "120,255,215", a: 0.13 },   // dim sickbay teal
+  berthing:    { tint: "255,196,110", a: 0.14 },   // warm amber cabin light
+  lounge:      { tint: "255,190,110", a: 0.15 },   // warm bar amber
 };
 export const NODEMAP = {};
 for (const d of DECK_ORDER) for (const [id, n] of Object.entries(DECKS[d].nodes)) { n.deck = d; n.id = id; NODEMAP[id] = n; }
 
+// Optional per-system repairPose: "kneel" (floor-level work) — default repair animation is "weld".
 export const SYSTEMS = {
-  warpcore: { name: "Warp Core", fault: "Warp core instability", deck: "engineering", x: 0.45, y: 0.62, mx: 0.45, my: 0.30, node: "core", dur: 6 },
-  shields: { name: "Shield Generator", fault: "Shield emitter failure", deck: "engineering", x: 0.305, y: 0.47, mx: 0.245, my: 0.47, node: "shield", dur: 5 },
-  phasers: { name: "Torpedo Launcher", fault: "Phaser misalignment", deck: "engineering", x: 0.745, y: 0.42, mx: 0.86, my: 0.20, node: "torpbay", dur: 5 },
-  eps: { name: "EPS Conduit", fault: "EPS fault — locker conduit", deck: "engineering", x: 0.47, y: 0.945, mx: 0.47, my: 0.83, node: null, dur: 5 },
-  coolant: { name: "Coolant Line", fault: "Coolant leak", deck: "engineering", x: 0.45, y: 0.62, mx: 0.565, my: 0.28, node: null, dur: 6 },
-  transporter: { name: "Transporter", fault: "Transporter buffer fault", deck: "engineering", x: 0.175, y: 0.29, mx: 0.175, my: 0.19, node: null, dur: 4 },
-  loader: { name: "Torpedo Loader", fault: "Torpedo loader jam", deck: "engineering", x: 0.745, y: 0.55, mx: 0.815, my: 0.575, node: null, dur: 4 },
+  warpcore: { name: "Warp Core", fault: "Warp core instability", deck: "engineering", x: 0.455, y: 0.59, mx: 0.45, my: 0.30, node: "core", dur: 6 },
+  shields: { name: "Shield Generator", fault: "Shield emitter failure", deck: "engineering", x: 0.335, y: 0.50, mx: 0.29, my: 0.47, node: "shield", dur: 5 },
+  phasers: { name: "Torpedo Launcher", fault: "Launcher misalignment", deck: "engineering", x: 0.755, y: 0.42, mx: 0.86, my: 0.20, node: "torpbay", dur: 5 },
+  eps: { name: "EPS Conduit", fault: "EPS fault — locker conduit", deck: "engineering", x: 0.47, y: 0.92, mx: 0.47, my: 0.83, node: null, dur: 5 },
+  coolant: { name: "Coolant Line", fault: "Coolant leak", deck: "engineering", x: 0.455, y: 0.59, mx: 0.565, my: 0.28, node: null, dur: 6 },
+  transporter: { name: "Transporter", fault: "Transporter buffer fault", deck: "engineering", x: 0.16, y: 0.27, mx: 0.175, my: 0.19, node: null, dur: 4 },
+  loader: { name: "Torpedo Loader", fault: "Torpedo loader jam", deck: "engineering", x: 0.755, y: 0.55, mx: 0.815, my: 0.575, node: null, dur: 4 },
 };
 export const OKAFOR_SHORT = { warpcore: "core", shields: "shield generator", phasers: "launcher", eps: "EPS conduit",
   coolant: "coolant line", transporter: "transporter", loader: "loader" };
@@ -110,7 +125,7 @@ export const OFFICERS = [
 ];
 
 export const CHAIR_LINES = [
-  "T'Ren, from the chair, without looking up: 'Probability, Lieutenant, is simply honesty with numbers attached.'",
+  "T'Ren, standing at the chair's shoulder, eyes still on the viewscreen: 'Probability, Lieutenant, is simply honesty with numbers attached.'",
   "T'Ren: 'The chair is heavier than it looks, Lieutenant. That is not a metaphor about mass.'",
   "T'Ren: 'You stand where I can see you, Lieutenant. That is not sentiment. It is supervision.'",
   "T'Ren: 'Every captain hears the ship differently. I hear her arithmetic.'",
@@ -124,7 +139,11 @@ export const BAR_LINES = [
 ];
 
 // ---- sprite atlases (harvested, per-frame anchors from the prototype) ----
-export const FIG_H = 67, LIE_LEN = 89, STEP_LEN = 39;
+// Characters are drawn at 2x (Shiloh, 2026-10-17): standing Lt ~134 design px tall (was 67). STEP_LEN is the
+// distance per walk half-cycle (scaled with the figure, slightly under 2x because walk speed went up 1.35x).
+// LIE_LEN is the 2x default lying length; beds that are shorter in the art clamp it with node.lieLen.
+export const FIG_H = 134, LIE_LEN = 178, STEP_LEN = 70;
+export const CHAR_SCALE = 2;
 export const CREW_FRAMES = {
   "down-idle": { x: 6, y: 6, w: 111, h: 372, ax: 54.8, ay: 372, refH: 372 },
   "down-stepA": { x: 157, y: 6, w: 132, h: 372, ax: 68.0, ay: 372, refH: 372 },
@@ -183,7 +202,63 @@ export function socialPose(t) {
   if (cyc < 6) { const d = cyc; return { loop: "drink", frame: d < 2.2 ? 0 : d < 2.9 ? 1 : d < 3.9 ? 2 : d < 4.5 ? 1 : 0 }; }
   const k = cyc - 6; return { loop: "talk", frame: k < 1.2 ? 0 : k < 2.4 ? 1 : k < 3.8 ? 2 : k < 4.8 ? 1 : 0 };
 }
+// ---- Lieutenant (v3 near-top-down set, sprites/lt_topdown_v3) ----
+// Sheet grid: 160x384 cells, columns up/down/right/left, one row per frame (A, M, B) per action in
+// sheet_layout.json order, feet anchored at (80,376), one shared scale for every frame. Standing height in the
+// cell is ~252px (walkM/talk rows measure 247-254), so refH = 252 renders the standing Lt at FIG_H (134) on screen.
+// Walk/idle, station work, eating, bar talk, kneel and weld all come from this sheet; only the berth/biobed
+// lying pose still uses CREW_FRAMES.lying from crew-atlas (v3 has no lying frame).
+export const LT2_CELL = { w: 160, h: 384, ax: 80, ay: 376 };
+export const LT2_DIRS = ["up", "down", "right", "left"];
+export const LT2_STAND_H = 252;
+export const LT2_LOOP = [0, 1, 2, 1];                  // A, M, B, M
+export const LT2_FRAME_T = { walk: 0.20, default: 0.22 }; // s/frame (walk is normally driven by walkPhase)
+export const LT2_IDLE = ["walk", 1];                    // standing idle = walk M (feet together, neutral)
+// Per-character sheets: character -> { sheet asset (assets/<key>.webp) -> actions in row order (3 rows each: A, M, B) }.
+// Every v3-format set shares the grid above (160x384, feet 80,376, cols up/down/right/left, A,M,B,M playback) and
+// the same draw scale (refH 252 -> FIG_H), so characters of matching height stand at matching size.
+// Adding a character = one asset + one entry here.
+export const CHAR_SHEETS = {
+  lt: { "lt-v3": ["walk", "talk", "eat", "computer", "kneel", "weld"] },      // sprites/lt_topdown_v3
+  tren: { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },  // sprites/tren_topdown_v1 (Captain T'Ren)
+};
+// CHAR_FRAMES[who][action][dir] = [A, M, B]; each frame also carries `img` (its sheet key).
+export const CHAR_FRAMES = {};
+for (const [who, sheets] of Object.entries(CHAR_SHEETS)) {
+  const F = CHAR_FRAMES[who] = {};
+  for (const [img, actions] of Object.entries(sheets)) actions.forEach((action, ai) => {
+    F[action] = {};
+    LT2_DIRS.forEach((dir, col) => {
+      F[action][dir] = [0, 1, 2].map(k => ({ img, x: col * LT2_CELL.w, y: (ai * 3 + k) * LT2_CELL.h,
+        w: LT2_CELL.w, h: LT2_CELL.h, ax: LT2_CELL.ax, ay: LT2_CELL.ay, refH: LT2_STAND_H }));
+    });
+  });
+}
+// back-compat names for the Lieutenant
+export const LT2_SHEETS = CHAR_SHEETS.lt;
+export const LT2_FRAMES = CHAR_FRAMES.lt;
+// time-driven A,M,B,M loop for any character
+export const charFrame = (who, action, dir, t) =>
+  CHAR_FRAMES[who][action][dir][LT2_LOOP[Math.floor(t / (LT2_FRAME_T[action] || LT2_FRAME_T.default)) % 4]];
+export const lt2Frame = (action, dir, t) => charFrame("lt", action, dir, t);
+
+// ---- Captain T'Ren on the Bridge (visual crew, not saved) ----
+// home = standing beside the Captain's Chair (starboard side, on the dais); stations = consoles she works.
+// All spots are on the bridge walk mask and clear of the Lt's stand spots (msd 0.425,0.3375 · chair 0.495,0.49).
+export const TREN = {
+  deck: "bridge",
+  home: { x: 0.578, y: 0.42, face: "down" },
+  stations: [
+    { x: 0.215, y: 0.50, face: "left" },   // port console bank
+    { x: 0.785, y: 0.50, face: "right" },  // starboard console bank
+    { x: 0.658, y: 0.30, face: "left" },   // Master Systems Display, starboard end
+  ],
+  homeT: [25, 50], stationT: [15, 30], speed: 0.10,   // s at home, s at a console, walk speed (deck fraction/s)
+};
+
 export const IMAGES = ["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
-  "crew-atlas", "crew-work", "crew-repair", "crew-captain", "crew-engineer", "crew-science", "crew-security",
+  "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
-  "ship-tenacity", "ship-jemhadar"];
+  "ship-tenacity", "ship-jemhadar", ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o))];
+// walk masks (PNG, white = floor), loaded alongside the plates
+export const WALK_MASKS = DECK_ORDER.map(d => "walk-" + d);

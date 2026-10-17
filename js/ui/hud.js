@@ -1,11 +1,12 @@
 // DOM HUD: stat bar, alert chip, orders, duty list, crew cards, chips, log, toasts, lift panel, report.
 import { G } from "../state.js";
-import { DECKS, DECK_ORDER, SYSTEMS, NODEMAP, SEV_LABEL, PRI_LABEL, OFFICERS } from "../data.js";
+import { DECKS, DECK_ORDER, SYSTEMS, NODEMAP, SEV_LABEL, PRI_LABEL, OFFICERS, DESTS } from "../data.js";
 import { on } from "../bus.js";
 import { dutyItems, shieldCap } from "../faults.js";
 import { voyageView } from "../voyage.js";
-import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering } from "../crew.js";
+import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering, ltStatus } from "../crew.js";
 import { BR } from "../battle.js";
+import { ltScreenFrac } from "../render/deck.js";
 
 const $ = s => document.querySelector(s);
 const STATS = [
@@ -23,9 +24,24 @@ export function buildHud() {
   $("#crewBar").innerHTML = OFFICERS.map(o => `<div class="crew" id="crew-${o.id}"><img src="assets/${o.img}.webp" alt="${o.who}"><div><div class="n">${o.who}</div><div class="r">${o.role}</div><div class="a">${o.ability} — <span class="r">${o.desc}</span></div><div class="s" id="cs-${o.id}"></div></div></div>`).join("");
   on("log", addLogLine);
   on("toast", showToast);
-  on("status", h => { $("#statusTxt").innerHTML = h; });
-  renderLog();
-  $("#statusTxt").innerHTML = G.status || "Tap a console, room, or open floor to send the Lieutenant.";
+  on("news", renderNews);
+  renderLog(); renderNews();
+  const row = $("#chipsPlay"); row.addEventListener("scroll", chipHint, { passive: true }); window.addEventListener("resize", chipHint);
+}
+// ship news line (orders, red alert, deck tasks...). The Lt line is separate and re-derived every HUD tick.
+function renderNews() {
+  const n = G.news, html = n ? n.html : "The bridge officers have the ship.";
+  $("#newsTxt").innerHTML = html; $("#newsBarTxt").innerHTML = html;
+}
+let lastLt = "";
+function renderLt() {
+  const h = ltStatus(); if (h === lastLt) return; lastLt = h;
+  $("#statusTxt").innerHTML = h; $("#ltBarTxt").innerHTML = h;
+}
+// scroll hint on the chip row: fade + chevron while there are chips off to the right
+function chipHint() {
+  const r = $("#chipsPlay");   // horizontal row (portrait) or vertical column (landscape phone)
+  r.parentElement.classList.toggle("has-more", r.scrollWidth - r.clientWidth - r.scrollLeft > 6 || r.scrollHeight - r.clientHeight - r.scrollTop > 6);
 }
 export function renderLog() { const ol = $("#log"); ol.innerHTML = ""; for (const e of G.log.slice(-120)) addLogLine(e); }
 function addLogLine(e) {
@@ -52,6 +68,13 @@ export function updateHud() {
   }
   $("#pips").textContent = "●".repeat(S.torps) + "○".repeat(S.torpCap - S.torps) + (S.charge > 0 && S.torps < S.torpCap ? ` ${Math.round(S.charge)}%` : "");
   // alert chip = duty list top item
+  renderLt();
+  // NEW-05: the turbolift panel belongs to the deck it was opened on; close it once he rides or changes deck
+  const lp = $("#liftPanel");
+  if (!lp.hidden && (L.lift || L.deck !== liftPanelDeck)) closeLiftPanel();
+  // BUG-08: toasts sit on the half of the stage the Lt isn't on (top in the space view, clear of the battle HUD)
+  const tb = $("#toasts"), up = document.body.classList.contains("view-space") || ltScreenFrac() > 0.5;
+  tb.classList.toggle("top", up);
   const items = dutyItems(), pill = $("#alertPill");
   if (items.length) {
     const top = items[0];
@@ -81,11 +104,13 @@ export function updateHud() {
   const ck = L.deck + L.mode + L.node + Object.keys(S.faults).join();
   if (ck !== lastChips) {
     lastChips = ck;
-    const html = Object.entries(DECKS[L.deck].nodes).map(([id, n], i) => {
+    // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + Object.entries(DECKS[L.deck].nodes).map(([id, n], i) => {
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;
-    }).join("") + `<button class="chip lift" data-lift="1">Turbolift ▸</button>`;
+    }).join("");
     $("#chipsPlay").innerHTML = html; $("#chipsInfo").innerHTML = html; $("#deckName").textContent = DECKS[L.deck].name;
+    requestAnimationFrame(chipHint);
   }
   // task pill
   const act = SP.ev.active, tp = $("#taskPill");
@@ -121,23 +146,31 @@ export function wireHud() {
   });
 }
 export function closeSheet() { document.body.className = document.body.className.replace(/\s?sheet-\w+/g, ""); }
+let liftPanelDeck = null;
+export function closeLiftPanel() { $("#liftPanel").hidden = true; liftPanelDeck = null; }
 export function openLiftPanel() {
   const L = G.lt, list = $("#liftList");
+  if (L.lift) return;
+  liftPanelDeck = L.deck;
   list.innerHTML = DECK_ORDER.map(d => {
     const alert = Object.entries(G.ship.faults).some(([k]) => SYSTEMS[k].deck === d) || (G.sp.ev.active && G.sp.ev.active.task && G.sp.ev.active.task.deck === d);
     return `<button data-deck="${d}" class="${d === L.deck ? "here" : ""}"><span>${DECKS[d].name}</span>${d === L.deck ? "<span>YOU ARE HERE</span>" : alert ? `<span class="bd">ALERT</span>` : ""}</button>`;
   }).join("");
-  list.onclick = e => { const b = e.target.closest("[data-deck]"); if (!b) return; $("#liftPanel").hidden = true; if (b.dataset.deck !== L.deck) rideLiftTo(b.dataset.deck); };
+  list.onclick = e => { const b = e.target.closest("[data-deck]"); if (!b) return; closeLiftPanel(); if (b.dataset.deck !== G.lt.deck) rideLiftTo(b.dataset.deck); };
   $("#liftPanel").hidden = false;
 }
 export function showReport(r) {
   const fmt = s => s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
   const d = (v, u = "") => (v >= 0 ? "+" : "") + Math.round(v) + u;
-  $("#reportBody").innerHTML = `<p>Lieutenant, you were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the last ${fmt(r.simulated)})` : ""}. The Tenacity kept flying.</p>
-  <ul><li>Legs completed: ${r.legs} · Events: ${r.events}</li><li>Battles: ${r.battles} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}</li>
-  <li>Torpedoes replicated: ${r.torpsBuilt} · Repairs: ${r.repairs}</li>
+  const vv = voyageView(), SP = G.sp;
+  const where = SP.battle ? "at red alert — the bridge has the fight" : SP.travel ? `at warp for ${DESTS[SP.travel.dest].name}` : SP.location ? `at ${DESTS[SP.location].name}` : "holding position in deep space";
+  const fights = r.battles === 0 ? "No contact with the Jem'Hadar." : `${r.battles} engagement${r.battles === 1 ? "" : "s"} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}.`;
+  $("#reportBody").innerHTML = `<p><b>Okafor's night-watch log.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
+  <ul><li>Voyage: ${r.legs} leg${r.legs === 1 ? "" : "s"} completed · ${r.events} event${r.events === 1 ? "" : "s"}</li>
+  <li>${fights}${r.avoided ? ` T'Ren steered around ${r.avoided} patrol${r.avoided === 1 ? "" : "s"}.` : ""}</li>
+  <li>Night watch cleared <b>${r.crewFixes || 0}</b> fault${r.crewFixes === 1 ? "" : "s"}${r.repairs ? ` · your repairs: ${r.repairs}` : ""}${r.torpsBuilt ? ` · torpedoes replicated: ${r.torpsBuilt}` : ""}</li>
   <li>Hull ${d(r.d.hull, "%")} · Parts ${d(r.d.parts)} · Torpedoes ${d(r.d.torps)} · Reputation ${d(r.d.rep)}</li>
-  <li>Faults awaiting you: <b>${r.faults}</b></li></ul>
+  <li>Faults awaiting you: <b>${r.faults}</b>${r.faults ? " — see DUTY." : " — the deck is clean."}</li></ul>
   ${r.highlights.length ? `<p><b>Log highlights</b></p><ul>${r.highlights.map(e => `<li>SD ${e.sd} — ${e.msg.replace(/</g, "&lt;")}</li>`).join("")}</ul>` : ""}`;
   $("#report").hidden = false;
 }

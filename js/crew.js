@@ -3,17 +3,24 @@ import { G } from "./state.js";
 import { DECKS, NODEMAP, SYSTEMS, STEP_LEN, CHAIR_LINES, BAR_LINES, ENG_ROOM } from "./data.js";
 import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
-import { log, setStatus, toast, fx } from "./bus.js";
+import { log, toast, fx, shipNews } from "./bus.js";
 import { faultPriority, shieldCap } from "./faults.js";
+import { PACE } from "./pacing.js";
 
-export const ZONE = 34;          // activation radius, design px (~68px tap zone)
+export const ZONE = 40;          // activation radius, design px (tap zones, task proximity, resume-at-station)
+export const ARRIVE_R = 3;       // walk all the way to the stand spot (2x figure: early stops looked like clipping)
 export const LIFT_T = 1.3;       // turbolift transit seconds
 const lt = () => G.lt;
+export const HEAD_Y = 0.235;     // floaters: just above the 2x Lt's head (FIG_H 134 / 640 = 0.21)
+// put his feet exactly on a stand spot when he's within a cell of it (paths end on cell centres)
+function settleAt(x, y) { const L = lt(); if (dDist(L.x, L.y, x, y) <= 24) { L.x = x; L.y = y; } }
+// Lt notes: a one-off explanation shown on the Lt line while he's idle (cleared by his next command)
+export function ltNote(html) { G.lt.note = html; }
 
 export const playerInEngineering = () => G.lt.deck === "engineering" && inRect(G.lt.x, G.lt.y, ENG_ROOM);
 function setFacing(d) { G.lt.dir = d; }
 function faceToward(tx, ty) {
-  const L = lt(), dx = tx - L.x, dy = (ty - L.y) * 1.5;
+  const L = lt(), dx = (tx - L.x) * 960, dy = (ty - L.y) * 640;   // compare in design px (was dy x1.5 in deck fractions)
   setFacing(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
 }
 export function sendTo(tx, ty, intent) {
@@ -22,14 +29,16 @@ export function sendTo(tx, ty, intent) {
   const c = cellCenter(...nearestWalkable(L.deck, tx, ty));
   const path = findPath(L.deck, L.x, L.y, c[0], c[1]);
   L.intent = intent || { kind: "walk" };
-  L.repairSys = null; L.node = null; L.seatSide = null;
+  if (L.intent.kind !== "liftPanel") fx("closeLift");   // NEW-05: a new order supersedes an open turbolift panel
+  fx("recenter");                                       // BUG-18: a new order hands the camera back to the Lt
+  L.repairSys = null; L.node = null; L.seatSide = null; L.note = null;
   if (!path || !path.length) { L.path = null; arrive(); return true; }
   L.path = path; L.pathI = 0; L.mode = "walk"; L.walkDist = 0;
   return true;
 }
 function intentTarget(it) {
   if (!it) return null;
-  if (it.kind === "use") { const n = NODEMAP[it.node]; return it.seat === "north" ? [n.seatN.x, n.seatN.y] : [n.x, n.y]; }
+  if (it.kind === "use") { const n = NODEMAP[it.node]; return [n.x, n.y]; }
   if (it.kind === "repair") return [SYSTEMS[it.sys].x, SYSTEMS[it.sys].y];
   if (it.kind === "liftPanel" || it.kind === "liftRide") return [DECKS[G.lt.deck].lift.x, DECKS[G.lt.deck].lift.y];
   return null;
@@ -39,10 +48,6 @@ export function sendUse(nodeId, opts = {}) {
   const L = lt(), n = NODEMAP[nodeId];
   if (n.deck !== L.deck) return rideLiftTo(n.deck, { kind: "use", node: nodeId });
   if (L.mode === "use" && L.node === nodeId && !opts.force) { retrigger(nodeId); return; }
-  if (nodeId === "mess") {
-    const north = L.y <= n.my, seat = north ? n.seatN : n;
-    return sendTo(seat.x, seat.y, { kind: "use", node: nodeId, seat: north ? "north" : "south" });
-  }
   sendTo(n.x, n.y, { kind: "use", node: nodeId });
 }
 export function sendRepair(sysId) {
@@ -64,7 +69,9 @@ function dispatchIntent(it) {
 }
 function beginLift(dest, then) {
   const L = lt();
+  if (L.lift) return;                                   // NEW-09: never start (and log) a second ride
   L.mode = "lift"; L.path = null; L.intent = null;
+  fx("closeLift");
   L.lift = { t: 0, dest, then, swapped: false };
   log(`Turbolift — ${DECKS[dest].name}.`);
 }
@@ -81,7 +88,6 @@ export function tickLift(dt) {
   }
   if (lf.t >= LIFT_T) {
     const then = lf.then; L.lift = null; L.mode = "idle";
-    setStatus(`Arrived on <b>${DECKS[L.deck].name}</b>.`);
     if (then) dispatchIntent(then);
   }
 }
@@ -106,7 +112,7 @@ const USE_STATUS = {
   shield: "At the <b>Shield Console</b> — recharging emitters.",
   torpbay: "In the <b>Torpedo Bay</b> — replicating torpedoes.",
   biobed: "On the <b>Biobed</b> — the doctor's scanner does its work. Energy recovering.",
-  mess: "Seated at a <b>Mess Table</b> — mug in hand, trading mess-hall talk. Energy recovering.",
+  mess: "Eating at the <b>Mess Table</b> — standing at a high-top, trading mess-hall talk. Energy recovering.",
   bunk: "Off his feet in <b>Berthing</b> — rack time in his own bunk.",
   locker: "At the <b>Parts Locker</b> — fabricating spares from stock.",
   pads: "Standing by the <b>Transporter Pads</b> — pattern buffers warm.",
@@ -114,19 +120,47 @@ const USE_STATUS = {
   chair: "At the <b>Captain's Chair</b> — reporting to T'Ren in person.",
   bar: "At the <b>Bar Counter</b> — off duty for exactly one drink.",
 };
+// ---- the Lt status line: always derived from what he is doing right now (ship news lives elsewhere) ----
+export function ltStatus() {
+  const L = lt(), S = G.ship, dk = DECKS[L.deck] ? DECKS[L.deck].name : "the deck";
+  if (L.lift) return `In the turbolift — bound for <b>${DECKS[L.lift.dest].name}</b>.`;
+  if (L.mode === "walk") {
+    const it = L.intent || {};
+    if (it.kind === "use") return `Heading to the <b>${NODEMAP[it.node].name}</b>…`;
+    if (it.kind === "repair") return `Heading to repair the <b>${SYSTEMS[it.sys].name}</b>…`;
+    if (it.kind === "liftRide") return `Walking to the turbolift — bound for <b>${DECKS[it.dest].name}</b>.`;
+    if (it.kind === "liftPanel") return "Walking to the turbolift.";
+    return `Walking the <b>${dk}</b> deck.`;
+  }
+  if (L.mode === "repair" && L.repairSys) {
+    const sy = SYSTEMS[L.repairSys];
+    return `Repairing the <b>${sy.name}</b> — ${Math.min(99, Math.round(L.repairT / sy.dur * 100))}%.`;
+  }
+  if (L.mode === "use" && L.node && NODEMAP[L.node]) {
+    const n = NODEMAP[L.node], base = USE_STATUS[L.node] || `At the <b>${n.name}</b>.`;
+    let extra = "";
+    if (L.node === "torpbay") extra = S.faults.phasers ? " Launcher fault — replication paused." : S.torps >= S.torpCap ? ` Complement full (${S.torps}/${S.torpCap}).` : ` Torpedo ${Math.round(S.charge)}% built (${S.torps}/${S.torpCap}).`;
+    else if (L.node === "core") extra = ` Power ${Math.round(S.power)}%.`;
+    else if (L.node === "shield") extra = ` Shields ${Math.round(S.shields)}%.`;
+    else if (L.node === "locker") extra = ` Parts ${S.parts}/${S.partsCap}.`;
+    else if (n.rest) extra = ` (${Math.round(S.energy)}%)`;
+    return base + extra;
+  }
+  return L.note || `Standing by on <b>${dk}</b>. Tap a console, room, or open floor.`;
+}
 function arrive() {
   const L = lt(), it = L.intent;
   L.intent = null; L.path = null;
-  if (!it || it.kind === "walk") { L.mode = "idle"; setStatus("Holding position. Tap a console, room, or open floor."); return; }
+  if (!it || it.kind === "walk") { L.mode = "idle"; ltNote("Holding position. Tap a console, room, or open floor."); return; }
   if (it.kind === "liftPanel") { L.mode = "idle"; fx("openLift"); return; }
   if (it.kind === "liftRide") { beginLift(it.dest, it.then); return; }
   if (it.kind === "use") {
     const n = NODEMAP[it.node];
     if (n.system && G.ship.faults[n.system]) { beginRepair(n.system); return; }
     L.mode = "use"; L.node = it.node;
+    settleAt(n.x, n.y);
     faceToward(n.mx, n.my);
-    if (it.node === "mess") { L.seatSide = it.seat || "south"; setFacing(L.seatSide === "north" ? "down" : "up"); }
-    setStatus(USE_STATUS[it.node] || `At the <b>${n.name}</b>.`);
+    if (n.face) setFacing(n.face);
     if (it.node === "msd") msdReport();
     if (it.node === "chair") log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm");
     if (it.node === "bar") log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm");
@@ -137,34 +171,35 @@ function arrive() {
 }
 export function beginRepair(sysId) {
   const L = lt(), s = SYSTEMS[sysId], f = G.ship.faults[sysId];
-  if (!f) { L.mode = "idle"; setStatus(`${s.name} is already nominal.`); return; }
+  if (!f) { L.mode = "idle"; ltNote(`The <b>${s.name}</b> is already nominal. Awaiting orders.`); return; }
   if (G.ship.parts < f.cost) {
     L.mode = "idle";
     log(`Repair stalled — ${s.name} needs ${f.cost} spare part(s). Fabricate more at the parts locker.`, "fault");
     toast(`Need ${f.cost} part(s) — visit the Parts Locker`, "med");
-    setStatus(`<b>${s.name}</b> repair needs ${f.cost} spare part(s) — send him to the <b>Parts Locker</b> first.`);
+    ltNote(`<b>${s.name}</b> repair needs ${f.cost} spare part(s) — send him to the <b>Parts Locker</b> first.`);
     return;
   }
   G.ship.parts -= f.cost;
   L.mode = "repair"; L.repairSys = sysId; L.repairT = 0; L.path = null;
+  if (dDist(L.x, L.y, s.x, s.y) < 20) settleAt(s.x, s.y);
   faceToward(s.mx, s.my);
   log(`Repairing ${s.name} — ${f.cost} spare part(s) committed.`);
-  setStatus(`Repairing <b>${s.name}</b>…`);
 }
-export const engSpeed = () => (G.ship.energy < 15 ? 0.058 : 0.115);
+// walk speed (deck fraction of 960 px per s); 1.35x the 1x-figure speed so the 2x Lt doesn't look slow-motion
+export const engSpeed = () => (G.ship.energy < 15 ? 0.078 : 0.155);
 
 export function stepLt(dt) {
-  const L = lt(), S = G.ship, eTempo = G.sp.battle ? 1 : 0.35;
+  const L = lt(), S = G.ship, D = PACE.ltDrain, eTempo = G.sp.battle ? PACE.ltDrainBattle : 1;
   tickLift(dt);
   if (L.mode === "walk" && L.path) {
     const zt = intentTarget(L.intent);
-    if (zt && dDist(L.x, L.y, zt[0], zt[1]) <= ZONE) { arrive(); }
+    if (zt && dDist(L.x, L.y, zt[0], zt[1]) <= ARRIVE_R) { arrive(); }
   }
   L.moving = false;
   if (L.mode === "walk" && L.path) {
     let remain = 0, rx = L.x, ry = L.y;
     for (let i = L.pathI; i < L.path.length; i++) { remain += dDist(L.path[i][0], L.path[i][1], rx, ry); rx = L.path[i][0]; ry = L.path[i][1]; }
-    const sf = clamp(Math.min(remain, L.walkDist + 8) / 52, 0.22, 1);
+    const sf = clamp(Math.min(remain, L.walkDist + 12) / 80, 0.22, 1);
     const px = L.x, py = L.y;
     let guard = 0;
     while (L.pathI < L.path.length && guard++ < 8) {
@@ -174,7 +209,7 @@ export function stepLt(dt) {
       L.x += (dxp / dist) * step / 960; L.y += (dyp / dist) * step / 640;
       setFacing(Math.abs(dxp) > Math.abs(dyp) ? (dxp > 0 ? "right" : "left") : (dyp > 0 ? "down" : "up"));
       L.moving = true;
-      S.energy = clamp(S.energy - 0.5 * eTempo * dt, 0, 100);
+      S.energy = clamp(S.energy - D.walk * eTempo * dt, 0, 100);
       break;
     }
     const moved = dDist(L.x, L.y, px, py);
@@ -184,28 +219,28 @@ export function stepLt(dt) {
     if (!sys || !S.faults[L.repairSys]) { L.mode = "idle"; L.repairSys = null; }
     else {
       L.repairT += dt * (S.energy < 10 ? 0.55 : 1);
-      S.energy = clamp(S.energy - 1.4 * eTempo * dt, 0, 100);
+      S.energy = clamp(S.energy - D.repair * eTempo * dt, 0, 100);
       faceToward(sys.mx, sys.my);
-      if (Math.random() < dt * 14) fx("spark", { x: L.x, y: L.y - 0.02 });
+      if (Math.random() < dt * 14) fx("spark", { x: L.x + (L.dir === "left" ? -0.03 : L.dir === "right" ? 0.03 : 0), y: L.y - 0.07 });
       if (L.repairT >= sys.dur) finishRepair();
     }
   } else if (L.mode === "use") {
     const nd = NODEMAP[L.node];
-    if (!nd.lie && L.node !== "mess") faceToward(nd.mx, nd.my);
+    if (!nd.lie) { if (nd.face) setFacing(nd.face); else faceToward(nd.mx, nd.my); }
     if (nd.rest) S.energy = clamp(S.energy + nd.rest * dt, 0, 100);
     else {
-      S.energy = clamp(S.energy - 0.7 * eTempo * dt, 0, 100);
+      S.energy = clamp(S.energy - D.station * eTempo * dt, 0, 100);
       if (L.node === "locker") {
         S.lockerT += dt;
         if (S.lockerT >= 2.5) {
           S.lockerT = 0;
-          if (S.parts < S.partsCap) { S.parts++; fx("floater", { x: L.x, y: L.y - 0.08, text: "+1 PART", color: "#e6b8ff" }); }
-          else fx("floater", { x: L.x, y: L.y - 0.08, text: "LOCKER FULL", color: "#93a5c4" });
+          if (S.parts < S.partsCap) { S.parts++; fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "+1 PART", color: "#e6b8ff" }); }
+          else fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "LOCKER FULL", color: "#93a5c4" });
         }
       }
     }
   } else if (L.mode !== "lift") {
-    S.energy = clamp(S.energy - 0.12 * eTempo * dt, 0, 100);
+    S.energy = clamp(S.energy - D.idle * eTempo * dt, 0, 100);
   }
   L.swingAmp += clamp((L.moving ? 1 : 0) - L.swingAmp, -dt / 0.16, dt / 0.16);
   tickRecharge(dt);
@@ -213,21 +248,31 @@ export function stepLt(dt) {
 }
 function finishRepair() {
   const L = lt(), id = L.repairSys, sys = SYSTEMS[id];
-  const pri = faultPriority(id);
+  const pri = faultPriority(id), f = G.ship.faults[id], sev = f ? f.sev : "low";
   delete G.ship.faults[id];
   L.repairSys = null;
   G.stats.repairs++;
   log(`Repairs complete — ${sys.name} back to full function.`, "good");
-  fx("floater", { x: L.x, y: L.y - 0.08, text: "REPAIRED", color: "#9fe8b1" });
+  fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "REPAIRED", color: "#9fe8b1" });
+  // visible rewards (first-session feel): reputation by severity, salvaged parts for MED/CRIT, and Okafor's
+  // welcome-aboard spare on each of a new Lieutenant's first five repairs
+  const S = G.ship, rep = PACE.repairRep[sev] || 1;
+  let parts = PACE.repairParts[sev] || (G.stats.repairs <= 5 ? 1 : 0);
+  parts = Math.min(parts, S.partsCap - S.parts);
+  G.sp.rep += rep; S.parts += parts;
+  fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${rep} REP`, color: "#ffaa77", delay: 0.6, life: 2.2 });
+  if (parts > 0) fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${parts} PART${parts > 1 ? "S" : ""}`, color: "#e6b8ff", delay: 1.2, life: 2.2 });
+  log(`Reputation +${rep}${parts ? ` · ${parts} spare part${parts > 1 ? "s" : ""} salvaged from the old components` : ""}.`, "good");
+  // the SHIP line shouldn't keep announcing a fault he just fixed
+  if (G.news && G.news.html && G.news.html.includes(sys.fault)) shipNews(`<b>${sys.name} repaired</b> by the Lieutenant — reputation +${rep}${parts ? `, +${parts} spare part${parts > 1 ? "s" : ""}` : ""}.`);
   if (pri === 1) log("T'Ren: 'Noted, Lieutenant. The bridge has its ship back.'", "comm");
   else if (pri === 2) log("Okafor: 'Good work, Lieutenant. That's how my deck runs.'", "comm");
   const n = sys.node ? NODEMAP[sys.node] : null;
   if (n && n.deck === L.deck && dDist(L.x, L.y, n.x, n.y) <= ZONE) {
     L.mode = "use"; L.node = sys.node; faceToward(n.mx, n.my);
-    setStatus(`${sys.name} repaired. Resuming at the <b>${n.name}</b>.`);
   } else if (id === "loader" && L.resumeTorp) {
     L.resumeTorp = false; L.mode = "idle"; sendUse("torpbay", { force: true });
-  } else { L.mode = "idle"; setStatus(`${sys.name} repaired. Awaiting orders.`); }
+  } else { L.mode = "idle"; ltNote(`<b>${sys.name}</b> repaired. Awaiting orders.`); }
 }
 // Miracle Worker can finish a repair under him
 export function cancelRepairIf(id) { const L = lt(); if (L.mode === "repair" && L.repairSys === id) { L.mode = "idle"; L.repairSys = null; } }
@@ -269,7 +314,7 @@ function tickReplication(dt) {
   if (S.charge >= 100) {
     S.charge = 0; S.torps++; S.tubeFlash = S.elapsed; G.stats.torpsBuilt++;
     log(`Torpedo replicated and loaded. (${S.torps} of ${S.torpCap})`, "good");
-    fx("floater", { x: L.x, y: L.y - 0.08, text: "+1 TORPEDO", color: "#ffb36b" });
+    fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "+1 TORPEDO", color: "#ffb36b" });
     if (S.torps >= S.torpCap) rp.fullNoted = true;
   }
 }

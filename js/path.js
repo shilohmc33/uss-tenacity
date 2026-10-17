@@ -1,13 +1,33 @@
 import { DECKS, DECK_ORDER, COLS, ROWS } from "./data.js";
 import { clamp, inRect } from "./util.js";
 const inAny = (fx, fy, list) => list.some(r => inRect(fx, fy, r));
+// Coarse fallback grid from the data.js rectangles (used only until / unless the painted masks load).
 for (const d of DECK_ORDER) {
   const dk = DECKS[d], g = new Uint8Array(COLS * ROWS);
   for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
     const fx = (cx + 0.5) / COLS, fy = (cy + 0.5) / ROWS;
     g[cy * COLS + cx] = inAny(fx, fy, dk.base) && !inAny(fx, fy, dk.blocks) ? 1 : 0;
   }
-  dk.walk = g;
+  dk.walk = g; dk.walkSrc = "rects";
+}
+// Sample the painted walk masks (assets/walk-<deck>.png, white = floor) into the 60x40 grid:
+// a cell is floor when at least half of its pixels are white. Returns the decks that got a mask.
+export function applyWalkMasks(IMG) {
+  const used = [];
+  for (const d of DECK_ORDER) {
+    const im = IMG["walk-" + d]; if (!im) continue;
+    const cw = 16, ch = 16, c = document.createElement("canvas"); c.width = COLS * cw; c.height = ROWS * ch;
+    const x = c.getContext("2d", { willReadFrequently: true }); x.imageSmoothingEnabled = true;
+    x.drawImage(im, 0, 0, c.width, c.height);
+    const px = x.getImageData(0, 0, c.width, c.height).data, g = new Uint8Array(COLS * ROWS);
+    for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
+      let n = 0;
+      for (let yy = 0; yy < ch; yy++) for (let xx = 0; xx < cw; xx++) if (px[((cy * ch + yy) * c.width + cx * cw + xx) * 4] > 127) n++;
+      g[cy * COLS + cx] = n * 2 >= cw * ch ? 1 : 0;
+    }
+    DECKS[d].walk = g; DECKS[d].walkSrc = "mask"; used.push(d);
+  }
+  return used;
 }
 export const cellOf = (fx, fy) => [clamp(Math.floor(fx * COLS), 0, COLS - 1), clamp(Math.floor(fy * ROWS), 0, ROWS - 1)];
 export const cellCenter = (cx, cy) => [(cx + 0.5) / COLS, (cy + 0.5) / ROWS];
@@ -15,10 +35,17 @@ export function isWalkable(deck, fx, fy) { const c = cellOf(fx, fy); return !!DE
 export function nearestWalkable(deck, fx, fy) {
   const W = DECKS[deck].walk, c = cellOf(fx, fy);
   if (W[c[1] * COLS + c[0]]) return c;
-  for (let rad = 1; rad < 14; rad++) for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
-    if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue;
-    const nx = c[0] + dx, ny = c[1] + dy;
-    if (nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS && W[ny * COLS + nx]) return [nx, ny];
+  // nearest by true (design-px) distance within a growing ring, so the Lt stops at the closest floor tile
+  for (let rad = 1; rad < 30; rad++) {
+    let best = null, bd = Infinity;
+    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rad) continue;
+      const nx = c[0] + dx, ny = c[1] + dy;
+      if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || !W[ny * COLS + nx]) continue;
+      const d2 = (dx * 16) ** 2 + (dy * 16) ** 2;
+      if (d2 < bd) { bd = d2; best = [nx, ny]; }
+    }
+    if (best) return best;
   }
   return c;
 }
@@ -63,4 +90,9 @@ export function findPath(deck, fx0, fy0, fx1, fy1) {
     }
   }
   return null;
+}
+// Is the Lt standing somewhere sane? (used after load / mask swap)
+export function snapToFloor(L) {
+  if (!DECKS[L.deck] || isWalkable(L.deck, L.x, L.y)) return false;
+  const c = cellCenter(...nearestWalkable(L.deck, L.x, L.y)); L.x = c[0]; L.y = c[1]; return true;
 }

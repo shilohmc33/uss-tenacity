@@ -2,9 +2,10 @@
 import { G } from "./state.js";
 import { DESTS, SYSTEMS } from "./data.js";
 import { clamp, rand } from "./util.js";
-import { log, toast, setStatus } from "./bus.js";
+import { log, toast, shipNews } from "./bus.js";
 import { spawnFault, impairing, shieldCap } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
+import { PACE, PACE_RT, nightActive } from "./pacing.js";
 
 // transient presentation state (not saved)
 export const SFX = { beams: [], shots: [], booms: [], floaters: [], smoke: [], flares: [], shieldFlare: null, shakeT: 0,
@@ -19,9 +20,28 @@ const OPEN = { convoy: "Jem'Hadar fighter breaks from the convoy's shadow — we
   defector: "Trap sprung — a Jem'Hadar fighter drops out of warp. T'Ren: 'Eighteen percent, Lieutenant. We drew it.' Red alert!",
   shadow: "The shadow commits — the tailing fighter turns in and opens fire. Red alert!",
   debug: "Simulation drill — Jem'Hadar fighter engaging. Red alert!" };
+// Battles are rare set pieces: none in a session's first 10 minutes, a long gap between fights, and a hard
+// per-hour cap while the player is away (offline catch-up or idle). See PACE in pacing.js.
+export function battleAllowed(kind) {
+  if (kind === "debug") return true;
+  const SP = G.sp, now = G.ship.elapsed, last = typeof SP.lastBattleT === "number" ? SP.lastBattleT : -1e9;
+  if (!PACE_RT.offline && PACE_RT.sessionT < PACE.sessionCalm) return false;
+  if (nightActive()) {
+    const recent = (G.night.battleTimes || []).filter(t => now - t < 3600 && now >= t);
+    if (recent.length >= PACE.idleBattlesPerHour || now - last < PACE.idleBattleGap) return false;
+  } else if (now - last < PACE.battleGap) return false;
+  return true;
+}
 export function startBattle(kind = "enroute") {
   const SP = G.sp;
-  if (SP.battle) return;
+  if (SP.battle) return false;
+  if (!battleAllowed(kind)) {
+    G.night.avoided = (G.night.avoided || 0) + 1;
+    log("Hale: 'Jem'Hadar patrol on long-range sensors, Captain. They haven't seen us.' T'Ren alters course a few degrees. Nobody says anything until it's gone.", "comm");
+    return false;
+  }
+  SP.lastBattleT = G.ship.elapsed;
+  const bt = (G.night.battleTimes || []).filter(t => G.ship.elapsed - t < 3600 && G.ship.elapsed >= t); bt.push(G.ship.elapsed); G.night.battleTimes = bt;
   SP.battle = { hull: 100, max: 100, ctx: kind, enterT: 0, volleyT: 2.0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed };
   G.stats.battles++;
   SFX.jink = { x: 0, y: 0, tx: 0, ty: 0, next: 1.4 }; SFX.shieldFlare = null; SFX.smoke.length = 0; SFX.flares.length = 0;
@@ -30,7 +50,8 @@ export function startBattle(kind = "enroute") {
   G.ship.alertT = 7;
   log(OPEN[kind] || "Long-range sensors scream — Jem'Hadar fighter on an attack vector, dropping us out of warp. Red alert!", "fault");
   toast("RED ALERT — Jem'Hadar fighter", "crit");
-  setStatus("<b>Red alert.</b> The bridge officers have the fight; your post is the <b>deck</b>: keep her systems alive and her tubes loaded.");
+  shipNews("<b>Red alert.</b> The bridge officers have the fight; your post is the <b>deck</b>: keep her systems alive and her tubes loaded.");
+  return true;
 }
 function damageEnemy(dmg, label) {
   const B = G.sp.battle;
@@ -56,8 +77,8 @@ function endBattleVictory() {
   toast("Victory — fighter destroyed", "good");
   if (kind === "convoy") { SP.rep++; SP.escortDone = true; log("The convoy is safe — every freighter accounted for. Reputation rising.", "comm"); }
   if (SP.travel && SP.travelPaused) { SP.travelPaused = false; log(`Course resumed — back to warp for ${DESTS[SP.travel.dest].name}.`, "comm"); }
-  else { SP.cap.decideT = 4; SP.cap.dest = null; SP.cap.reason = `Action resolved at ${SP.location ? DESTS[SP.location].name : "deep space"} — the Captain is evaluating her next orders.`; }
-  setStatus("Battle won. Check the <b>deck</b> for damage the fight left behind.");
+  else { SP.cap.decideT = 30; SP.cap.dest = null; SP.cap.reason = `Action resolved at ${SP.location ? DESTS[SP.location].name : "deep space"} — the Captain is evaluating her next orders.`; }
+  shipNews("Battle won. Check the <b>deck</b> for damage the fight left behind.");
 }
 export function damageShip(dmg, label) {
   const S = G.ship, SP = G.sp;
@@ -76,7 +97,7 @@ export function damageShip(dmg, label) {
   SFX.booms.push({ x: tp[0], y: tp[1], t: 0, dur: 0.5, big: false });
   for (let i = 0; i < 9; i++) SFX.smoke.push({ x: tp[0] + rand(-0.02, 0.02), y: tp[1] + rand(-0.015, 0.015), vx: rand(-0.05, 0.05), vy: rand(-0.05, 0.02), t: 0, life: rand(0.3, 0.7), r: 0.006, kind: "spark" });
   const through = (dmg - S.shields) * 0.6;
-  S.shields = 0; S.hull = Math.max(0, S.hull - through);
+  S.shields = 0; S.hull = Math.max(PACE_RT.offline ? PACE.offlineHullFloor : 0, S.hull - through);   // offline: damage control holds the line
   SFX.floaters.push({ x: tp[0], y: tp[1] - 0.05, t: 0, text: "HULL −" + Math.round(through), color: "#ff8a7a" });
   log(`${label} — shields down, the hull takes ${Math.round(through)}%. Hull at ${Math.round(S.hull)}%.`, "fault");
   if (S.hull <= 0) { towToDS9(); return; }
@@ -111,7 +132,16 @@ function haleFirePhaser() {
 }
 function launchTorp(delay = 0) {
   const from = tenPoint(0.42, 0.18), to = jemPoint(rand(0.3, 0.6), rand(0.35, 0.65));
-  SFX.shots.push({ x0: from[0], y0: from[1], x1: to[0], y1: to[1], t: -delay, dur: 0.5, dmg: Math.round(rand(22, 30)) });
+  const dmg = Math.round(rand(22, 30)), B = G.sp.battle;
+  SFX.shots.push({ x0: from[0], y0: from[1], x1: to[0], y1: to[1], t: -delay, dur: 0.5, dmg });
+  if (B) B.inflight = (B.inflight || 0) + dmg;   // BUG-17: saved with the battle so a reload doesn't eat the salvo
+}
+// BUG-17: after a reload, torpedoes that were in flight when the game saved land at once (SFX.shots isn't saved)
+export function settleInflightTorps() {
+  const B = G.sp.battle;
+  if (!B || !(B.inflight > 0)) return;
+  const dmg = B.inflight; B.inflight = 0;
+  if (!SFX.shots.length) damageEnemy(dmg, "Torpedoes already in flight when the bridge log resumed — they strike home");
 }
 function haleFireTorp() {
   const B = G.sp.battle, S = G.ship;
@@ -137,7 +167,7 @@ function trenDisengage() {
   const SP = G.sp, B = SP.battle;
   if (!B || B.dying || impairing("warpcore")) return;
   const enroute = !!(SP.travel && SP.travelPaused), kind = B.ctx;
-  SP.battle = null; SP.evasiveT = 0; SP.cap.decideT = 4;
+  SP.battle = null; SP.evasiveT = 0; SP.cap.decideT = 30;
   if (enroute) { SP.travel = null; SP.travelPaused = false; SP.location = null; }
   if (kind === "convoy") SP.escortDone = true;
   log("T'Ren: 'Helm — emergency warp, disengage.' The Tenacity breaks off and runs.", "comm");
@@ -161,13 +191,13 @@ export function towToDS9() {
   const SP = G.sp, S = G.ship;
   SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++;
   SP.location = "ds9"; SP.escortDone = true;
-  Object.assign(SP.cap, { decideT: 6, dest: "convoy", holdLogged: false, reason: "Towed home to Deep Space Nine — holding for repairs. Departure pending my hull minimum of 40%." });
+  Object.assign(SP.cap, { decideT: PACE.dockDwell[0], dest: "convoy", holdLogged: false, reason: "Towed home to Deep Space Nine — holding for repairs. Departure pending my hull minimum of 40%." });
   S.hull = 20; S.shields = 0; S.power = Math.min(S.power, 30);
   log("The Tenacity goes dark — main power gone, drifting, guns silent. Disabled.", "fault");
   for (let i = 0; i < 3; i++) spawnFault("battle");
   log("A runabout out of Deep Space Nine takes her under tow. She'll fly again — Mirandas always do.", "comm");
   toast("Disabled — towed to Deep Space Nine", "crit");
-  setStatus("<b>Disabled and towed to Deep Space Nine.</b> Hull at 20%, systems faulted — the Lieutenant has work to do.");
+  shipNews("<b>Disabled and towed to Deep Space Nine.</b> Hull at 20%, systems faulted — the Lieutenant has work to do.");
 }
 // ---- officer abilities (autonomous) ----
 const armed = a => !!(G.sp.battle && !G.sp.battle.dying && a.cd <= 0 && !(a.active > 0));
@@ -244,7 +274,7 @@ export function tickBattle(dt) {
   if (SFX.smoke.length > 170) SFX.smoke.splice(0, SFX.smoke.length - 170);
   for (let i = SFX.shots.length - 1; i >= 0; i--) {
     const sh = SFX.shots[i]; sh.t += dt;
-    if (sh.t >= sh.dur) { SFX.shots.splice(i, 1); SFX.booms.push({ x: sh.x1, y: sh.y1, t: 0, dur: 0.55 }); damageEnemy(sh.dmg, "Photon torpedo — direct hit"); }
+    if (sh.t >= sh.dur) { SFX.shots.splice(i, 1); if (SP.battle) SP.battle.inflight = Math.max(0, (SP.battle.inflight || 0) - sh.dmg); SFX.booms.push({ x: sh.x1, y: sh.y1, t: 0, dur: 0.55 }); damageEnemy(sh.dmg, "Photon torpedo — direct hit"); }
   }
   for (const k of ["beams", "booms", "floaters", "flares"]) {
     const arr = SFX[k];

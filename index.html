@@ -32,13 +32,17 @@
     <div id="loading"><div>USS TENACITY · NCC-31671</div><div class="bar"><i id="loadBar"></i></div><small>Loading deck plates…</small></div>
   </main>
   <nav id="playbar">
-    <div id="chipsPlay" class="chips"></div>
+    <div id="lines" data-sheet="orders">
+      <div id="ltBar" class="sbar"><b class="tag">LT</b><span id="ltBarTxt"></span></div>
+      <div id="newsBar" class="sbar"><b class="tag">SHIP</b><span id="newsBarTxt"></span></div>
+    </div>
+    <div class="chipWrap"><div id="chipsPlay" class="chips"></div><i class="more" aria-hidden="true">›</i></div>
     <div class="sheetBtns"><button data-sheet="orders">ORDERS</button><button data-sheet="duty">DUTY <b id="dutyBadge"></b></button><button data-sheet="crew">CREW</button><button data-sheet="log">LOG</button></div>
   </nav>
   <section id="panels">
-    <div class="sheetHead"><span id="sheetTitle"></span><button id="sheetClose">✕</button></div>
+    <div class="sheetHead"><span id="sheetTitle"></span><button id="sheetClose" aria-label="Close">✕</button></div>
     <div class="panel" id="p-orders"><h4>CAPTAIN'S ORDERS</h4><div id="ordersHead"></div><div class="prog"><i id="ordersProg"></i></div><p id="ordersWhy"></p></div>
-    <div class="panel" id="p-status"><p id="statusTxt"></p></div>
+    <div class="panel" id="p-status"><div class="sline"><span class="tag">LIEUTENANT</span><p id="statusTxt"></p></div><div class="sline ship"><span class="tag">SHIP</span><p id="newsTxt"></p></div></div>
     <div class="panel" id="p-chips"><h4>STATIONS · <span id="deckName"></span></h4><div id="chipsInfo" class="chips"></div></div>
     <div class="panel" id="p-duty"><h4>DUTY LIST</h4><div id="dutyBody"></div></div>
     <div class="panel" id="p-crew"><h4>COMMAND CREW <small id="crewState"></small></h4><div id="crewBar"></div><div id="supBadge"></div></div>

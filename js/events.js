@@ -2,10 +2,11 @@
 import { G } from "./state.js";
 import { NODEMAP, DESTS, DECKS } from "./data.js";
 import { clamp, rand, dDist } from "./util.js";
-import { log, toast, setStatus } from "./bus.js";
+import { log, toast, shipNews, fx } from "./bus.js";
 import { spawnFault } from "./faults.js";
-import { startBattle } from "./battle.js";
 import { ZONE } from "./crew.js";
+import { startBattle as _sb, battleAllowed } from "./battle.js";
+import { PACE, PACE_RT, rr } from "./pacing.js";
 
 export const EV_POOL = [
   { id: "distress", w: 14, name: "Distress call" }, { id: "refugee", w: 12, name: "Refugee convoy" }, { id: "defector", w: 12, name: "Cardassian defector" },
@@ -14,7 +15,8 @@ export const EV_POOL = [
 ];
 export function evResetLeg(dest) {
   const ev = G.sp.ev;
-  ev.legTarget = Math.random() < 0.5 ? 1 : 2; ev.legFired = 0; ev.nextT = DESTS[dest].time * rand(0.22, 0.42);
+  const dur = G.sp.travel ? G.sp.travel.dur : 600;
+  ev.legTarget = Math.round(rr(PACE.eventsPerLeg)); ev.legFired = 0; ev.nextT = dur * rr(PACE.eventAt);
 }
 function pickEvent() {
   const ev = G.sp.ev, pool = EV_POOL.filter(e => e.id !== ev.lastId);
@@ -32,12 +34,12 @@ function evBegin(id, task) {
   if (task) {
     ev.active = { id, task, trap: false };
     toast(`Captain's deck task: ${task.label} (${task.dur}s)`, "task");
-    setStatus(`<b>Ship's business — optional deck task.</b> ${task.label}. Bonus if he makes it in time; no harm if he doesn't.`);
+    shipNews(`<b>Ship's business — optional deck task.</b> ${task.label}. Bonus if he makes it in time; no harm if he doesn't.`);
   }
 }
 function evScheduleNext() {
   const SP = G.sp;
-  SP.ev.nextT = SP.travel && !SP.travelPaused && SP.ev.legFired < SP.ev.legTarget ? rand(6, 11) : -1;
+  SP.ev.nextT = SP.travel && !SP.travelPaused && SP.ev.legFired < SP.ev.legTarget ? Math.max(20, SP.travel.dur * rr(PACE.eventAt)) : -1;
 }
 export function fireEvent(id) {
   const SP = G.sp;
@@ -80,7 +82,7 @@ export function fireEvent(id) {
       evBegin(id, null);
       S.alertT = Math.max(S.alertT, 5);
       log("Hale: 'Contact — Jem'Hadar fighter, extreme range, matching course and speed. She's not closing. She's just… watching.'", "comm");
-      if (Math.random() < 0.12) { log("T'Ren: 'Twelve percent, Mr. Hale. Watch it come due.'", "fault"); evScheduleNext(); startBattle("shadow"); return true; }
+      if (Math.random() < 0.12 && battleAllowed("shadow")) { log("T'Ren: 'Twelve percent, Mr. Hale. Watch it come due.'", "fault"); evScheduleNext(); _sb("shadow"); return true; }
       log("T'Ren: 'Probability she commits: 12%. Hold course, shields warm, no provocation.' The shadow peels off. Nobody aboard breathes normally for an hour.", "comm");
       evScheduleNext(); break;
     case "warnews":
@@ -100,10 +102,13 @@ export function fireEvent(id) {
 export function tickEvents(dt) {
   const SP = G.sp, ev = SP.ev, act = ev.active, L = G.lt;
   if (act) {
+    // NEW-06: offline nobody can answer a deck task, so the bridge handles it at once (same outcome as letting it
+    // expire, without the countdown warning or the "window closed" line cluttering the shift report)
+    if (act.task && PACE_RT.offline) { resolveEvent(false); return; }
     if (act.task && !SP.battle) {
       const tk = act.task;
       tk.t -= dt;
-      if (!tk.warned && tk.t <= 10 && tk.acc < tk.need) {
+      if (!tk.warned && tk.t <= 10 && tk.acc < tk.need && !PACE_RT.offline) {   // no "10 seconds left" noise offline
         tk.warned = true;
         log(`Deck task — 10 seconds left: ${tk.label}.`, "fault");
         toast(`10s left: ${DECKS[tk.deck].name} — ${NODEMAP[tk.node].name}`, "warn");
@@ -123,19 +128,26 @@ export function tickEvents(dt) {
   if (!SP.travel || SP.travelPaused || SP.battle) return;
   if (ev.legFired >= ev.legTarget || ev.nextT < 0) return;
   ev.nextT -= dt;
-  if (ev.nextT <= 0 && SP.travel.t < SP.travel.dur - 3) fireEvent(pickEvent());
+  if (ev.nextT <= 0 && SP.travel.t < SP.travel.dur - 20) fireEvent(pickEvent());
 }
-const dGood = (L, tk) => dDist(L.x, L.y, tk.x, tk.y) <= ZONE;
+const dGood = (L, tk) => L.mode === "use" && L.node === tk.node && dDist(L.x, L.y, tk.x, tk.y) <= ZONE;   // must man it, not walk past
 function resolveEvent(bonus) {
   const SP = G.sp, act = SP.ev.active, S = G.ship;
   if (!act) return;
   SP.ev.active = null;
+  const rep0 = SP.rep;
+  resolveEffects(act, bonus, SP, S);
+  // visible reward: the bonus reputation floats up over the Lieutenant at the task console
+  if (bonus && SP.rep > rep0) fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `+${SP.rep - rep0} REP`, color: "#ffaa77", delay: 0.2, life: 2.2 });
+}
+function resolveEffects(act, bonus, SP, S) {
   if (act.id === "distress") {
     if (bonus) { SP.rep += 3; log("The Lieutenant's regulator goes over by transporter — the Kestrel Wind's life support steadies. Reputation +3, not one spare part spent. The log credits the Lieutenant by name.", "good"); }
     else if (S.parts >= 2) { S.parts -= 2; SP.rep += 3; log("The Tenacity's own spares patch the freighter's life support — 2 parts out of the locker. Reputation +3.", "good"); }
     else { S.power = clamp(S.power - 20, 0, 100); SP.rep += 1; log("No spares to give — the rescue runs slow and hungry instead. Power −20. Reputation +1.", "comm"); }
   } else if (act.id === "defector") {
-    if (act.trap) { log("The galor's transporter signal was a targeting lock wearing a costume — the 'defector' was bait.", "fault"); startBattle("defector"); return; }
+    if (act.trap && battleAllowed("defector")) { log("The galor's transporter signal was a targeting lock wearing a costume — the 'defector' was bait.", "fault"); _sb("defector"); return; }
+    if (act.trap) { log("Diallo catches it at the last second: the galor's transporter signal is a targeting lock wearing a costume. T'Ren drops the beam-in and the 'defector' runs before Hale can return the favour.", "comm"); evScheduleNext(); return; }
     SP.rep += bonus ? 3 : 2; SP.preScanned = true;
     log(`Gul Revan beams aboard${bonus ? " onto a pad the Lieutenant had prepped and swept" : ""}; his intelligence checks out. Asylum granted: reputation +${bonus ? 3 : 2}. The next fighter we meet starts pre-scanned.`, "good");
   } else if (act.id === "anomaly") {
