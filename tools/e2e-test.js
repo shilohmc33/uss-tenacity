@@ -6,6 +6,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const errors = [];
   async function mk(w, h, mobile) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+    if (process.env.DEATHS === '1' || process.env.DEATHS === '0') await ctx.addInitScript(on => { window.__TENACITY_TEST_DEATHS = on; }, process.env.DEATHS === '1');   // phase 6: force deaths ON/OFF (default: the shipped PROG value, ON)
     const p = await ctx.newPage();
     p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${w}] ${m.type()}: ${m.text()}`); });
     p.on('pageerror', e => errors.push(`[${w}] pageerror: ${e.message}`));
@@ -139,6 +140,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await d.screenshot({ path: SH + 'desk_04_fullscreen_deck_redalert.png' });
   await d.evaluate(() => { __D.Depart && 0; }); 
   console.log(JSON.stringify(res, null, 1));
-  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');
+  console.log('ERRORS:', errors.length ? errors.join('\n') : 'none', process.env.DEATHS === '0' ? '(deaths OFF)' : '(deaths ON)');
   await browser.close();
 })();

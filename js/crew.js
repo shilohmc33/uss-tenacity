@@ -3,7 +3,7 @@ import { G } from "./state.js";
 import { DECKS, NODEMAP, SYSTEMS, STEP_LEN, CHAIR_LINES, BAR_LINES, ENG_ROOM } from "./data.js";
 import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
-import { log, toast, fx, shipNews } from "./bus.js";
+import { log, toast, fx, shipNews, hushed } from "./bus.js";
 import { faultPriority, shieldCap } from "./faults.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
 import { ltChatPartner } from "./npc-ambient.js";
@@ -106,8 +106,8 @@ export function tickLift(dt) {
 export function retrigger(nodeId) {
   const n = NODEMAP[nodeId];
   fx("pulse", { x: n.x, y: n.y });
-  if (nodeId === "chair") log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm");
-  else if (nodeId === "bar") log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm");
+  if (nodeId === "chair") { if (!hushed()) log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); }
+  else if (nodeId === "bar") { if (!hushed()) log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); }
   else if (nodeId === "msd") msdReport();
   const S = G.ship;
   const what = nodeId === "torpbay" ? (S.torps >= S.torpCap ? "complement full" : `torpedo ${Math.round(S.charge)}% built`)
@@ -178,8 +178,8 @@ function arrive() {
     faceToward(n.mx, n.my);
     if (n.face) setFacing(n.face);
     if (it.node === "msd") msdReport();
-    if (it.node === "chair") { log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); chatXP("tren"); }
-    if (it.node === "bar") { log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); chatXP("bar"); }
+    if (it.node === "chair") { if (!hushed()) log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); chatXP("tren"); }
+    if (it.node === "bar") { if (!hushed()) log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); chatXP("bar"); }
     fx("pulse", { x: n.x, y: n.y });
     return;
   }
@@ -286,9 +286,9 @@ function finishRepair() {
   if (q.rations > 0) fx("floater", { x: L.x, y: H, text: `+${q.rations} ${PROG.currency.short}`, color: "#9ff0c8", delay: parts > 0 ? 2.2 : 1.65, life: 2.2 });
   const tierWord = { excellent: "Excellent repair", good: "Good repair", standard: "Repairs complete", marginal: "Marginal repair" }[q.tier];
   log(`${tierWord} — ${sys.name} ${q.tier === "marginal" ? "patched" : "back to full function"}${manual ? "" : " (on his own initiative)"}. ${q.line}`, q.tier === "marginal" ? "comm" : "good");
-  log(`+${xp} XP · reputation +${rep}${q.rations ? ` · +${q.rations} ${PROG.currency.unit}` : ""}${parts ? ` · ${parts} spare part${parts > 1 ? "s" : ""} salvaged from the old components` : ""}.`, "good");
+  log(`+${xp} XP${rep > 0 ? ` · reputation +${rep}` : ""}${q.rations ? ` · +${q.rations} ${PROG.currency.unit}` : ""}${parts ? ` · ${parts} spare part${parts > 1 ? "s" : ""} salvaged from the old components` : ""}.`, "good");
   // the SHIP line shouldn't keep announcing a fault he just fixed
-  if (G.news && G.news.html && G.news.html.includes(sys.fault)) shipNews(`<b>${sys.name} repaired</b> by the Lieutenant (${q.tier}) — +${xp} XP, reputation +${rep}${parts ? `, +${parts} spare part${parts > 1 ? "s" : ""}` : ""}.`);
+  if (G.news && G.news.html && G.news.html.includes(sys.fault)) shipNews(`<b>${sys.name} repaired</b> by the Lieutenant (${q.tier}) — +${xp} XP${rep > 0 ? `, reputation +${rep}` : ""}${parts ? `, +${parts} spare part${parts > 1 ? "s" : ""}` : ""}.`);
   milestone("firstRepair", "First repair");
   if (q.reopen) {   // marginal (auto repairs only, never in week 1): the fault comes back as LOW
     G.ship.faults[id] = { t: 0, sev: "low", cost: 1, escT: 0, reopened: true };

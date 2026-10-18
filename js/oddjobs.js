@@ -72,7 +72,7 @@ export function tickJobs(dt) {
         taskDone(a.node, a.deck);
         j.done++; j.xp += xp; j.active = null; j.next = rr(k.gap);
         log(a.kind === "request" ? `${a.short} — sorted. 'I owe you one, ${addr()}.' (+${xp} XP)` : `Odd job done — ${a.label.replace(/^./, c => c.toLowerCase())}. (+${xp} XP)`, "good");
-        toast(`Odd job done · +${xp} XP · +${k.rep} rep`, "good");
+        toast(`Odd job done · +${xp} XP${k.rep > 0 ? ` · +${k.rep} rep` : ""}`, "good");
         fx("floater", { x: L.x, y: L.y - 0.235, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 });
       }
     }

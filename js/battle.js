@@ -216,9 +216,9 @@ function useMiracle() {
   const credit = sup ? "Miracle Worker, empowered by the Lieutenant's support — " : "Okafor: Miracle Worker — ";
   if (worst) {
     const nm = SYSTEMS[worst].name; delete S.faults[worst]; cancelRepairIf(worst);
-    log(`${credit}${nm} fault repaired on the spot — no parts spent — and hull patched +${gained}%.`, "good");
-    a.last = `Repaired ${nm} · hull +${gained}%${sup ? " · empowered" : ""}`;
-  } else { log(`${credit}no active faults — patch teams turn the miracle on the hull, +${gained}%.`, "good"); a.last = `Hull +${gained}%${sup ? " · empowered" : ""}`; }
+    log(`${credit}${nm} fault repaired on the spot — no parts spent — ${gained > 0 ? `and hull patched +${gained}%` : "hull already at full strength"}.`, "good");
+    a.last = `Repaired ${nm}${gained > 0 ? ` · hull +${gained}%` : ""}${sup ? " · empowered" : ""}`;
+  } else { log(`${credit}no active faults — patch teams turn the miracle on the hull${gained > 0 ? `, +${gained}%` : " (already at full strength)"}.`, "good"); a.last = `${gained > 0 ? `Hull +${gained}%` : "Hull already full"}${sup ? " · empowered" : ""}`; }
 }
 function useScan() { const a = G.ab.scan; a.cd = a.cdMax; a.active = 15; a.last = "Weapon damage +50% — 15s"; log("Diallo: Weak-Point Scan — shield seams and reactor vents mapped. All Tenacity weapon damage +50% for 15 seconds.", "comm"); }
 function useSpread() {

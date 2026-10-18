@@ -16,4 +16,6 @@ export function log(msg, cls = "") {
 }
 export function toast(msg, kind = "") { if (!quiet) subs.toast.forEach(f => f(msg, kind)); }
 export function shipNews(html) { G.news = { html, sd: G.ship.stardate.toFixed(1) }; if (!quiet) subs.news.forEach(f => f(G.news)); }
-export function fx(kind, data) { if (!quiet) subs.fx.forEach(f => f(kind, data)); }
+// pass 06 m1: ~10 min of ship time after a death (G.prog.med.hushUntil): no floaters and no cheerful ambient lines
+export const hushed = () => { const m = G.prog && G.prog.med; return !!(m && G.ship && G.ship.elapsed < (m.hushUntil || 0)); };
+export function fx(kind, data) { if (kind === "floater" && hushed()) return; if (!quiet) subs.fx.forEach(f => f(kind, data)); }

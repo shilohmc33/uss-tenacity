@@ -84,8 +84,8 @@ async function career(p) {   // a Lt jg mid-week-1 with some decor, a pending sp
   R.checks = await p.evaluate(async () => {
     const G = __T.G, PR = await import('/js/progression.js'), CL = __T.CL, CB = __T.CB, D = await import('/js/render/deck.js'), out = {};
     // m2: play day by LOCAL midnight
-    G.prog.lastPlayDate = null; const d0 = G.prog.playDays;
-    PR.markPlayDay(new Date(2026, 9, 17, 18, 55)); const a = G.prog.playDays; PR.markPlayDay(new Date(2026, 9, 17, 19, 5)); const b2 = G.prog.playDays; PR.markPlayDay(new Date(2026, 9, 18, 0, 5)); const c = G.prog.playDays;
+    G.prog.lastPlayDate = null; G.prog.lastPlayAt = null; const d0 = G.prog.playDays;
+    PR.markPlayDay(new Date(2026, 9, 17, 18, 55), 999); const a = G.prog.playDays; PR.markPlayDay(new Date(2026, 9, 17, 19, 5), 999); const b2 = G.prog.playDays; G.prog.lastPlayAt = null; PR.markPlayDay(new Date(2026, 9, 18, 0, 5), 999); const c = G.prog.playDays;
     out.m2 = { at1855: a - d0, at1905: b2 - d0, nextMidnight: c - d0, ok: a - d0 === 1 && b2 === a && c === a + 1 };
     // m3: shipment favour near a full locker
     G.prog.alumni.push({ id: 'testalum', name: 'Ens Test', short: 'Test', species: 'human', rank: 1, ladder: 'officer', slot: 'engineer-2', dept: 'eng', role: 'Engineer', opinion: 60, posting: 'utopia', leftDay: 1, leftPD: 1, fr: 6 });

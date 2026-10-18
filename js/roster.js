@@ -130,7 +130,7 @@ export const TAGS = {
   devout: ["{short}: 'The Prophets favour the patient, {lt}. So does a coolant line.'", "{short} murmurs a short blessing over the console. It boots first try."],
   blunt: ["{short}: 'Your last report was wrong in three places. The repair was right. Fix the report.'", "{short}: 'You're good. Don't let it go to your head; your head's big enough.'"],
   playful: ["{short} bats a loose stylus across the console. 'What? It was asking for it.'", "{short}: 'Race you to the turbolift. Loser files the parts report.'"],
-  stoic: ["{short} nods once. From them, that's a standing ovation.", "{short}: 'Adequate.' A pause. 'More than adequate.'"],
+  stoic: ["{short} nods once. From {obj}, that's a standing ovation.", "{short}: 'Adequate.' A pause. 'More than adequate.'"],
   musical: ["{short} is humming something from home. It fits the warp core's rhythm exactly.", "{short}: 'Jam session in the mess at 2100. Bring something that makes noise.'"],
 };
 export const TAG_KEYS = Object.keys(TAGS);
@@ -173,3 +173,18 @@ export const START_CREW = [
 // pt04 m7: per-occupant 'protected' flag: never picked for a random transfer, never seriously injured or killed (phase 6).
 // Thelev is Shiloh's social-test character (named ambient NPC with art and custom lines).
 for (const o of START_CREW) if (o.id === "thelev") o.protected = true;
+// Personal Log phase 1 (save v8): every crewmate carries a pronoun. Shiloh fixed T'Ren, Okafor, Diallo, Thelev = she and
+// Hale = he; the rest are a mix (some they). Generated crew roll one (genOccupant); alumni keep theirs.
+export const START_PRONOUNS = { tren: "she", okafor: "she", diallo: "she", hale: "he", orvin: "they", tull: "he", kovac: "she", seo: "she", doru: "he",
+  rhovan: "she", grevv: "he", mollo: "he", vardock: "they", natarajan: "she", rmira: "she", thelev: "she", delgado: "she", sorvan: "they" };
+for (const o of START_CREW) o.pronoun = START_PRONOUNS[o.id] || "they";
+export const PRONOUNS = {
+  she: { sub: "she", obj: "her", pos: "her", poss: "hers", ref: "herself", is: "is", has: "has", s: "s" },
+  he: { sub: "he", obj: "him", pos: "his", poss: "his", ref: "himself", is: "is", has: "has", s: "s" },
+  they: { sub: "they", obj: "them", pos: "their", poss: "theirs", ref: "themself", is: "are", has: "have", s: "" },
+};
+// pr(o, "sub") -> "she"; Pr(o, "sub") -> "She". o: an occupant, alumnus, roster entry or crew-list row (falls back to they)
+export const pr = (o, form = "sub") => (PRONOUNS[o && o.pronoun] || PRONOUNS.they)[form];
+// fill {sub} {obj} {pos} {ref} (and {Sub} etc. capitalised) in a crew line for crewmate o
+export const prFill = (str, o) => str.replace(/\{(sub|obj|pos|poss|ref|Sub|Obj|Pos|Poss|Ref)\}/g, (_, f) => f[0] === f[0].toUpperCase() ? Pr(o, f.toLowerCase()) : pr(o, f));
+export const Pr = (o, form = "sub") => { const w = pr(o, form); return w.charAt(0).toUpperCase() + w.slice(1); };

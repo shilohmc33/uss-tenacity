@@ -50,7 +50,11 @@ export const PACE = {
   // repair rewards (repairRep / repairParts) moved to js/progression.js (PROG) with the quality roll
 };
 // runtime-only pacing state (not saved)
-export const PACE_RT = { offline: false, idleT: 0, sessionT: 0 };
+export const PACE_RT = { offline: false, idleT: 0, sessionT: 0, hidden: false };
 export const rr = ([a, b]) => a + Math.random() * (b - a);
 export const nightActive = () => PACE_RT.offline || PACE_RT.idleT >= PACE.idleAfter;
 export function playerInput() { PACE_RT.idleT = 0; }
+// pass 06: the player is PRESENT when the app is visible, not in an offline catch-up, and there was input within the
+// last PROG.deaths.presentIdle s (60). Injury clocks, surgery outcomes and deaths only ever run while present.
+export const presentIdle = { s: 60 };
+export const isPresent = () => !PACE_RT.offline && !PACE_RT.hidden && !(typeof document !== "undefined" && document.hidden) && PACE_RT.idleT < presentIdle.s;

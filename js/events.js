@@ -75,7 +75,7 @@ export function fireEvent(id) {
     case "ferengi": {
       evBegin(id, null);
       log("Bridge: A Ferengi marauder hails — DaiMon Pesk. His opening offer for two spare parts is 'one Miranda-class starship, slightly used.'", "comm");
-      if (Math.random() < 0.5) { const got = Math.min(2, S.partsCap - S.parts); S.parts += got; log(`T'Ren negotiates for eleven minutes in perfect Ferengi, quoting Rule of Acquisition 190 back at him: +${got} spare parts.`, "good"); }
+      if (Math.random() < 0.5) { const got = Math.min(2, S.partsCap - S.parts); S.parts += got; log(`T'Ren negotiates for eleven minutes in perfect Ferengi, quoting Rule of Acquisition 190 back at him${got > 0 ? `: +${got} spare parts` : " (the locker is already full)"}.`, "good"); }
       else log("T'Ren declines the final offer with arctic courtesy. Pesk: 'Call me when you're desperate, Captain. Everyone does.'", "comm");
       evScheduleNext(); break;
     }

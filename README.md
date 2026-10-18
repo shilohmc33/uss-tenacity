@@ -31,14 +31,89 @@ Static ES-module build. There's no build step.
   stats column | deck | side column (alert, modes, stations, sheet buttons), one merged LT/SHIP line, sheets as a right drawer.
 - js/main.js: loop, input, modes, visibility, and boot.
 - js/debug.js
-- js/injuries.js (phase 6, WIP — off: PROG.deaths.enabled = false until it is finished): crew injuries and rare, fair deaths, built to the design memo's safeguards (§2). Injuries only come
+- js/injuries.js (phase 6 — ON by default since retune v2, Shiloh: about 1 death per 4 months for a regular player; Gentle mode is the opt-out;
+  21-run sim: regular p10/p50/p90 0/1/1 deaths per 120 days, casual 0/0/1 — shots/prog6-sim-v2.txt): crew injuries and rare, fair deaths, built to the design memo's safeguards (§2). Injuries only come
   from battle hull hits and hazard events, never the daily crew roll. The injured crew member lies on a sickbay biobed
   (render/deck.js) with an INJURED status on the CREW sheet. A serious injury hangs on a ship's system (coolant / EPS, or the
   fault the hit opened). Fixing it inside the warning window saves them. Deaths: never before day 14 of play or before Lt; never
   senior staff; never the 2 favourites (or the player's 2 pins), who are transferred to a starbase hospital instead. Gentle mode
   (CREW > Crew safety) turns a death into an evacuation. At most 1 death per 21 days of play, inside the crew-event caps. Offline
   outcomes wait until the player has seen the warning. On a death: a memorial log line, a Mess & Bar service, In Memoriam on the
-  CREW sheet, and a transfer-in replacement. Tuning: PROG.deaths. Save: G.prog.med (v7). Proof: tools/prog6-shots.js, prog-sim `deaths` mode.
+  CREW sheet, and a transfer-in replacement. Tuning: PROG.deaths. Save: G.prog.med (v7). Proof: tools/prog6-shots.js, prog-sim `deaths` mode
+  (exits 2 on any safeguard violation). Force deaths ON/OFF in tests: `DEATHS=1` / `DEATHS=0 node tools/tap44-check.js` (also save-fuzz, e2e); unset = the shipped default (ON). Protected crew
+  (Thelev) are a per-occupant `protected` flag, never a name check. While the player is live but idle, the night crew leaves a fault
+  a serious injury depends on to the Lt; offline it still fixes it (so no death resolves unseen).
+  **Pass 06 (playtest-06 HOLD fixes, save v10):** a death only ever resolves while the player is PRESENT (app visible, not in
+  catch-up, input within 60 s — pacing.js `isPresent()`), shown live in the sickbay scene, never as a shift-report bullet. The
+  injury clock starts when the alert is seen (input after it appeared, or tapping it / opening DUTY or CREW), counts 180 s of
+  present time only, and pauses while hidden / locked / idle (night mode too). Away or offline the night crew + doctor always
+  stabilise the patient (`crewStabilise` 1; pass 07: only patients never seen live); back with the system still down, the window restarts fresh (pass 07: resumes). The alert pill turns
+  into a red ✚ medical alert with a live countdown (+ vibrate and a short tone after the first user gesture). Rate: when the
+  system is restored live, Dr. Orvin operates (PROG.deaths.surgery: 8 s scene, chance 0.2, ×0.65 fast, ×0.7 per Excellent
+  repair (max 2), ×0.7 visited, cap 0.25); every safeguard is re-checked at the outcome. Play days use a high-water mark
+  (date must be later than any counted, ≥ 20 h real time apart), so clock flips can't skip the day-14 / 21-day gates.
+  ~10 min hush after a death (no floaters / cheerful lines), the service waits ≥ 10 min, evacuations get their own
+  goodbye, the memorial states the real opinion change and names the department's crew, a one-time Crew safety prompt from
+  play day 12, prog.rep clamped. Proof: tools/pt06-shots.js (hidden / idle / tamper / day-13 tests), prog6-shots
+  asserts, prog-sim `deaths` (`notPresent` / `offlineDeath` violations) — shots/prog6-sim-v3.txt.
+  **Pass 07 (playtest-07 narrow HOLD, save v13):** deaths have TWO sources, both only while present: (a) the surgery roll after
+  the fix, and (b) a timeout: the 180 s of present time ran out after the alert was seen and acknowledged, with the system still
+  down (fair; kept; counted in the rate). (1) A play day also needs ~3 min of present play once it is due (later date + 20 h),
+  measured by the in-session timer, so stepping the clock and relaunching adds nothing; a stored future date / time is pulled
+  back to now (no frozen days); migrateProg13 seeds the present requirement so the first day after the update counts; deaths
+  also need 3 h of present play in total and 3 h since the last death (`minPresentH` / `gapPresentH`). (2) Away never beats
+  watching: a seen patient whose system is fixed while the player is away / idle goes to surgery like any other; the surgery
+  pauses while away and resumes on return (never auto-saved); back with the system still down, the clock resumes where it paused
+  (not a fresh 180 s). Only a patient never seen live is stabilised with no roll. The 'fast' bonus needs the Lt's own fix landing
+  while present. (4) Surgery: base 0.30, ×0.4 fast (≈12%), one-tap ASSIST (×0.75), odds shown as a band (good chance ≤ 15% /
+  touch and go ≤ 35% / grim), and after a loss the doctor says it wasn't the Lt. Proof: tools/pt07-shots.js, save-fuzz v13
+  cases, prog-sim `deaths` (adds `awayBetter` / `freeSave` violations and the surgery vs timeout split) — shots/prog6-sim-v4.txt.
+  Exposure retuned to hold the rate (hazard injury 0.40, serious 0.9 / 0.45 / 0.85): 21 runs x 120 days, regular p10/p50/p90 0/1/2
+  (mean 0.95; 18 surgery + 2 timeout deaths), casual 0/1/2 (mean 0.71; 7 + 8). Minors: Orvin is they, evac / homesick lines use
+  the patient's pronoun, homesick is a 3-day spell every 15 ship's days, the gift that reveals a loved item doesn't start the
+  repeat decay, no cheerful repair quips in the hush, care-made good words count at 50% (max +2 readiness, x1.25 call-up),
+  generated crew never love a disliked category, the injury note shows the clock state, the phone gift picker footer is solid.
+- js/plog.js (Personal Log phase 1 = design memo 2026-10-17 phase A; save v8, the memo's "v7" — memo v8/v9/v10 become v9/v11/v12; pass 06 took v10):
+  CREW > PERSONAL LOG opens a read-only modal: one page per crewmate with standing (bar + label + 7-day trend arrow; the number stays
+  hidden until Insight 3+ in phase C), "What moved it" (last 5 nudge(why) reasons, consecutive repeats merge ×n) and a stardated journal
+  in the Lt's voice (crew events, sickbay, chats max 1/crewmate/ship's day, dinner, kit, odd jobs, praise/complaints). Former
+  shipmates (alumni, frozen opinion, posting, rank, favour contact ✓ at +30) and the fallen keep their pages; Seo's is hand-written.
+  Save: G.prog.plog { hist, journal, snap, chat, n }; migrateProg8 seeds the journal from crew.log (last 60). Caps: PROG.plog.
+  Every crewmate has a `pronoun` (START_PRONOUNS in roster.js; generated crew roll one; alumni/memorial keep it); crew text uses
+  pr()/Pr()/prFill() ({sub} {obj} {pos} {ref}). Proof: tools/plog1-shots.js, save-fuzz v7->v8 cases, prog-sim `deaths` PL-1/PL-2.
+- js/gifts.js + js/gift-data.js (Personal Log phase 2 = memo phase B; save v9, the memo's "v8"): gifts from a crew page in the
+  Personal Log. Memo tiers/caps in PROG.gifts: Token 10 FR / base 2 and Thoughtful 30 / 4 from Delgado's galley (any time), Personal
+  75 / 7 on the DS9 Promenade while docked, Treasured 180 / 12 at a homeworld (Lt+); both of those wait in the GIFT LOCKER (6).
+  Liked x1.5, loved x2 (the exact item, already known; not Tokens), disliked -4 raw; same item 1 / 0.5 / 0.25; ship-wide x0.5 after
+  3 a day; occasions x1.5 (birthday every 60 ship's days, seeded per save; 3 days after a promotion; homesick); one gift per person
+  per 2 ship's days; gifts stop at +70. Reactions reveal tastes (KNOWN TASTES: partial = category, full = item). Care packages to
+  ex-shipmates: 60 FR / base 5, +10 total, no Fleet Rep change. Gift opinion (gifts.giftOp) counts 50% in board readiness and in
+  the Fleet Rep banked on a transfer. Quarters dinner opinion 2 -> 4. Save: G.prog.gifts, G.prog.know (migrateProg9).
+  Proof: tools/plog2-shots.js, save-fuzz v8->v9 cases, prog-sim `gifts` mode (shots/plog2-sim.txt).
+- js/insight.js (Personal Log phase 3 = memo phase C, §4; save v11, the memo's "v9"). Player-facing name INSIGHT (never
+  "Intelligence"). XP -> Insight 0-10 at 10/25/45/70/100/140/190/250/320/400 (memo): chat +1 (Rhovan / Delgado / any Betazoid +2),
+  gift +2, first time a crewmate shows a given reaction +3, every 5 Lt levels +5, 3-D chess set / holo-novel library placed +1 a day
+  each. Chat XP is capped at 8 and gift XP at the first gift per ship's day (PROG.insight.dayCap, sim-tuned to the memo pace).
+  It unlocks knowledge only: a hint roll per chat (4% + 3% x Insight) reveals a hidden taste (partial = category, full = item at
+  Insight x 10%; Insight 8+ upgrades partials; dislikes and sore subjects too), the opinion number at Insight 3+ (Personal Log +
+  CREW RELATIONS), and the ⚠ on the risky reply of a chat-choice beat (20% + 6% x Insight, max 80%). Beats: 18% of chats with a
+  named crewmate, max 2 a ship's day, lapse at day's end; a 💬 chip + Personal Log row open a 3-reply modal (BEATS in insight.js).
+  Good reply +1 (normal nudge); the risky one -2 raw, reveals the sore subject and opens an apology from the next ship's day for
+  2 days that gives the loss back in full. The second like of each named crewmate is seeded per save from a pool of 3 (L2_ALT in
+  gift-data.js; gifts.tastesFor). No effect on readiness or promotion. Save: G.prog.insight { xp, lvl, today, n, seen, beat, apol,
+  l2, notes } (migrateProg11 pins pool 0 where a second like was already learned; hardenInsight re-derives lvl from xp).
+  Proof: tools/plog3-shots.js, save-fuzz v10->v11 cases + invariants, prog-sim `insight` mode (shots/plog3-sim.txt).
+- js/romance.js (Personal Log phase 4 = memo phase D, romance; save v12, the memo's "v10"). Opt-in (prog.romance.opt null = off;
+  card in the Personal Log index, toggle any time). Any gender; everyone except T'Ren and Okafor (PROG.romance.excluded). The crewmate
+  signals first: at opinion +50 after 3 shared moments (chat / dinner / pleased gift, one a day), 30% a day, 5-day gap; decline costs
+  nothing (never asked again by that crewmate unless the player reopens). Per-crew FRIENDS ONLY toggle. Dates (dinner 40 rations,
+  holosuite 30, Promenade free at DS9; every 2 days) end in a PG fade to black; Courting after 2 dates, Together after 5 dates and
+  5 days. Disclosure (memo): senior partner -> to the captain at Together; Lt Cmdr over a non-senior partner -> outrank disclosure.
+  Partner below +20 ends it; END IT GENTLY costs -3. Transfer -> letter thread (alumni page, reply warm/light/end, +1 alumni opinion,
+  no Fleet Rep). Partners are not auto-protected (excluded from the auto top-2 favourites; normal safeguards only); their death gives a
+  heavier memorial + personal log entry. Anti-farm: romanceCap() caps partner opinion at +50 in readiness social share and transfer
+  Fleet Rep, and 0 for readiness under authority. Tuning in PROG.romance. Proof: tools/plog4-shots.js, save-fuzz v11->v12 cases +
+  invariants, prog-sim `romance` mode (shots/plog4-sim.txt, anti-farm and safeguard assertions).
 - assets/: harvested art. Ships are pre-keyed from magenta to alpha.
 - reference/: original HTML, assets, and attachments.
 - tools/: Playwright e2e scripts (tools/lt2-shots.js: Lt sprite screenshots -> shots/lt2_*.png; tools/tren-shots.js: T'Ren -> shots/tren_*.png).

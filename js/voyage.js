@@ -108,7 +108,7 @@ export function arriveAtDest() {
   if (!G.prog.milestones.firstArrival) {   // session-1 milestone: T'Ren's commendation + DS9's welcome-aboard crate
     const fa = PROG.firstArrival, got = Math.min(fa.parts, S.partsCap - S.parts);
     SP.rep += fa.rep; S.parts += got;
-    log(`T'Ren: 'First arrival logged, Lieutenant. I've noted your conduct in the record.' Reputation +${fa.rep}. DS9's welcome-aboard crate caught up with us: +${got} spare parts.`, "good");
+    log(`T'Ren: 'First arrival logged, Lieutenant. I've noted your conduct in the record.' Reputation +${fa.rep}. ${got > 0 ? `DS9's welcome-aboard crate caught up with us: +${got} spare parts.` : "DS9's welcome-aboard crate will wait — the parts locker is full."}`, "good");
     milestone("firstArrival", "First arrival");
   }
   if (id === "ds9") {
@@ -128,7 +128,7 @@ export function arriveAtDest() {
     else { const got = Math.min(3, S.partsCap - S.parts); S.parts += got; log(`Diallo: Sensor find — a dead freighter's cargo pods. Salvaged ${got} spare part(s).`, "good"); }
   } else if (id === "hulk") {
     const haul = Math.min(4 + Math.floor(rand(0, 2)), S.partsCap - S.parts); S.parts += haul;
-    log(`Diallo: Alongside the hulk — her holds are intact. Cutting parties strip her: +${haul} spare parts.`, "good");
+    log(`Diallo: Alongside the hulk — her holds are intact. ${haul > 0 ? `Cutting parties strip her: +${haul} spare parts.` : "No room in the parts locker to take anything aboard."}`, "good");
     if (Math.random() < 0.10 && startBattle("hulk")) { /* ambush */ }
     else if (Math.random() < 0.35) {
       if (Math.random() < 0.5) { log("Something was still aboard the hulk — and it got into the ship's systems before security flushed it out.", "fault"); const id = spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "hulk", sys: id })); }

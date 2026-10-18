@@ -4,8 +4,8 @@
 // Runs inside stepSim (so the offline catch-up rolls days and lands arrivals too); the npc-ambient layer only draws.
 import { G } from "./state.js";
 import { log, toast, fx } from "./bus.js";
-import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, rankOf, fullName, perkFx, spend, canAfford, addr, costText, computeReadiness } from "./progression.js";
-import { SLOTMAP, SPECIES, TAGS, TAG_KEYS, POSTINGS, LADDERS, DEPTS } from "./roster.js";
+import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, rankOf, fullName, perkFx, spend, canAfford, addr, costText, computeReadiness, giftShare, romanceCap } from "./progression.js";
+import { SLOTMAP, SPECIES, TAGS, TAG_KEYS, POSTINGS, LADDERS, DEPTS, pr, Pr, prFill } from "./roster.js";
 import { PACE_RT, nightActive } from "./pacing.js";
 
 const P = () => G.prog;
@@ -20,10 +20,12 @@ const KIT = ["tricorder that keeps losing calibration", "family holo-projector t
 const weekCount = () => { const pd = P().playDays; return C().rolls.hist.filter(d => d > pd - 7).length; };
 const dayCount = () => C().rolls.hist.filter(d => d === P().playDays).length;
 const tenure = o => P().playDays - (o.joined || 0);
+const romProtected = id => { const R = P().romance, b = R && R.bond[id]; return !!b && R.partner === id && P().day < b.protectUntil; };
 function eligible(kind, c) {
   if (c.senior) return false;
   if (medFx.isInjured(c.id)) return false;                     // phase 6: nobody is transferred / re-ranked from a biobed                                  // seniors are protected (memo §2.4); newcomers settle in via minTenure
   const sl = SLOTMAP[c.slot], top = LADDERS[sl.ladder].length - 1;
+  if (kind === "transfer" && romProtected(c.id)) return false;   // phase 4: a new partner is safe from random transfers for PROG.romance.protectDays
   if (kind === "transfer") return !c.occ.protected && tenure(c.occ) >= PROG.crewEvents.minTenure;   // pt04 m7: protected crew never transfer at random
   if (kind === "promotion") return c.rank < Math.min(top, sl.ladder === "officer" ? 3 : top);   // regulars top out at Lt Cmdr / Senior Chief
   if (kind === "demotion") return c.rank > 0;
@@ -78,7 +80,7 @@ export function rankChange(id, dir) {
     toast(`Crew promotion — ${fullName(o)}`, "good");
     note("promotion", id, fullName(o));
   } else {
-    log(`Crew news: ${before} is reduced in rank to ${rankOf(o, true)} after a disciplinary hearing. ${o.short} keeps their eyes on the deck for a few days.`, "fault");
+    log(`Crew news: ${before} is reduced in rank to ${rankOf(o, true)} after a disciplinary hearing. ${o.short} keeps ${pr(o, "pos")} eyes on the deck for a few days.`, "fault");
     toast(`Crew demotion — ${fullName(o)}`, "warn");
     note("demotion", id, fullName(o));
   }
@@ -92,16 +94,26 @@ function postingFor(dept) {
 export function transferOff(id, posting = null, why = "roll") {
   const p = P(), cr = C(), o = cr.occ[id]; if (!o) return null;
   const sl = SLOTMAP[o.slot], post = posting || postingFor(sl.dept), op = Math.round(opinionOf(id));
-  const fr = Math.max(0, Math.floor(op / PROG.fleet.perOpinion));
-  const alum = { id, name: o.name, short: o.short, species: o.species, rank: o.rank, ladder: sl.ladder, slot: o.slot, dept: sl.dept, role: sl.role,
+  const frOp = romanceCap(id, op, "fleet");   // phase 4 anti-farm: a partner's opinion counts at most +50 (friendship) here
+  const fr = Math.max(0, Math.floor((frOp - (1 - PROG.gifts.fleetShare) * Math.min(giftShare(id), frOp)) / PROG.fleet.perOpinion));   // gifts phase: gift opinion counts 50%
+  const alum = { id, name: o.name, short: o.short, species: o.species, pronoun: o.pronoun || "they", tags: [...(o.tags || [])], rank: o.rank, ladder: sl.ladder, slot: o.slot, dept: sl.dept, role: sl.role,
     opinion: op, posting: post, leftDay: p.day, leftPD: p.playDays, fr };
   p.alumni.push(alum); p.fleetRep += fr;
   cr.slots[o.slot] = null; delete cr.occ[id]; crewTouch();
   cr.pending.push({ slot: o.slot, at: G.ship.elapsed + rnd(PROG.crewEvents.replaceAfter) });
   const bye = op >= PROG.fleet.contactMin ? `${o.short}, kit bag over one shoulder, stops by the ${addr()}: 'I'll tell them about you. Call if you ever need anything.'`
     : op >= 0 ? `${o.short} shakes the ${addr()}'s hand on the way to the transporter room.` : `${o.short} leaves without a goodbye.`;
+  if (why === "evac" || why === "hospital") {   // pass 06 m6: a medical evacuation is not a handshake at the transporter room
+    const did = cr.slots.doctor, dd = did && did !== id && cr.occ[did], doc = dd ? `Dr. ${dd.short}` : "The duty medic";
+    const goodbye = why === "evac"
+      ? `${o.short} goes out on a stretcher under a thermal blanket, ${pr(o, "pos")} hand finding the ${addr()}'s for a moment on the way to the transporter pad. ${doc} walks beside ${pr(o, "obj")} all the way.`
+      : `${o.short} is carried to the transporter pad on a medical stretcher; ${pr(o)} manages a small nod to the ${addr()}.`;
+    log(`Medical evacuation: ${fullName(o)} (${SPECIES[o.species].name}, ${sl.role}) is beamed to ${POSTINGS[post].name}. ${goodbye}${fr ? ` Fleet Reputation +${fr}.` : ""} A replacement will be assigned.`, "comm");
+    toast(`Evacuated — ${o.short} to ${POSTINGS[post].name}`, "info");
+  } else {
   log(`Transfer orders: ${fullName(o)} (${SPECIES[o.species].name}, ${sl.role}) is reassigned to ${POSTINGS[post].name}. ${bye}${fr ? ` Fleet Reputation +${fr}.` : ""} A replacement is en route.`, op >= 0 ? "good" : "fault");
   toast(`Transfer off — ${o.short} to ${POSTINGS[post].name}${fr ? ` · Fleet Rep +${fr}` : ""}`, "info");
+  }
   note("transfer", id, fullName(o), { posting: post, opinion: op, fr, why });
   return alum;
 }
@@ -119,7 +131,8 @@ export function genOccupant(slot) {
   const tags = []; const pool = TAG_KEYS.filter(t => t !== "devout" || spId === "bajoran");
   while (tags.length < 2) { const t = pick(pool); if (!tags.includes(t)) tags.push(t); }
   const id = `${spId.slice(0, 3)}${cr.nextId++}`;
-  return { id, slot, rank: Math.random() < 0.7 ? 0 : 1, name, short, species: spId, tags, joined: P().playDays, intro: true, from: pick(ORIGINS) };
+  const r = Math.random(), pronoun = r < 0.44 ? "she" : r < 0.88 ? "he" : "they";   // plog phase 1: generated crew get a pronoun too
+  return { id, slot, rank: Math.random() < 0.7 ? 0 : 1, name, short, species: spId, tags, pronoun, joined: P().playDays, intro: true, from: pick(ORIGINS) };
 }
 export function arrive(slot, occ = null) {
   const p = P(), cr = C(), sl = SLOTMAP[slot];
@@ -138,8 +151,8 @@ export function introLine(id) {
   const cr = C(), o = cr.occ[id]; if (!o) return "";
   const sl = SLOTMAP[o.slot], best = friendliestAlum();
   const heard = o.heard >= PROG.fleet.newcomer.lineAt && best ? ` 'Heard good things about you from ${rankOf(best)} ${best.short} at ${POSTINGS[best.posting].name}.'` : "";
-  const flav = (TAGS[o.tags[0]] || TAGS.warm)[0].replace(/\{short\}/g, o.short).replace(/\{lt\}/g, addr());
-  return `New crewmate: ${fullName(o)} (${SPECIES[o.species].name}) introduces themself — 'Reporting as ${sl.role.split(" ·")[0].toLowerCase()}, ${addr()}. Just in from ${o.from}.'${heard} ${flav}`;
+  const flav = (TAGS[o.tags[0]] || TAGS.warm)[0].replace(/\{short\}/g, o.short).replace(/\{lt\}/g, addr()), flavP = prFill(flav, o);
+  return `New crewmate: ${fullName(o)} (${SPECIES[o.species].name}) introduces ${pr(o, "ref")} — 'Reporting as ${sl.role.split(" ·")[0].toLowerCase()}, ${addr()}. Just in from ${o.from}.'${heard} ${flavP}`;
 }
 export function introDone(id) {
   const o = C().occ[id]; if (!o || !o.intro) return false;
@@ -187,10 +200,18 @@ export function onDiplomatic(dest) {   // +2 Fleet Reputation per diplomatic vis
   if (cr.dipPD != null && pd - cr.dipPD < PROG.fleet.diplomaticEvery) return;
   cr.dipPD = pd; addFleetRep(PROG.fleet.diplomatic, "the Tenacity's diplomatic call is noted fleet-wide");
 }
-const goodWordN = () => P().alumni.filter(a => a.opinion >= PROG.fleet.perks.goodword.min).length;
+// pt07 m7: care packages (rations) count at 50% toward the good-word threshold, like gifts in readiness, and what care adds is
+// capped (+2 readiness, x1.25 call-up at most), so rations can never double the call-up odds on their own
+function goodWord() {
+  const K = PROG.fleet.perks.goodword, care = (P().gifts && P().gifts.care) || {}; let org = 0, viaCare = 0;
+  for (const a of P().alumni) { const c = care[a.id] || 0; if (a.opinion - c >= K.min) org++; else if (a.opinion - c * 0.5 >= K.min) viaCare++; }
+  return { org, viaCare, n: org + viaCare };
+}
 export const perkState = () => {
-  const K = PROG.fleet.perks, qm = P().alumni.find(a => K.quartermaster.postings.includes(a.posting) && a.opinion >= K.quartermaster.min), n = goodWordN();
-  return { quartermaster: qm || null, goodword: n, readiness: Math.min(K.goodword.cap, n * K.goodword.readiness), callup: Math.min(K.goodword.callupCap, 1 + n * K.goodword.callup) };
+  const K = PROG.fleet.perks, qm = P().alumni.find(a => K.quartermaster.postings.includes(a.posting) && a.opinion >= K.quartermaster.min), gw = goodWord(), W = K.goodword;
+  const ready = Math.min(W.cap, gw.org * W.readiness + Math.min(W.careReadyMax, gw.viaCare * W.readiness * 0.5));
+  const callup = Math.min(W.callupCap, 1 + gw.org * W.callup + Math.min(W.careCallupMax, gw.viaCare * W.callup * 0.5));
+  return { quartermaster: qm || null, goodword: gw.n, goodwordCare: gw.viaCare, readiness: ready, callup };
 };
 perkFx.readiness = () => perkState().readiness;
 perkFx.callup = () => perkState().callup;
@@ -308,7 +329,7 @@ export function fixKit(id) {
   const p = P(), K = PROG.sinks.kit, r = p.requests.find(x => x.id === id), o = p.crew.occ[id];
   if (!r || !o || !spend({ parts: K.parts }, "kit")) return false;
   p.requests = p.requests.filter(x => x !== r);
-  const d = nudge(id, K.opinion, "kit", true);
+  const d = nudge(id, K.opinion, `kit|${r.item}`, true);
   log(`The ${addr()} fixes ${o.short}'s ${r.item} — ${o.short} is delighted (opinion +${Math.max(1, Math.round(d))}, −${K.parts} parts).`, "good");
   toast(`Fixed ${o.short}'s kit — −${K.parts} parts`, "good"); return true;
 }

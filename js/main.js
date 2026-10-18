@@ -2,7 +2,7 @@
 import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY } from "./state.js";
 import { preload, missing, IMG } from "./assets.js";
 import { applyWalkMasks, snapToFloor } from "./path.js";
-import { PACE_RT, playerInput } from "./pacing.js";
+import { PACE_RT, playerInput, isPresent } from "./pacing.js";
 import { on, log, shipNews } from "./bus.js";
 import { ltNote } from "./crew.js";
 import { stepSim, catchUp } from "./sim.js";
@@ -15,8 +15,14 @@ import { buildHud, wireHud, updateHud, openLiftPanel, closeLiftPanel, showReport
 import * as CB from "./cabin.js";
 import * as BD from "./boards.js";
 import * as MD from "./injuries.js";
+import * as PL from "./plog.js";   // Personal Log phase 1 (hooks register on import)
+import * as GF from "./gifts.js";   // Personal Log phase 2: gifts
+import * as IN from "./insight.js";   // Personal Log phase 3: Insight (hooks register on import)
+import * as RM from "./romance.js";   // Personal Log phase 4: romance (hooks register on import)
 import { sendTo, sendUse, sendRepair, sendLiftPanel, retrigger, ORDER, playerOrder } from "./crew.js";
-import { awardXP, PROG, qualityOdds, markPlayDay } from "./progression.js";
+import { awardXP, PROG, qualityOdds, markPlayDay, tickPlayDay } from "./progression.js";
+// phase 6 test override: tools force deaths ON (DEATHS=1) or OFF (DEATHS=0) via an init script; default = PROG.deaths.enabled (true since retune v2)
+if (typeof window !== "undefined" && typeof window.__TENACITY_TEST_DEATHS === "boolean") PROG.deaths.enabled = window.__TENACITY_TEST_DEATHS;
 import { setupDebug } from "./debug.js";
 import { settleInflightTorps } from "./battle.js";
 
@@ -101,7 +107,7 @@ $("#zoomCtl").onclick = e => { const b = e.target.closest("[data-z]"); if (b) se
 document.querySelectorAll("[data-sheet]").forEach(b => b.onclick = () => {
   const name = b.dataset.sheet, open = document.body.classList.contains("sheet-" + name);
   closeSheet();
-  if (!open) { document.body.classList.add("sheet-open", "sheet-" + name); $("#sheetTitle").textContent = name.toUpperCase(); }
+  if (!open) { document.body.classList.add("sheet-open", "sheet-" + name); $("#sheetTitle").textContent = name.toUpperCase(); if (name === "duty" || name === "crew") MD.ackInjury(); }   // pass 06 (a): opening DUTY / CREW = alert seen
 });
 $("#sheetClose").onclick = closeSheet;
 window.addEventListener("resize", resize);
@@ -118,6 +124,7 @@ function frame(now) {
   if (app.paused) { last = now; return; }
   let dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
   rt += dt;
+  tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
   let simDt = dt * app.timeScale;
   while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); simDt -= s; }
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
@@ -127,6 +134,7 @@ function frame(now) {
 // pause when hidden; on return, run idle catch-up for the gap
 let hiddenAt = 0;
 document.addEventListener("visibilitychange", () => {
+  PACE_RT.hidden = document.hidden;   // pass 06: never 'present' while hidden
   if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (!window.__noSave) saveGame(); }
   else {
     const gap = (Date.now() - hiddenAt) / 1000;
@@ -183,7 +191,7 @@ function bootGame(params, masks) {
   if (masks.length < 5) console.warn("Walk masks missing for some decks; using fallback rects.");
   $("#loading").classList.add("done");
   if (params.has("debug")) setupDebug(app, { setView, setMode });
-  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger, PACE_RT, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, playerOrder, ORDER, awardXP, PROG, qualityOdds };
+  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger, PACE_RT, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds };
   updateHud();
   requestAnimationFrame(t => { last = t; frame(t); });
 }

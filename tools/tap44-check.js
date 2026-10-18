@@ -35,7 +35,7 @@ async function setup(p) {
     const PR = await import('/js/progression.js'), G = __T.G; window.__noSave = true;
     G.sp.cap.decideT = 1e9; G.ship.nextFault = 1e9; G.sp.ev.nextT = -1;
     PR.awardXP(9000, 'manual'); G.prog.rank = 1; __T.CB.applyTier();
-    G.prog.specOffered = 99; G.sp.rep = 3000; G.prog.repLifetime = 9000; G.prog.playDays = 12;
+    G.prog.specOffered = 99; G.sp.rep = 3000; G.prog.repLifetime = 9000; G.prog.playDays = 12; G.prog.med.prompt12 = true;   // pass 06: the Crew safety prompt is measured in pt06-shots
     const C = G.prog.cabin; C.rations = 5000; const ids = Object.keys(__T.CB.DECOR).slice(0, 3); for (const id of ids) { if (!C.owned.includes(id)) C.owned.push(id); }
     if (G.prog.fleet) G.prog.fleet.rep = 60;
     G.ship.faults.coolant = { sev: 'med', t: 0, cost: 1, escT: 0 };
@@ -53,6 +53,7 @@ async function mode(p, m) { await p.evaluate(m => document.querySelector(m === '
   for (const [w, h, mobile] of [[390, 844, true], [844, 390, true], [1280, 800, false]]) {
     const tag = `${w}x${h}`; report.errors[tag] = [];
     const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+    if (process.env.DEATHS === '1' || process.env.DEATHS === '0') await ctx.addInitScript(on => { window.__TENACITY_TEST_DEATHS = on; }, process.env.DEATHS === '1');   // phase 6: force deaths ON/OFF (default: the shipped PROG value, ON)
     const p = await ctx.newPage();
     p.on('console', m => { if (['error', 'warning'].includes(m.type())) report.errors[tag].push(m.text()); });
     p.on('pageerror', e => report.errors[tag].push('pageerror: ' + e.message));
@@ -84,6 +85,6 @@ async function mode(p, m) { await p.evaluate(m => document.querySelector(m === '
   fs.writeFileSync(OUT + 'tap44-report.json', JSON.stringify(report, null, 1));
   const uniq = {}; for (const f of report.fails) { const k = `${f.size} ${f.el} "${f.text}" ${f.w}x${f.h}`; uniq[k] = (uniq[k] || []).concat(f.scene); }
   console.log(JSON.stringify(report.sizes)); for (const [k, v] of Object.entries(uniq)) console.log('SMALL', k, '—', [...new Set(v)].join('; '));
-  console.log('errors', JSON.stringify(report.errors)); console.log(report.pass ? 'TAP44 PASS' : 'TAP44 FAIL');
+  console.log('errors', JSON.stringify(report.errors)); console.log(report.pass ? 'TAP44 PASS' : 'TAP44 FAIL', process.env.DEATHS === '0' ? '(deaths OFF)' : '(deaths ON)');
   process.exit(report.pass ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(2); });

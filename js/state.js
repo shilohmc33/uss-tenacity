@@ -1,8 +1,8 @@
 // Single source of truth: everything that matters lives in G and is JSON-serialisable.
 import { DECKS, NODEMAP, SYSTEMS, DESTS } from "./data.js";
-import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, clampProg } from "./progression.js";
+import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, migrateProg8, migrateProg9, migrateProg10, migrateProg11, migrateProg12, migrateProg13, clampProg, clampResources } from "./progression.js";
 export const SAVE_KEY = "tenacity.save.v1";   // key kept; the schema version lives in G.version
-export const SAVE_VERSION = 7;               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med)
+export const SAVE_VERSION = 13;               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med); v8: Personal Log (G.prog.plog) + crew pronouns (memo 'v7'; memo v8/v9/v10 -> v9/v10/v11); v9: gifts + tastes known (G.prog.gifts / G.prog.know; memo 'v8'); v10: pass 06 presence-based injury clock, surgery outcome, play-day high-water mark (memo 'v9' Insight is now v11); v11: Insight (G.prog.insight, memo 'v9'), seeded second likes, avoid known; v12: romance (G.prog.romance, memo 'v10'); v13: pass 07 present-time play days (G.prog.dayPresent), paused surgery + assist
 export const G = {};
 export function freshState() {
   return {
@@ -63,6 +63,12 @@ export function loadGame() {
     if (data.version < 5) { data.prog = migrateProg5(data.prog); data.version = 5; }
     if (data.version < 6) { data.prog = migrateProg6(data.prog); data.version = 6; }
     if (data.version < 7) { data.prog = migrateProg7(data.prog); data.version = 7; }
+    if (data.version < 8) { data.prog = migrateProg8(data.prog); data.version = 8; }
+    if (data.version < 9) { data.prog = migrateProg9(data.prog); data.version = 9; }
+    if (data.version < 10) { data.prog = migrateProg10(data.prog); data.version = 10; }
+    if (data.version < 11) { data.prog = migrateProg11(data.prog); data.version = 11; }
+    if (data.version < 12) { data.prog = migrateProg12(data.prog); data.version = 12; }
+    if (data.version < 13) { data.prog = migrateProg13(data.prog); data.version = 13; }
     for (const k of Object.keys(G)) delete G[k];
     // shallow-merge each section so new fields get defaults
     for (const k of Object.keys(base)) {
@@ -74,10 +80,17 @@ export function loadGame() {
       else G[k] = v !== undefined ? v : base[k];
     }
     sanitize(base);
+    if (G.lt && !['up', 'down', 'left', 'right'].includes(G.lt.dir)) G.lt.dir = 'down';   // pt07 fuzz: a junk facing broke the sprite lookup
     clampProg();
+    clampResources();   // pass 05 m1-a
     G.version = SAVE_VERSION;   // pt04 m1: a stray/future version number never sticks
     return true;
-  } catch (e) { return false; }
+  } catch (e) {
+    // pass 05 m1-b: a save that can't be read at all (truncated / invalid JSON, or a load that throws) is kept aside byte
+    // for byte as tenacity.save.v1.corrupt before the fresh shift can overwrite it; bootGame tells the player.
+    try { const raw = localStorage.getItem(SAVE_KEY); if (raw) { localStorage.setItem(SAVE_KEY + ".corrupt", raw); sessionStorage.setItem("tenacity.recovered", String(e && e.message || e)); } } catch (e2) {}
+    return false;
+  }
 }
 // Fall back gracefully when a save references decks/nodes/systems/destinations this build doesn't have
 // (renamed or removed content): reset just the broken piece instead of crashing the boot.

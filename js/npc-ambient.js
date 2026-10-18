@@ -8,10 +8,10 @@
 // themself the first time the Lt is on their deck. Slot "mess-regular-1" keeps Thelev's hand-made config (AMBIENT_NPCS).
 import { G } from "./state.js";
 import { AMBIENT_NPCS, NODEMAP, STEP_LEN, CHAR_SHEETS, DECKS } from "./data.js";
-import { CREW_ROSTER, SLOTMAP, SPECIES, DEPTS, TAGS } from "./roster.js";
+import { CREW_ROSTER, SLOTMAP, SPECIES, DEPTS, TAGS, prFill } from "./roster.js";
 import { findPath, isWalkable, nearestWalkable, cellCenter } from "./path.js";
 import { clamp, dDist } from "./util.js";
-import { log, fx } from "./bus.js";
+import { log, fx, hushed } from "./bus.js";
 import { PROG, chatXP, addr, fullName } from "./progression.js";
 import { introDone } from "./crewlife.js";
 
@@ -61,10 +61,10 @@ function cfgFor(sl, o) {
   const R = PROG.roster;
   if (sl.ambient && CUSTOM[sl.ambient]) {
     const c = CUSTOM[sl.ambient], mine = o.id === c.id;
-    return { ...c, id: o.id, rank: "", name: fullName(o), short: o.short, custom: true, social: { ...c.social, lines: mine ? c.social.lines : linesFor(o) } };
+    return { ...c, id: o.id, rank: "", name: fullName(o), short: o.short, pronoun: o.pronoun, custom: true, social: { ...c.social, lines: mine ? c.social.lines : linesFor(o) } };
   }
   const nodes = {}; for (const nd of sl.chat || []) nodes[nd] = NEAR;
-  return { id: o.id, deck: sl.deck, speed: R.speed, seed: (o.id.length * 1.7) % 6, spots: sl.spots, name: fullName(o), short: o.short,
+  return { id: o.id, deck: sl.deck, speed: R.speed, seed: (o.id.length * 1.7) % 6, spots: sl.spots, name: fullName(o), short: o.short, pronoun: o.pronoun,
     social: { nodes, maxSnap: 28, joinRange: R.joinRange, chatRange: 150, chatDur: [12, 20], lingerT: [3, 6], lineCooldown: 0, lines: linesFor(o) } };
 }
 export const ambient = [];
@@ -109,17 +109,20 @@ function startChat(n, kind = "social") {
   n.mode = "chat"; n.chatKind = kind; n.chatT = rnd(so.chatDur); n.lastChat = now; lastAnyChat = now;
   if (kind === "intro") { introDone(c.id); chatXP(c.id); return; }
   chatXP(c.id);   // progression: 3 XP per chat (shared 2-min cooldown) + opinion
+  if (hushed()) return;   // pass 06 m1: the ship goes quiet for a while after a death
   if (now - m.lineAt >= so.lineCooldown) {
     m.lineAt = now;
-    const line = so.lines[m.lineI++ % so.lines.length].replace("{name}", c.name).replace(/\{short\}/g, c.short).replace(/\{lt\}/g, addr());
-    log(line, "comm");
+    const line = so.lines[m.lineI++ % so.lines.length].replace("{name}", c.name).replace(/\{short\}/g, c.short).replace(/\{lt\}/g, addr()); const lineP = prFill(line, c);
+    log(lineP, "comm");
   }
   if (so.perk && now - m.perkAt >= so.perk.cooldown) {
     m.perkAt = now;
     const before = S.energy; S.energy = clamp(S.energy + so.perk.energy, 0, 100);
     const got = Math.round(S.energy - before);
-    log(`A few words with ${c.short} lift the Lieutenant's spirits — energy +${got}.`, "good");
-    fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `+${got} ENERGY`, color: "#66e0d0", delay: 0.3, life: 2.2 });
+    if (got > 0) {   // energy already full: the chat still happens, but no "energy +0" line or floater
+      log(`A few words with ${c.short} lift the Lieutenant's spirits — energy +${got}.`, "good");
+      fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `+${got} ENERGY`, color: "#66e0d0", delay: 0.3, life: 2.2 });
+    }
   }
 }
 // the Lt is "socialising" when he's using one of this NPC's chat nodes on its deck
