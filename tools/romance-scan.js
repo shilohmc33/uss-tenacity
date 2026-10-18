@@ -9,7 +9,9 @@
 //    after a death is deferred (no letter, toast or log) and arrives once the gate opens.
 // Pass 12: the rendered SHIP log (whole history) is scanned too; off_history (full romance history then OFF, legacy untagged lines);
 // m3_m4 (endIt clears a stale disclosure + counts the ending; the auto-protection notice only for a former AUTO favourite, never
-// for a hand-pinned partner - pass 13 minor); off_deadpartner (pass 13: a dead partner keeps a plain death journal entry with romance off).
+// for a hand-pinned partner - pass 13 minor); off_deadpartner (pass 13: a dead partner keeps a plain death journal entry with romance off);
+// off_transferredpartner (pass 14: a transferred partner keeps the plain transfer entry with romance off); off_build09 (pass 15: a real
+// build09 save that wrote both death entries for a lost partner shows ONE, romance on or off).
 // Usage: NODE_PATH=/workspace/pwtools/node_modules node tools/romance-scan.js   (exit 1 on failure; STATIC=1 skips the browser)
 const fs = require('fs'), path = require('path');
 const ROOT = path.join(__dirname, '..', 'js'), rd = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
@@ -39,7 +41,8 @@ const { chromium } = require('playwright-core');
 const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
-  const p = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage(); const errs = [];
+  const [VW, VH] = (process.env.VIEWPORT || '1280x800').split('x').map(Number), mob = VW < 1000;   // pass 14: VIEWPORT=390x844 / 844x390 (default 1280x800)
+  const p = await (await b.newContext({ viewport: { width: VW, height: VH }, isMobile: mob, hasTouch: mob, deviceScaleFactor: mob ? 2 : 1 })).newPage(); const errs = [];
   p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
   const fresh = async () => { await p.goto(BASE + '?debug=1&reset=1'); await p.waitForFunction(() => !!window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 30000 }); await p.waitForTimeout(300);
     await p.evaluate(async () => { window.__noSave = true; const G = __T.G, P = G.prog; __T.app.paused = true; G.sp.cap.decideT = 1e9; G.ship.nextFault = 1e9; if (G.sp.ev) G.sp.ev.nextT = -1; P.day = 20; P.playDays = 20; P.rank = 1; P.rations = 900;
@@ -74,6 +77,7 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
     P.day += 20; P.romance.lastEnd = -99; P.opinions.natarajan = 70; P.romance.lastSignal = -99; RM.forceSignal('natarajan'); RM.answerSignal(true); __T.CL.transferOff('natarajan', null, 'roll'); days(30);
     const BUS = window.BUS; BUS.log("An evening with Kovac. You talk until the replicator runs out of tea.", "good"); BUS.log("A letter from Kovac at Starbase 375. (Personal Log)", "comm"); BUS.log("Before the transporter takes Kovac, there's a moment that's only yours. 'Write to me.' You promise. (Personal Log ▸ letters)", "comm");
     const tagged = G.log.filter(e => e.tag === 'rom').length; HUD.renderLog(); const onCount = [...document.querySelectorAll('#log li')].filter(li => ROMRX.test(li.innerText)).length;
+    await new Promise(r => setTimeout(r, 60));   /* pass 14 deflake: let the toast observer record letters toasted while romance was ON before the off-scan baseline */
     RM.setOpt(false); const hits = await scan(G.log.length, toasts.length, []); RM.setOpt(true); HUD.renderLog(); const backOn = [...document.querySelectorAll('#log li')].filter(li => ROMRX.test(li.innerText)).length;
     return { tagged, onCount, hits, backOn }; });
   // pass 13 HOLD 1: the IN MEMORIAM row for a lost partner reads '· a close friend' (no ♥) with romance off, '· your partner' with it on
@@ -102,6 +106,23 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
     Object.assign(K.surgery, sg); const dead = !P.crew.occ[id] && P.med.memorial.some(m => m.id === id);
     const on = __T.PL.journalOf(id).map(j => j.text); RM.setOpt(false); const off = __T.PL.journalOf(id).map(j => j.text); const hits = await scan(G.log.length, toasts.length, [id], /Somewhere a letter home is being written/);
     return { id, dead, on: on.slice(0, 3), off: off.slice(0, 3), offDeath: off.some(t => /^We lost .+ today\.|is gone\. I wrote the letter home/.test(t)), onLost: on.some(t => /I don't have words for the log/.test(t)), hits }; });
+  // pass 14: a partner who transferred off, then romance OFF -> their journal still has the plain crewmate transfer entry
+  await fresh(); R.off_transferredpartner = await p.evaluate(async () => { const G = __T.G, P = G.prog, RM = __T.RM; RM.setOpt(true);
+    const id = PR.crewList().find(c => !c.senior && !c.protected && RM.eligible(c.id)).id; P.opinions[id] = 70; P.romance.lastSignal = -99; RM.forceSignal(id); RM.answerSignal(true);
+    __T.CL.transferOff(id, null, 'roll'); await new Promise(r => setTimeout(r, 60)); const gone = !P.crew.occ[id] && (P.alumni || []).some(a => a.id === id);
+    const on = __T.PL.journalOf(id).map(j => j.text); RM.setOpt(false); const off = __T.PL.journalOf(id).map(j => j.text); const hits = await scan(G.log.length, toasts.length, [id], /have lost touch\. It happens with postings/);
+    return { id, gone, on: on.slice(0, 3), off: off.slice(0, 3), offTransfer: off.some(t => /shipped out to|Said goodbye to/.test(t)), onLetter: on.some(t => /We promised to write/.test(t)), hits }; });
+  // pass 15: a REAL build09 save (tools/fixtures/rom-build09-lostpartner.json, made on efdb4b8: partner Tull died in surgery; that
+  // build wrote BOTH a plain "death" entry (v1 pinned: "...is gone. I wrote the letter home...") and "lostpartner") -> one death entry
+  await fresh(); R.off_build09 = await (async () => {
+    const raw = fs.readFileSync(path.join(__dirname, 'fixtures', 'rom-build09-lostpartner.json'), 'utf8');
+    await p.evaluate(r => { window.__noSave = true; const d = JSON.parse(r); d.savedAt = Date.now(); localStorage.setItem('tenacity.save.v1', JSON.stringify(d)); }, raw);
+    await p.goto(BASE + '?debug=1'); await p.waitForFunction(() => !!window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 30000 }); await p.waitForTimeout(300);
+    return p.evaluate(async () => { window.__noSave = true; __T.app.paused = true; const G = __T.G, RM = __T.RM, id = 'tull', DRX = /^We lost .+ today\.|is gone\. I wrote the letter home|I don't have words for the log/;
+      const raw = (G.prog.plog.journal || []).filter(e => e.id === id).map(e => e.k);
+      RM.setOpt(true); const on = __T.PL.journalOf(id).map(j => j.text); RM.setOpt(false); const off = __T.PL.journalOf(id).map(j => j.text);
+      return { version: G.version, raw, on, off, onDeaths: on.filter(t => DRX.test(t)).length, offDeaths: off.filter(t => DRX.test(t)).length, onLost: on.some(t => /I don't have words for the log/.test(t)), offPlain: off.some(t => /^We lost .+ today\.|is gone\. I wrote the letter home/.test(t)) }; });
+  })();
   // HOLD 2: a letter due inside the quiet period waits for the gate
   await fresh(); R.quiet_letter = await p.evaluate(async () => { const G = __T.G, P = G.prog, RM = __T.RM; RM.setOpt(true); P.opinions.natarajan = 70; P.romance.lastSignal = -99; RM.forceSignal('natarajan'); RM.answerSignal(true);
     __T.CL.transferOff('natarajan', null, 'roll'); await new Promise(r => setTimeout(r, 60)); const th = P.romance.thread; th.next = P.playDays + 1; BUS.hush && BUS.hush(); if (!BUS.hushed()) G.prog.med.hushUntil = G.ship.elapsed + 600;
@@ -118,6 +139,8 @@ function finish(R) {
   if (R.memorial_row) { const m = R.memorial_row; if (!/your partner/.test(m.on) || !/♥/.test(m.on)) bad.push('memorial_row: setup failed (on) ' + m.on); if (!/a close friend/.test(m.off) || /your partner|♥/.test(m.off)) bad.push('memorial_row: off row ' + m.off); }
   if (R.m3_m4) { const m = R.m3_m4; if (m.ended !== 1) bad.push(`m3: endIt did not count the ending (${m.ended})`); if (m.discAfter) bad.push('m3: stale disclosure left after endIt ' + JSON.stringify(m.discAfter)); if (m.noteNonFav) bad.push('m4: auto-protection notice for a non-favourite: ' + m.noteNonFav); if (m.partner2 && m.fav && !m.noteFav) bad.push('m4: no notice for a former favourite'); if (!m.partner2 || !m.partner1 || !m.favAuto) bad.push('m4: setup failed (partners) ' + JSON.stringify(m)); if (m.partner3 !== m.pinned || !m.pinFav) bad.push('pass 13 pinned: setup failed ' + JSON.stringify(m)); if (m.notePinned) bad.push('pass 13: auto-protection notice for a hand-pinned partner: ' + m.notePinned); if (!m.stillProtected) bad.push('pass 13: the pinned partner lost protection'); }
   if (R.off_deadpartner) { const d = R.off_deadpartner; if (!d.dead || !d.onLost) bad.push('off_deadpartner: setup failed ' + JSON.stringify(d)); if (!d.offDeath) bad.push('off_deadpartner: no plain death entry in the journal with romance off ' + JSON.stringify(d.off)); }
+  if (R.off_transferredpartner) { const d = R.off_transferredpartner; if (!d.gone || !d.onLetter) bad.push('off_transferredpartner: setup failed ' + JSON.stringify(d)); if (!d.offTransfer) bad.push('off_transferredpartner: no plain transfer entry in the journal with romance off ' + JSON.stringify(d.off)); }
+  if (R.off_build09) { const d = R.off_build09; if (!(d.raw.includes('death') && d.raw.includes('lostpartner'))) bad.push('off_build09: fixture setup failed ' + JSON.stringify(d.raw)); if (d.offDeaths !== 1 || !d.offPlain) bad.push('off_build09: romance off - expected exactly 1 plain death entry, got ' + JSON.stringify(d.off)); if (d.onDeaths !== 1 || !d.onLost) bad.push('off_build09: romance on - expected exactly 1 death entry (the partner one), got ' + JSON.stringify(d.on)); }
   if (R.errs && R.errs.length) bad.push(`console errors: ${R.errs.slice(0, 3).join(' | ')}`);
   console.log(JSON.stringify({ R, bad }, null, 1).slice(0, 6000));
   console.log(bad.length ? 'ROMANCE SCAN FAIL' : 'ROMANCE SCAN PASS'); process.exit(bad.length ? 1 : 0);

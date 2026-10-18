@@ -237,13 +237,13 @@ Static ES-module build. There's no build step.
 ## Encounter weighting (2026-10-18; proof tools/enc-shots.js -> shots/enc-*.png + shots/enc-report.json, prog-sim deaths -> shots/prog6-sim-v9.txt)
 - js/encounters.js `chooseEncounter(ctx, { prog, ship, enc, forced })`: a forced type (tests, debug) > a story context (CTX_ENEMY: defector
   = Galor, shadow = fighter, debug drill = Galor) > the weighted table. Tunables in pacing.js `PACE.encounter`.
-- The table (relative odds among the open rows): Jem'Hadar fighter 50 · Cardassian Galor 40 · Jem'Hadar battlecruiser 10. With the
-  battlecruiser's gate closed the roll is fighter 56% / Galor 44%; open, 50 / 40 / 10%.
+- The table (relative odds among the open rows): Jem'Hadar fighter 50 · Cardassian Galor 40 · Jem'Hadar battlecruiser 20 (pass 15; was 10).
+  With the battlecruiser's gate closed the roll is fighter 56% / Galor 44%; open, 45 / 36 / 18% live (away: 1 -> about 1%, see pass 15 D2).
 - The battlecruiser's gate (all must hold, `bcBlock` says which fails): rank >= Lieutenant (rank 1) AND ship's day >= 21 (the battle
   groundwork's gate, kept on the pass 12 manager's call; Lt is guaranteed by play day 7); never twice running and spaced (pass 13): at
   least 2 other battles AND at least 2 play days since the last one (`gapBattles`, `gapPlayDays`); and (pass 13 manager call: she is an
-  EVENT) blocked only for a CRIPPLED ship: hull < 60% or an open CRIT fault (`minHull`, `blockSev`) -> the roll falls back to fighter /
-  Galor and counts as `held`. Low power, an empty magazine or a med fault no longer hold her back.
+  EVENT) blocked only for a CRIPPLED ship: hull < 60% or an open CRIT fault (`minHull`, `blockSev`), and (pass 15 D1) 0 torpedoes or
+  main power < 30% (`minTorps`, `minPower`) -> the roll falls back to fighter / Galor and counts as `held`. A med / low fault doesn't hold her.
 - `G.sp.enc = { last, since, lastBcPD, n: { type: count }, held }` (saved; additive to the v14 shape; `hardenEnc` clamps junk at load).
   Pass 13: the memory survives migration - a valid `enc` rides through every migration step untouched, and a save without one (pre-encounter
   builds, or a junk value) is rebuilt by `seedEnc` from its saved battle and the ship log's red-alert openers (a battlecruiser found there
@@ -254,15 +254,31 @@ Static ES-module build. There's no build step.
   87.3% active Lt; T'Ren disengages 12-13%, tows 0.5-1.8%) and a WON fight still costs ~22% hull (p90 36%); injuries 1.6-2.4% a fight
   (shields hold longer, and the bleed rolls none). Before (hull 150, no pierce): 90.1 / 93.0% wins and won fights cost ~0% hull.
   Sensor warning first: Hale's "capital-class contact" log line + a "⚠ SENSORS - capital-class contact" toast, the red-alert card
-  ~1.2 s later (`redAlertCard({ delay })`). Card copy: "She outguns us, and her polarons bleed through shields: expect hull damage, maybe
-  casualties. / No outrunning her. Keep shields and weapons up, tubes loaded, the deck patched." No disengage option (T'Ren's automatic
+  ~1.2 s later (`redAlertCard({ delay })`). Card copy (pass 15): "She outguns us — if it goes badly, T'Ren will break off. Expect
+  hull damage. / Her polarons bleed through shields. Keep shields and weapons up, tubes loaded, the deck patched." (was "...maybe casualties. /
+  No outrunning her..." - injuries are ~2% a fight and T'Ren does break off). No disengage option (T'Ren's automatic
   break-off below 25% hull is unchanged). A battlecruiser fought during offline catch-up (`catchUp().bcFights`: outcome, hull after, hull
   lost) is the return report's HEADLINE, first thing in `#reportBody` (`.bcHead`). Proof: tools/pt13-shots.js -> shots/pt13-*.png.
+- Pass 15: Hale's sensor toast stays visible ALONGSIDE the card. The card no longer covers a toast (hud.js `fitAlertCard`: below the toast
+  stack on a phone in portrait; in landscape the card steps left and the toasts sit to its right at its top, clear of the zoom buttons,
+  capped at 40%; the landscape card starts at 96 px so it clears the RED ALERT banner), and the crit sensor toast is held
+  until the card closes (7 s or a tap). Was: the card covered the toast at 390x844 and 844x390 and the toast left after 3.2 s.
 - The warning: a battlecruiser opens with a red-alert CARD (bus.js `redAlertCard` -> hud.js `#bcCard`: "RED ALERT · CAPITAL SHIP",
   the name, two lines of what it means; below the RED ALERT banner, tap to dismiss, gone after 7 s) instead of the plain toast, plus a
   Diallo log line. Not behind the quiet-period gate (bus.js cheerful() holds back light / cheerful lines; a battle warning is a danger
   alert and must never be hushed); offline catch-up (bus quiet) skips it like every toast, the log keeps it. Fighters and Galors keep the
   "RED ALERT — <name>" toast and their fights are untouched.
+- Pass 15 D2: she is weighted toward LIVE play. Live her weight is 20 (was 10; fighter 50 / Galor 40 unchanged). While the player is away
+  (`nightActive()`: offline catch-up or an idle tab) the roll uses `PACE.encounter.awayWeights` (battlecruiser 1) and also needs
+  `bc.awayGapPlayDays` (14) since her last fight - about one away battlecruiser per 2-3 weeks of play days. `G.sp.enc.off`
+  counts away fights per type and `G.sp.enc.bcRec` keeps the last 60 battlecruiser fights `{ pd, away, h0, h1, out }` (hardened at load);
+  prog-sim's ENCOUNTERS section prints LIVE vs AWAY (count, % live, first day, spacing, hull cost of won fights).
+- Pass 15 D2: why away wins were cheap - hours away let every officer ability cool down, so she met a fully rested bridge (Scan + a full
+  Spread, 8 torpedoes) and died in one volley: won-fight hull lost p50 0%, mean 3.5% (the offline hull floor also rules out break-off /
+  tow). Now an away battlecruiser fight starts on the night watch (`PACE.encounter.bcAway`): each ability starts on cooldown at 0.8-1.0 x
+  its cdMax (36 s+, so none in the fight), torpedoes capped at 4 (`torpsMax`), and T'Ren logs "The night watch has the bridge". Probe (catchUp steady state, ~190 fights):
+  won-fight hull lost p50 19-22% (p25 11-12, p90 66-69 - the floor of 30% replaces break-off), like the gated live sim's p50 22%. Fighters and
+  Galors have the same rested-bridge mechanism offline but their live full-ready fights are just as cheap, so they are unchanged.
 
 ## Ship sprites (art hook; the artist's copy is notes/ship-sprite-spec.md)
 - Hook: `SHIP_ART[sprite] = { img, len?, pivot?, rows?, engine? }` in js/data.js, keyed by `SHIPS[id].sprite` (tenacity, freighter,
@@ -293,3 +309,8 @@ Static ES-module build. There's no build step.
 - Minors: endIt's swallowed line restored (stale disclosure cleared, `n.ended++`); the "no longer auto-protected" notice only for a
   former favourite; four sober quiet-period ship-log lines, never the same twice running; a journal `{X}` that opens a sentence is
   capitalised; the battlecruiser's class line is "Dominion capital ship".
+- Pass 15 (build09 journal): build09 wrote BOTH a plain death entry and the "lostpartner" entry for a partner, so with romance off the
+  journal showed two neutral death lines ("We lost Tull today..." + "Tull is gone. I wrote the letter home..."). plog.js `dedupeGone`
+  keeps one per crewmate at render time (the romance entry while on, the plain one while off; same for a plain transfer next to a
+  "letter" v2). Proof: romance-scan `off_build09` loads a real build09 save (tools/fixtures/rom-build09-lostpartner.json, made on
+  efdb4b8; its death entry pinned to v1, the line the tester saw) - fails before (2 death lines on and off), passes after.

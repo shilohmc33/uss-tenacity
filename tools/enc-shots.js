@@ -42,19 +42,21 @@ const SIZES = [[390, 844, true], [844, 390, true], [1280, 800, false]];
     await boot();
     // 1) gates (pure table, 4000 rolls each)
     const gates = await p.evaluate(async () => { const E = await import('/js/encounters.js'), G = __T.G, ok = { hull: 100, power: 90, torps: 6, faults: {} };
-      const roll = (prog, ship, enc) => { let n = 0; for (let i = 0; i < 4000; i++) if (E.chooseEncounter('enroute', { prog, ship, enc }).id === 'jh_battlecruiser') n++; return n; };
+      const roll = (prog, ship, enc, away = false) => { let n = 0; for (let i = 0; i < 4000; i++) if (E.chooseEncounter('enroute', { prog, ship, enc, away }).id === 'jh_battlecruiser') n++; return n; };
       const enc = E.freshEnc(), after = { ...E.freshEnc(), last: 'jh_battlecruiser', since: 0, lastBcPD: 20 };
       return { ensign: roll({ rank: 0, day: 40 }, ok, enc), day20: roll({ rank: 1, day: 20 }, ok, enc), open: roll({ rank: 1, day: 21 }, ok, enc), twice: roll({ rank: 2, day: 30 }, ok, after),
         oneBetween: roll({ rank: 2, day: 30, playDays: 30 }, ok, { ...after, last: 'galor', since: 1, lastBcPD: 20 }),   // pass 13: 1 fight between is not enough (gapBattles 2)
         twoBetween: roll({ rank: 2, day: 30, playDays: 22 }, ok, { ...after, last: 'galor', since: 2, lastBcPD: 20 }),   // 2 fights + 2 play days: open
         oneDay: roll({ rank: 2, day: 30, playDays: 21 }, ok, { ...after, last: 'galor', since: 9, lastBcPD: 20 }),      // many fights but only 1 play day: closed
         // pass 13: blocked ONLY for a crippled ship (hull < 60 or an open crit fault); power / torpedoes / med faults no longer hold her
-        hull59: roll({ rank: 1, day: 30 }, { ...ok, hull: 59 }, enc), hull60: roll({ rank: 1, day: 30 }, { ...ok, hull: 60 }, enc), power10: roll({ rank: 1, day: 30 }, { ...ok, power: 10 }, enc), torps0: roll({ rank: 1, day: 30 }, { ...ok, torps: 0 }, enc),
+        hull59: roll({ rank: 1, day: 30 }, { ...ok, hull: 59 }, enc), hull60: roll({ rank: 1, day: 30 }, { ...ok, hull: 60 }, enc), power29: roll({ rank: 1, day: 30 }, { ...ok, power: 29 }, enc), power30: roll({ rank: 1, day: 30 }, { ...ok, power: 30 }, enc), torps0: roll({ rank: 1, day: 30 }, { ...ok, torps: 0 }, enc), torps1: roll({ rank: 1, day: 30 }, { ...ok, torps: 1 }, enc),   // pass 15 D1
         crit: roll({ rank: 1, day: 30 }, { ...ok, faults: { weapons: { sev: 'crit' } } }, enc),
+        // pass 15 D2: away (offline / idle) she rolls at awayWeights (1 in 91) and needs 14 play days since her
+        away: roll({ rank: 1, day: 30 }, ok, enc, true), awayGap13: roll({ rank: 2, day: 40, playDays: 33 }, ok, { ...after, last: 'galor', since: 9, lastBcPD: 20 }, true), awayGap14: roll({ rank: 2, day: 40, playDays: 34 }, ok, { ...after, last: 'galor', since: 9, lastBcPD: 20 }, true),
         impairing: roll({ rank: 1, day: 30 }, { ...ok, faults: { weapons: { sev: 'med' } } }, enc), lowFault: roll({ rank: 1, day: 30 }, { ...ok, faults: { weapons: { sev: 'low' } } }, enc),
         shadow: E.chooseEncounter('shadow', { prog: { rank: 3, day: 90 }, ship: ok, enc }).id, defector: E.chooseEncounter('defector', { prog: { rank: 3, day: 90 }, ship: ok, enc }).id,
         table: E.encounterTable({ rank: 1, day: 21 }, ok, enc) }; });
-    ck(tag, 'gates: none before Lt / ship\'s day 21, twice in a row, < 2 fights or < 2 play days since her, or against a crippled ship (hull < 60 / crit fault); open at hull 60, low power, no torps, med fault; ~10% once open', ['ensign', 'day20', 'twice', 'oneBetween', 'oneDay', 'hull59', 'crit'].every(k => gates[k] === 0) && gates.open > 300 && gates.open < 500 && ['twoBetween', 'lowFault', 'impairing', 'hull60', 'power10', 'torps0'].every(k => gates[k] > 300) && gates.shadow === 'jh_fighter' && gates.defector === 'galor', gates);
+    ck(tag, 'gates: none before Lt / ship\'s day 21, twice in a row, < 2 fights or < 2 play days since her, or against a crippled ship (hull < 60 / crit fault / 0 torpedoes / power < 30); open at hull 60, power 30, 1 torpedo, med fault; ~18% once open live (pass 15: weight 20); away ~1% and only 14+ play days after her', ['ensign', 'day20', 'twice', 'oneBetween', 'oneDay', 'hull59', 'crit', 'power29', 'torps0', 'awayGap13'].every(k => gates[k] === 0) && gates.open > 600 && gates.open < 860 && ['twoBetween', 'lowFault', 'impairing', 'hull60', 'power30', 'torps1'].every(k => gates[k] > 600) && gates.away > 15 && gates.away < 90 && gates.awayGap14 > 15 && gates.awayGap14 < 90 && gates.shadow === 'jh_fighter' && gates.defector === 'galor', gates);
     // 2) the real path: battlecruiser + card, then the next fight can't be her
     await ready(); const r1 = await fight();
     ck(tag, 'pass 13: capital-class sensor line first (log before the opener + toast), the card follows ~1.2 s later', r1.sensorLog && r1.sensorFirst && r1.sensorToast && !r1.cardAt0 && r1.card, r1);

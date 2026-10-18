@@ -455,8 +455,18 @@ const ROMSIM = process.argv[5] === 'romance';   // Personal Log phase 4: regular
       const q = a => a.length ? `${Math.min(...a)} / ${med(a)} / ${[...a].sort((x, y) => x - y)[Math.floor(a.length * 0.9)]} / ${Math.max(...a)}` : '-';
       console.log(`${name}: battles/${DAYS_N}d mean ${(all / last.length).toFixed(1)} (p50 ${med(nb)}) · per 30d ${(all / last.length / (DAYS_N / 30)).toFixed(1)} · mix ${mix}`);
       console.log(`  battlecruiser: per run min/p50/p90/max ${q(bcN)} · runs with none ${bcN.filter(n => !n).length}/${runs.length} · first play day min/p50/p90/max ${q(first)} (999 = none) · spacing (play days) ${q(gaps)} · battles between ${q(battlesBetween)} · battles where only the worn-ship check kept her out ${last.reduce((a, o) => a + (o.enc.held || 0), 0)}`);
+      // pass 15 D2: live vs away (offline catch-up / idle tab) battlecruisers, from G.sp.enc.off + G.sp.enc.bcRec
+      if (last[0].enc.off) {
+        const offN = last.map(o => o.enc.off.jh_battlecruiser || 0), totN = last.map(o => o.enc.n.jh_battlecruiser || 0), liveN = totN.map((t, i) => t - offN[i]);
+        const sum = a => a.reduce((x, y) => x + y, 0), recs = last.map(o => o.enc.bcRec || []);
+        const firstOf = (aw) => recs.map(r => { const x = r.find(z => z.away === aw); return x ? x.pd : 999; }), gapOf = aw => recs.flatMap(r => { const d = r.filter(z => z.away === aw).map(z => z.pd); return d.slice(1).map((v, i) => v - d[i]); });
+        const cost = aw => { const w = recs.flat().filter(z => z.away === aw && z.out === 'won').map(z => z.h0 - z.h1).sort((a, b) => a - b); return w.length ? `won n ${w.length} hull lost mean ${(sum(w) / w.length).toFixed(1)} p50 ${w[Math.floor(w.length / 2)]} p90 ${w[Math.floor(0.9 * (w.length - 1))]}` : 'none'; };
+        const outs = aw => { const r = recs.flat().filter(z => z.away === aw), c = k => r.filter(z => z.out === k).length; return r.length ? `won ${(c('won') / r.length * 100).toFixed(1)}% · broke off ${(c('disengaged') / r.length * 100).toFixed(1)}% · towed ${(c('towed') / r.length * 100).toFixed(1)}%` : '-'; };
+        console.log(`  battlecruiser LIVE vs AWAY: per run live ${q(liveN)} / away ${q(offN)} (min/p50/p90/max) · total live ${sum(liveN)} away ${sum(offN)} · % live ${(sum(liveN) / Math.max(1, sum(totN)) * 100).toFixed(1)}% · first live play day ${q(firstOf(false))} · first away ${q(firstOf(true))} (999 = none) · live spacing ${q(gapOf(false))} · away spacing ${q(gapOf(true))}`);
+        console.log(`    live: ${outs(false)} · ${cost(false)}   |   away: ${outs(true)} · ${cost(true)}`);
+      }
     };
-    console.log('\nENCOUNTERS (encounter weighting v9: PACE.encounter)'); encT('regular', regRuns); encT('casual', casRuns);
+    console.log('\nENCOUNTERS (encounter weighting v9 + pass 15 live/away: PACE.encounter)'); encT('regular', regRuns); encT('casual', casRuns);
     // ---- pass 07: both death sources, the fast-fixer risk, and 'looking away never improves the outcome' ----
     const p7 = (name, runs) => {
       const A = runs.flatMap(x => x.o[x.o.length - 1].audit), dd = runs.map(x => x.o[x.o.length - 1].med.deaths || 0);

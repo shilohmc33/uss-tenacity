@@ -30,15 +30,26 @@ export const PACE = {
   // --- encounter table (js/encounters.js): WHICH enemy a random battle brings. Weights are relative odds among the
   //     types whose gates are open; story contexts (defector, shadow) and forced/debug fights skip the table.
   encounter: {
-    weights: { jh_fighter: 50, galor: 40, jh_battlecruiser: 10 },   // fighters most common, then Galors; the battlecruiser rare (~10% once open, as the groundwork had)
+    weights: { jh_fighter: 50, galor: 40, jh_battlecruiser: 20 },   // pass 15 D2: battlecruiser 10 -> 20 live (she is met live, not on the return report)
+    // pass 15 D2: while the player is AWAY (offline catch-up or an idle tab) the battlecruiser is rolled at a much lower weight and needs a
+    // much longer gap, so she is mostly met live (target: >= 1/3 of a regular player's battlecruisers live). Fighter : Galor odds unchanged.
+    awayWeights: { jh_fighter: 50, galor: 40, jh_battlecruiser: 1 },   // fighters most common, then Galors; the battlecruiser rare (~10% once open, as the groundwork had)
     bc: {                          // the battlecruiser (worn start: 83.8% wins / 14.9% injuries; hard start 9.7% wins) only when ALL hold:
       minRank: 1,                  //   she is a full Lieutenant (rank 1; guaranteed by play day 7, ~day 5 for a regular player) ...
       minShipDay: 21,              //   ... AND ship's day 21+ (the groundwork's gate, kept: pass 12 manager note) ...
       gapBattles: 2,               //   never twice in a row: at least 2 other battles since the last battlecruiser ...
       gapPlayDays: 2,              //   ... AND at least 2 play days since her (pass 13: spaced by battles AND by days)
+      awayGapPlayDays: 14,         //   ... and, rolled while away, at least 14 play days since her (pass 15 D2)
       minHull: 60,                 //   and never against a CRIPPLED ship (pass 13 manager call): hull below 60% ...
-      blockSev: "crit",            //   ... or an open CRIT fault -> the roll falls back to fighter / Galor. Power, torpedoes, med faults don't hold her.
+      blockSev: "crit",            //   ... or an open CRIT fault ...
+      minTorps: 1,                 //   ... or 0 torpedoes (pass 15 D1) ...
+      minPower: 30,                //   ... or main power below 30% (pass 15 D1) -> the roll falls back to fighter / Galor. Med / low faults don't hold her.
     },
+    // pass 15 D2: an AWAY battlecruiser fight (offline catch-up / idle tab) starts on the night watch: hours away let every officer
+    // ability cool down, so she used to walk into Scan + a full Spread and die in one volley (~1-3% hull). The night watch has the
+    // bridge instead: each ability starts on cooldown at cdFrac x its cdMax (uniform; >= 36 s, so in practice none in the fight), and the
+    // tubes hold at most torpsMax (only the ready rack is loaded).
+    bcAway: { cdFrac: [0.8, 1.0], torpsMax: 4 },
   },
   // --- faults ---
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)

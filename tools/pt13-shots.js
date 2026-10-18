@@ -37,7 +37,7 @@ const SIZES = [[390, 844, true], [844, 390, true], [1280, 800, false]];
     await sleep(1300);
     const s2 = await p.evaluate(() => { const c = document.querySelector('#bcCard'), r = c.getBoundingClientRect(); return { card: !c.hidden, text: c.innerText, fits: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, tap: parseFloat(getComputedStyle(c.querySelector('.tap')).fontSize), buttons: c.querySelectorAll('button').length }; });
     await shot('card');
-    ck(tag, 'card: pass 13 copy (outguns us / hull damage / casualties / no outrunning her), fits, TAP >= 12 px, no disengage button', s2.card && /outguns us/i.test(s2.text) && /casualties/i.test(s2.text) && /no outrunning her/i.test(s2.text) && !/Half again/i.test(s2.text) && !/disengage/i.test(s2.text) && s2.buttons === 0 && s2.fits && s2.tap >= 12, s2);
+    ck(tag, 'card: pass 15 copy (outguns us / break off / hull damage; no casualties, no outrunning her), fits, TAP >= 12 px, no disengage button', s2.card && /outguns us/i.test(s2.text) && /break off/i.test(s2.text) && /hull damage/i.test(s2.text) && !/casualties/i.test(s2.text) && !/outrunning/i.test(s2.text) && !/Half again/i.test(s2.text) && !/disengage/i.test(s2.text) && s2.buttons === 0 && s2.fits && s2.tap >= 12, s2);
     // 3) the return-report headline after an offline battlecruiser
     await boot(); await ready();
     const s3 = await p.evaluate(async () => { const BT = await import('/js/battle.js'), SIM = await import('/js/sim.js'), HUD = await import('/js/ui/hud.js'), G = __T.G; __T.app.paused = true;

@@ -15,7 +15,7 @@ const TYPES = (process.argv[4] || 'galor').split(',');
 const LABEL = process.argv[5] || 'after';
 const START = process.env.START || 'worn';
 // pass 13: START=gated - a realistic start that PASSES the battlecruiser's gate (not crippled), a mix: 60% well kept (hull 85-100, shields /
-// power 60-100, 2-8 torpedoes, cooldowns x1, a low / med fault 25% / 10%) and 40% mid-voyage (hull 60-85, shields / power 30-80, 0-6
+// power 60-100, 2-8 torpedoes, cooldowns x1, a low / med fault 25% / 10%) and 40% mid-voyage (hull 60-85, shields / power 30-80, 1-6 (pass 15 D1; was 0-6)
 // torpedoes, cooldowns x1.5, low / med 50% / 35%). BC='{"hull":200,...}' overrides the battlecruiser's stats in-page (tuning only). LT=active: the player keeps the Lt on the
 // worst open fault through the fight (a present player); default passive (nobody repairs).
 const LT = process.env.LT || 'passive', BCO = process.env.BC ? JSON.parse(process.env.BC) : null;
@@ -43,7 +43,7 @@ const AWAY = process.env.AWAY === '1';   // full: a fresh ship; worn (default): 
         const hard = START === 'hard';
         const gated = START === 'gated';
         if (gated) { const fresh = Math.random() < 0.6;   // 60% a well-kept ship between fights, 40% caught mid-voyage (both pass the gate: hull >= 60, no crit)
-          Object.assign(S, fresh ? { hull: R(85, 100), shields: R(60, 100), power: R(60, 100) } : { hull: R(60, 85), shields: R(30, 80), power: R(30, 80) }); S.torps = fresh ? 2 + Math.floor(Math.random() * 7) : Math.floor(Math.random() * 7); S.faults = {};
+          Object.assign(S, fresh ? { hull: R(85, 100), shields: R(60, 100), power: R(60, 100) } : { hull: R(60, 85), shields: R(30, 80), power: R(30, 80) }); S.torps = fresh ? 2 + Math.floor(Math.random() * 7) : 1 + Math.floor(Math.random() * 6);   // pass 15 D1: >= 1 torpedo passes the gate S.faults = {};
           const sys = Object.keys(DA.SYSTEMS); for (const [pr, sev] of [[fresh ? 0.25 : 0.5, 'low'], [fresh ? 0.1 : 0.35, 'med']]) if (Math.random() < pr) { const k = sys[Math.floor(Math.random() * sys.length)]; if (!S.faults[k]) S.faults[k] = { sev, cost: sev === 'med' ? 2 : 1, t: 0, escT: 0 }; }
           for (const a of Object.values(G.ab)) { a.cd = Math.random() * (a.cdMax || 60) * (fresh ? 1 : 1.5); a.active = 0; }
         } else {

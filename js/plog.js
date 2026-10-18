@@ -117,8 +117,19 @@ export function lineOf(e) {
 export const ROM_KINDS = ["signal", "accepted", "declined", "date", "together", "disclosure", "parted", "letter", "lostpartner"];
 // pass 13 minor: with romance OFF a lost partner's journal still records the death - their "lostpartner" entry (a romance kind) reads
 // as the normal crewmate death entry instead of vanishing (crewEvent skips the plain one for a partner). Render-time, so old saves too.
-const asOff = e => e.k === "lostpartner" ? { ...e, k: "death", v: 0 } : e;
-export function journalOf(id, n = K().perCrew) { const out = [], on = romOn(); for (const e of L().journal.filter(e => e.id === id).map(e => on ? e : asOff(e)).filter(e => on || !ROM_KINDS.includes(e.k)).slice(-n).reverse()) { const text = lineOf(e); if (out.length && out[out.length - 1].text === text) continue; out.push({ day: e.d, sd: e.sd, text }); } return out; }
+// pass 14: likewise a partner who TRANSFERRED off - their "letter" v2 entry ("gone to a new posting. We promised to write") reads as the
+// plain crewmate transfer entry, posting from the entry or their alumni record. Other letter entries stay hidden while off.
+const asOff = e => e.k === "lostpartner" ? { ...e, k: "death", v: 0 }
+  : e.k === "letter" && e.v === 2 ? { ...e, k: "transfer", v: 0, x: e.x || whoOf(e.id).posting || "" } : e;
+// pass 15: build09 wrote BOTH a plain death entry and the "lostpartner" one for a partner (and a build of that era could write a plain
+// transfer next to the "letter" v2 one): keep one per crewmate - the romance entry while romance is on, the plain one while it is off.
+// Render-time, so old saves are covered.
+function dedupeGone(es, on) {
+  const pairs = [[e => e.k === "lostpartner", e => e.k === "death"], [e => e.k === "letter" && e.v === 2, e => e.k === "transfer"]];
+  for (const [rom, plain] of pairs) if (es.some(rom) && es.some(plain)) es = es.filter(e => !(on ? plain(e) : rom(e)));
+  return es;
+}
+export function journalOf(id, n = K().perCrew) { const out = [], on = romOn(); for (const e of dedupeGone(L().journal.filter(e => e.id === id), on).map(e => on ? e : asOff(e)).filter(e => on || !ROM_KINDS.includes(e.k)).slice(-n).reverse()) { const text = lineOf(e); if (out.length && out[out.length - 1].text === text) continue; out.push({ day: e.d, sd: e.sd, text }); } return out; }
 // the next variant for a romance evening of type x with crewmate id: none of the last two used (so any 3 evenings in a row differ)
 export function nextDateVariant(id, x) {
   const t = dateTable(x); if (!t) return 0;

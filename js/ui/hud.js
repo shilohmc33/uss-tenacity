@@ -103,14 +103,40 @@ export function showAlertCard(c) {
   el.querySelector(".c").textContent = c.cls || "";
   el.querySelector(".l").innerHTML = (c.lines || []).map(x => `<p>${x.replace(/[<>&]/g, "")}</p>`).join("");
   el.hidden = false; el.classList.remove("in"); void el.offsetWidth; el.classList.add("in");
+  // pass 15: the sensor (crit) toast stays up alongside the card, and the card never covers a toast
+  document.querySelectorAll("#toasts .toast.crit").forEach(t => t.classList.add("hold"));
+  fitAlertCard();
   clearTimeout(alertTimer); alertTimer = setTimeout(hideAlertCard, 7000);
 }
-function hideAlertCard() { const el = $("#bcCard"); if (el) el.hidden = true; clearTimeout(alertTimer); }
+function hideAlertCard() {
+  const el = $("#bcCard"); if (el) { el.hidden = true; el.style.top = ""; el.classList.remove("side"); } clearTimeout(alertTimer);
+  const box = $("#toasts"); if (box) { box.classList.remove("side"); box.querySelectorAll(".toast.hold").forEach(t => t.remove()); }
+}
+// pass 15: keep every toast clear of the red-alert card - below the toast stack if the card fits there (phone portrait), else the
+// card steps left and the toasts right (landscape: a 390 px tall stage has no room below, and above it would cover the RED ALERT banner). Card geometry from offsetTop / offsetHeight (the bcin scale
+// animation would shrink getBoundingClientRect).
+function fitAlertCard() {
+  const el = $("#bcCard"), box = $("#toasts"); if (!el || el.hidden || !box) return;
+  el.style.top = ""; box.classList.remove("side"); el.classList.remove("side");
+  const par = el.offsetParent; if (!par) return;
+  const pr = par.getBoundingClientRect(), H = el.offsetHeight, W = el.offsetWidth;
+  const cardAt = top => { const l = pr.left + el.offsetLeft - W / 2; return { top, bottom: top + H, left: l, right: l + W }; };
+  const ts = () => [...box.querySelectorAll(".toast")].map(t => t.getBoundingClientRect());
+  const hit = (c, list) => list.some(r => r.left < c.right && r.right > c.left && r.top < c.bottom && r.bottom > c.top);
+  let c = cardAt(pr.top + el.offsetTop), list = ts();
+  if (!hit(c, list)) return;
+  const setTop = y => { el.style.top = (y - pr.top) + "px"; };
+  const below = Math.max(...list.map(r => r.bottom)) + 8;
+  if (below + H <= innerHeight - 8) { setTop(below); return; }
+  box.classList.add("side"); el.classList.add("side");   // no room below (landscape): card to the left, toasts to its right at the card's top (css: clear of the zoom buttons, capped at 40%)
+}
+addEventListener("resize", () => fitAlertCard());
 export function showToast(msg, kind = "") {
   const box = $("#toasts"), d = document.createElement("div");
   d.className = "toast " + kind; d.textContent = msg; box.appendChild(d);
   while (box.children.length > 3) box.firstChild.remove();
-  setTimeout(() => d.remove(), 3200);
+  setTimeout(() => { if (!d.classList.contains("hold")) d.remove(); }, 3200);
+  fitAlertCard();
 }
 let lastChips = "", lastDuty = "";
 export function updateHud() {

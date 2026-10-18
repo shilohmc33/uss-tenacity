@@ -3,7 +3,7 @@ import { G } from "./state.js";
 import { DESTS, SYSTEMS } from "./data.js";
 import { clamp, rand } from "./util.js";
 import { log, toast, shipNews, redAlertCard } from "./bus.js";
-import { chooseEncounter, noteEncounter } from "./encounters.js";
+import { chooseEncounter, noteEncounter, noteBcEnd } from "./encounters.js";
 import { spawnFault, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
@@ -60,10 +60,12 @@ export function startBattle(kind = "enroute", opts = {}) {
   }
   SP.lastBattleT = G.ship.elapsed;
   const bt = (G.night.battleTimes || []).filter(t => G.ship.elapsed - t < 3600 && G.ship.elapsed >= t); bt.push(G.ship.elapsed); G.night.battleTimes = bt;
-  const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: opts && opts.enemy }), enemy = pick.id, d = SHIPS[enemy];
-  noteEncounter(SP, enemy, kind, G.prog.playDays, pick.held);
-  SP.battle = { ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, allies: [makeAlly("tenacity", 0)], enemies: [makeEnemy(enemy, 0)], target: 0 };
+  const away = nightActive();   // pass 15 D2: the player isn't watching - the battlecruiser rolls at PACE.encounter.awayWeights
+  const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: opts && opts.enemy, away }), enemy = pick.id, d = SHIPS[enemy];
+  noteEncounter(SP, enemy, kind, G.prog.playDays, pick.held, away);
+  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, allies: [makeAlly("tenacity", 0)], enemies: [makeEnemy(enemy, 0)], target: 0 };
   G.stats.battles++;
+  if (SP.battle.bc && away) nightWatch();
   SFX.jink = { x: 0, y: 0, tx: 0, ty: 0, next: 1.4 }; SFX.shieldFlare = null; SFX.anim = {}; SFX.smoke.length = 0; SFX.flares.length = 0;
   if (SP.preScanned) { SP.preScanned = false; const E = foe(SP.battle); E.hull = Math.round(E.max * 0.76); log("Diallo: 'The defector's shield frequencies are exact. She starts this fight pre-scanned.'", "comm"); }
   if (SP.travel) SP.travelPaused = true;
@@ -79,7 +81,7 @@ export function startBattle(kind = "enroute", opts = {}) {
     // alert (a death-hush must never hide a battle warning). Offline catch-up (bus quiet) skips it like every toast.
     redAlertCard({ delay: 1200, title: d.name.toUpperCase(), cls: d.cls, kicker: "RED ALERT · CAPITAL SHIP",
       // pass 13: the copy matches the real danger (gated start: she wins ~1 fight in 8, and a won fight still costs ~20% hull)
-      lines: ["She outguns us, and her polarons bleed through shields: expect hull damage, maybe casualties.", "No outrunning her. Keep shields and weapons up, tubes loaded, the deck patched."] });
+      lines: ["She outguns us — if it goes badly, T'Ren will break off. Expect hull damage.", "Her polarons bleed through shields. Keep shields and weapons up, tubes loaded, the deck patched."] });   // pass 15 copy: injuries are ~2% a fight, and disengages happen
     log("Diallo: 'Captain — that's a battlecruiser. She outguns us, and those polarons go straight through shields. All hands, brace.'", "fault");
   } else toast("RED ALERT — " + d.name, "crit");
   shipNews("<b>Red alert.</b> The bridge officers have the fight; your post is the <b>deck</b>: keep her systems alive and her tubes loaded.");
@@ -107,8 +109,11 @@ function damageEnemy(dmg, label) {
     log(d.death || `The ${d.name} breaks apart — secondary explosions walking her spine. She's gone.`, "good");
   }
 }
+// pass 15 D2: a battlecruiser fight's record (hull before / after, outcome, whether the player was away) -> G.sp.enc.bcRec
+function recBc(B, out, h1) { if (B && B.bc) noteBcEnd(G.sp, { pd: B.bc.pd, away: !!B.bc.away, h0: B.bc.h0, h1: Math.round(h1), out }); }
 function endBattleVictory() {
   const SP = G.sp, S = G.ship, kind = SP.battle ? SP.battle.ctx : null, d = shipOf(foe(SP.battle));
+  recBc(SP.battle, "won", S.hull);
   SP.battle = null; SP.evasiveT = 0; G.stats.wins++;
   const salvage = Math.max(0, Math.min(d.salvage ?? 3, S.partsCap - S.parts)); S.parts += salvage;
   log(`Victory. Tractor crews pull ${salvage} usable part(s) from the wreckage.`, "good");
@@ -222,6 +227,7 @@ function trenDisengage() {
   log("T'Ren: 'Helm — emergency warp, disengage.' The Tenacity breaks off and runs.", "comm");
   toast("Disengaged", "warn");
   if (Math.random() < 0.55) { const d = shipOf(foe(B)); log(`A parting volley from ${the(d)} chases her out—`, "fault"); damageShip(rand(d.parting[0], d.parting[1]), "Parting volley"); }
+  if (!G.sp.battle) recBc(B, "disengaged", G.ship.hull);
 }
 function officerOrders() {
   const B = G.sp.battle, S = G.ship, E = foe(B);
@@ -238,6 +244,7 @@ function officerOrders() {
 }
 export function towToDS9() {
   const SP = G.sp, S = G.ship;
+  recBc(SP.battle, "towed", 0);
   SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++;
   SP.location = "ds9"; SP.escortDone = true;
   Object.assign(SP.cap, { decideT: PACE.dockDwell[0], dest: "convoy", holdLogged: false, reason: "Towed home to Deep Space Nine — holding for repairs. Departure pending my hull minimum of 40%." });
@@ -249,6 +256,14 @@ export function towToDS9() {
   shipNews("<b>Disabled and towed to Deep Space Nine.</b> Hull at 20%, systems faulted — the Lieutenant has work to do.");
 }
 // ---- officer abilities (autonomous) ----
+// pass 15 D2: an away battlecruiser fight starts on the night watch (PACE.encounter.bcAway) - the senior staff are not all at their
+// posts, so their abilities start partly cooled down and she can't be one-volleyed by a fully rested bridge.
+function nightWatch() {
+  const c = PACE.encounter.bcAway; if (!c) return; const [lo, hi] = c.cdFrac;
+  for (const a of Object.values(G.ab)) a.cd = Math.max(a.cd, a.cdMax * (lo + Math.random() * (hi - lo)));
+  if (c.torpsMax != null) G.ship.torps = Math.min(G.ship.torps, c.torpsMax);
+  log("T'Ren: 'The night watch has the bridge. Senior staff to their posts — we fight her short-handed until they're here.'", "comm");
+}
 const armed = a => !!(G.sp.battle && !G.sp.battle.dying && a.cd <= 0 && !(a.active > 0));
 function usePattern() { const a = G.ab.pattern; a.cd = a.cdMax; a.active = 20; a.last = "Halved incoming fire — 20s"; log("T'Ren: Attack Pattern Analysis — incoming fire halved for 20 seconds. 'Their firing pattern is a solved equation, Lieutenant.'", "comm"); }
 function useMiracle() {
