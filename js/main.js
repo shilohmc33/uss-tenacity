@@ -2,6 +2,7 @@
 import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY } from "./state.js";
 import { preload, missing, IMG } from "./assets.js";
 import { applyWalkMasks, snapToFloor } from "./path.js";
+import { applyArtHooks } from "./art-hooks.js";
 import { PACE_RT, playerInput, isPresent } from "./pacing.js";
 import { on, log, shipNews } from "./bus.js";
 import { ltNote } from "./crew.js";
@@ -150,6 +151,7 @@ async function boot() {
   resize();
   await preload(p => { $("#loadBar").style.width = Math.round(p * 100) + "%"; });
   const masks = applyWalkMasks(IMG);
+  applyArtHooks();   // pass 08: seated / lying / tint-base art switches on when its files loaded (data.js ART HOOKS)
   const params = new URLSearchParams(location.search);
   if (params.has("reset")) {
     wipeSave();

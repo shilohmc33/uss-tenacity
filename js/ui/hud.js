@@ -288,8 +288,8 @@ export function renderCareer(force = false) {
     const v = Math.round(opinionOf(c.id)), w = Math.abs(v) / 2, st = PL.standing(c.id);
     const face = c.img ? `<img src="assets/${c.img}.webp" alt="">` : `<span class="badge" style="background:${c.color}">${c.short.replace(/[^A-Za-z]/g, "").slice(0, 2)}</span>`;
     const inj = MD.injuryOf(c.id), fav = favs.includes(c.id), pinned = G.prog.med.pins.includes(c.id);
-    const injTag = inj ? ` <em class="injb${inj.state === "warning" ? " crit" : ""}">${inj.state === "warning" ? "INJURED · SERIOUS" : "INJURED"}</em>` : "";
-    const injNote = inj ? (inj.state === "warning" ? `in sickbay — needs the ${SYSTEMS[inj.sys].name} fixed (${Math.max(0, Math.ceil(inj.left))}s${!inj.ack ? " · waiting for you — the clock starts when you respond" : MD.isPresentNow() ? " left · clock running" : " left · paused while you're away"})` : `in sickbay — recovering${inj.healAt ? `, back in ~${Math.max(1, Math.round((inj.healAt - G.ship.elapsed) / 3600))} h` : ""}`) : "";
+    const injTag = inj ? ` <em class="injb${inj.state === "warning" || inj.state === "surgery" ? " crit" : ""}">${inj.state === "warning" ? "INJURED · SERIOUS" : inj.state === "surgery" ? "IN SURGERY" : "INJURED"}</em>` : "";
+    const injNote = inj ? (inj.state === "surgery" ? (inj.held ? `in surgery — held stable until you're back on watch` : `in surgery — ${MD.docName(inj.id).replace(/^The /, "the ")} operating`) : inj.state === "warning" ? `in sickbay — needs the ${SYSTEMS[inj.sys].name} fixed (${Math.max(0, Math.ceil(inj.left))}s${!inj.ack ? " · waiting for you — the clock starts when you respond" : MD.isPresentNow() ? " left · clock running" : " left · paused while you're away"})` : `in sickbay — recovering${inj.healAt ? `, back in ~${Math.max(1, Math.round((inj.healAt - G.ship.elapsed) / 3600))} h` : ""}`) : "";
     const pin = (c.senior || !PROG.deaths.enabled) ? `<span class="pin0"></span>` : `<button class="pin${pinned ? " on" : ""}${fav ? " fav" : ""}" data-pin="${c.id}" title="${pinned ? "Pinned favourite (protected)" : fav ? "Favourite — protected (tap to pin)" : "Pin as a protected favourite"}"><i>${pinned || fav ? "★" : "☆"}</i></button>`;
     return `<div class="rel${inj ? " inj" : ""}">${face}<div class="nm">${c.rankShort} ${c.short}${c.intro ? ` <em class="newb">NEW</em>` : ""}${injTag}<small>${inj ? injNote : `${c.speciesName} · ${c.role}`}</small></div>${pin}<div class="opbar"><i class="${v >= 0 ? "pos" : "neg"}" style="width:${w}%"></i></div><small class="lab" title="7-day trend: ${st.trend.label}">${st.label}${IN.numbersShown() ? ` <b class="opn">${sgn(v)}</b>` : ""}<i class="tr t${st.trend.dir}">${st.trend.arrow}</i></small></div>`;   // plog1 follow-up: label + trend, number hidden (as in the Personal Log)
   };
@@ -353,7 +353,7 @@ function renderMedScene() {
   const left = MD.surgeryLeft(), total = PROG.deaths.surgery.scene, od = MD.surgeryOdds(), key = sc.phase + sc.id + (sc.phase === "surgery" ? Math.ceil(left * 2) + (od ? od.band + od.assist + od.held : "") : "");
   if (key === medKey && !P.hidden) return;
   medKey = key;
-  const doc = (() => { const id = G.prog.crew.slots.doctor, o = id && G.prog.crew.occ[id]; return o ? `Dr. ${o.short}` : "The duty medic"; })();
+  const doc = MD.docName(sc.id);   // pass 08 leftover: never the patient as their own surgeon
   const head = `<div class="mhead"><b class="mx">✚</b><div><h3>SICKBAY</h3><small>${sc.name}</small></div></div>`;
   let body = "";
   if (sc.phase === "surgery") {
@@ -363,8 +363,8 @@ function renderMedScene() {
     body = `<p class="mline">${doc} works over the biobed. The monitors chirp, steady, then not, then steady again.</p>
       <div class="mbar"><i style="width:${Math.round((1 - left / total) * 100)}%"></i></div><p class="mfac">${f.join(" · ")}</p>
       <p class="odds ${bc}">${doc}: <b>${band}</b></p>
-      ${od && !od.assist ? `<button class="assist" data-med="assist">ASSIST ${doc.toUpperCase()}</button>` : od ? `<p class="cnote">You're at ${doc}'s side, holding the power steady.</p>` : ""}
-      <p class="cnote">${od && od.held ? `${doc} is holding ${sc.short} stable on the table until you're back on watch — nothing changes while you're away.` : `Every second you save on the repair, and every hand you lend, improves the odds.`}</p>`;
+      ${od && !od.assist ? `<button class="assist" data-med="assist">ASSIST ${doc.toUpperCase()}</button>` : od ? `<p class="cnote">You're at ${doc.replace(/^The /, "the ")}'s side, holding the power steady.</p>` : ""}
+      <p class="cnote">${od && od.held ? `${doc} is holding ${sc.short} stable on the table until you're back on watch — nothing changes while you're away.` : `The faster the repair, and every hand you lend, the better the odds.`}</p>`;
   } else if (sc.phase === "saved") body = `<div class="bres good">${sc.short.toUpperCase()} WILL LIVE</div><p class="mline">${doc}: '${sc.short} is going to make it.'${sc.close ? ` It was closer than ${sc.docPr || "they"} ${(sc.docPr || "they") === "they" ? "let" : "lets"} on.` : ""}</p><p class="cnote">${sc.short}'s opinion of you +${sc.d || 1}</p><button class="close" data-med="close">BACK TO DUTY</button>`;
   else if (sc.phase === "lost") body = `<div class="bres bad lost">IN MEMORIAM</div><p class="mline"><b>${sc.name}</b>, ${String(sc.role || "").toLowerCase()}.</p><p class="mline">${sc.why}</p>${sc.orvin ? `<p class="mline orvin">${sc.orvin}</p>` : ""}<p class="cnote">The crew will hold a service in the Mess &amp; Bar.</p><button class="close" data-med="close">STAND DOWN</button>`;
   else if (sc.phase === "evac" || sc.phase === "hospital") body = `<div class="bres warn">${sc.phase === "evac" ? "EVACUATED" : "HOSPITAL TRANSFER"}</div><p class="mline">${sc.short} is beamed to ${sc.post}. ${sc.phase === "evac" ? "Critically injured, but alive and in the best hands in the quadrant." : `Badly hurt; ${PRON(sc.pron)}'ll recover there.`}</p><button class="close" data-med="close">BACK TO DUTY</button>`;

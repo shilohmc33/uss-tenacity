@@ -41,7 +41,8 @@ const R = { sizes: {} };
       // anti-farm: a partner at +90 counts like +50 in readiness and in transfer Fleet Rep, and 0 under station authority
       P.romance.lastSignal = -99; RM.forceSignal('vardock'); RM.answerSignal(true);
       P.opinions.vardock = 90; const r90 = PR.computeReadiness(), s90 = P.readyParts.social; P.opinions.vardock = 50; const r50 = PR.computeReadiness();
-      o.readyCapped = r90 === r50; o.cap = PR.romanceCap('vardock', 90);
+      const g0 = P.gifts.giftOp.vardock; P.gifts.giftOp.vardock = 30; P.opinions.vardock = 97; const c97 = PR.socialCredit('vardock'); P.opinions.vardock = 50; const c50 = PR.socialCredit('vardock'); P.gifts.giftOp.vardock = g0;   // da943e7 finding: gift-made opinion above +50
+      o.giftCase = { c97, c50 }; o.readyCapped = r90 === r50 && c97 === c50; o.cap = PR.romanceCap('vardock', 90);
       P.rank = 2; o.authority = PR.romanceCap('vardock', 90) === 0; P.rank = 1;
       P.opinions.vardock = 90; const fr0 = P.fleetRep; __T.CL.transferOff('vardock', null, 'roll'); o.fleetCapped = P.fleetRep - fr0 <= Math.floor(PR.PROG.romance.friendCap / PR.PROG.fleet.perOpinion);
       o.letters = !!RM.thread() && RM.thread().id === 'vardock'; P.romance.thread.ended = true; P.romance.signal = null;

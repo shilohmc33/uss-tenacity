@@ -3,8 +3,9 @@
 // then returns. Talks (talk loop, facing them) while the Lt reports at the chair or stands next to her, and
 // holds at the chair talking (issuing orders) during battle. Walk/idle use the same rules as the Lt.
 import { G } from "./state.js";
-import { TREN, STEP_LEN } from "./data.js";
-import { findPath, isWalkable } from "./path.js";
+import { TREN, DECKS, COLS, ROWS } from "./data.js";
+import { walkStep, walkSettle, keepPace, pathNear, blockedAhead, AVOID } from "./anim.js";
+import { findPath, isWalkable, cellOf, cellCenter } from "./path.js";
 import { clamp, dDist } from "./util.js";
 
 const rnd = ([a, b]) => a + Math.random() * (b - a);
@@ -16,12 +17,13 @@ export const tren = {
 const faceDir = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
 function faceToward(x, y) { tren.dir = faceDir((x - tren.x) * 960, (y - tren.y) * 640); }
 function goTo(spot, mode) {
-  const p = findPath(TREN.deck, tren.x, tren.y, spot.x, spot.y);
+  const p = findPath(TREN.deck, tren.x, tren.y, spot.x, spot.y); tren.detour = false;
   tren.spot = spot; tren.next = mode;
-  tren.path = (p || []).concat([[spot.x, spot.y]]); tren.pathI = 0; tren.mode = "walk"; tren.walkDist = 0;
+  const pace = tren.mode === "walk" && keepPace(tren);
+  tren.path = (p || []).concat([[spot.x, spot.y]]); tren.pathI = 0; tren.mode = "walk"; if (!pace) tren.walkDist = 0;
 }
 function arrive() {
-  const s = tren.spot; tren.x = s.x; tren.y = s.y; tren.dir = s.face; tren.path = null;
+  const s = tren.spot; tren.detour = false; tren.x = s.x; tren.y = s.y; tren.dir = s.face; tren.path = null;
   tren.mode = tren.next; tren.t = tren.mode === "aside" ? 4 : rnd(tren.mode === "home" ? TREN.homeT : TREN.stationT);
 }
 // Who she should be talking to right now (null = nobody)
@@ -49,35 +51,63 @@ function asideSpot(tx, ty) {
   }
   return best && { x: best.x, y: best.y, face: faceDir((tx - best.x) * 960, (ty - best.y) * 640), aside: true };
 }
+// someone stands at (or is walking to) (x, y) on the bridge: the Lt, or visible ambient crew (registered by npc-ambient.js)
+export const trenHooks = { standers: () => [] };
+function standersNear(x, y, r = 20) {
+  const L = G.lt, pts = trenHooks.standers();
+  if (L.deck === TREN.deck && !L.lift) { const e = L.mode === "walk" && L.path && L.path.length ? L.path[L.path.length - 1] : [L.x, L.y]; pts.push({ x: e[0], y: e[1] }); }
+  return pts.some(p => dDist(p.x, p.y, x, y) < r);
+}
 const STEP_ASIDE_R = 34;   // design px: his destination this close to her = she makes room
+// pass 09 (4): blocked by the Lt standing in her way for AVOID.yieldMaxS, she re-paths around him (A* with the cells
+// around him blocked; the route must keep clear of him); with no way round she simply keeps waiting.
+// She never walks through him.
+// the route never gets closer to him than she already is, nor than DETOUR_CLEAR px (she may squeeze past his shoulder in a
+// narrow passage, never through him: the overlap probe counts < 12 px)
+const DETOUR_CLEAR = 20;
+function routeClear(path, L) { const d0 = dDist(tren.x, tren.y, L.x, L.y); return pathNear({ x: tren.x, y: tren.y, path, pathI: 0, mode: "walk" }, L.x, L.y, 1e4).d >= Math.min(DETOUR_CLEAR, d0 - 1); }
+function detour(L) {
+  const end = tren.path[tren.path.length - 1];
+  if (dDist(end[0], end[1], L.x, L.y) < AVOID.yieldR + 4) return null;   // he stands on her destination: wait for him to move
+  // A* on a copy of the walk grid with the cells around him blocked (her own cell stays open), then put the grid back
+  const dk = DECKS[TREN.deck], W0 = dk.walk, W = W0.slice(), mine = cellOf(tren.x, tren.y), R = DETOUR_CLEAR + 2;
+  for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
+    const [fx, fy] = cellCenter(cx, cy);
+    if (dDist(fx, fy, L.x, L.y) < R && !(cx === mine[0] && cy === mine[1])) W[cy * COLS + cx] = 0;
+  }
+  let p = null;
+  try { dk.walk = W; p = findPath(TREN.deck, tren.x, tren.y, end[0], end[1]); } finally { dk.walk = W0; }
+  if (!p) return null;
+  const path = p.concat([[end[0], end[1]]]).filter((q, i) => i > 0 || dDist(q[0], q[1], tren.x, tren.y) > 8);
+  return routeClear(path, L) ? path : null;
+}
 export function tickTren(dt) {
   const L = G.lt, battle = !!G.sp.battle;
   const tgt = ltTarget();
   if (tgt && tren.mode !== "walk" && dDist(tgt[0], tgt[1], tren.x, tren.y) < STEP_ASIDE_R) {
     const sp = asideSpot(tgt[0], tgt[1]);
     if (sp) { tren.resume = tren.mode === "station" ? tren.spot : TREN.home; goTo(sp, "aside"); }
+  } else if (tgt && tren.mode !== "walk" && tren.mode !== "aside" && L.deck === TREN.deck) {   // pass 08: his path runs through her
+    const pn = pathNear(L, tren.x, tren.y);
+    if (pn.d < AVOID.asideR) { const sp = asideSpot(pn.px, pn.py); if (sp) { tren.resume = tren.mode === "station" ? tren.spot : TREN.home; goTo(sp, "aside"); } }
   }
   const wantHome = battle || (L.deck === TREN.deck && L.mode === "use" && L.node === "chair");
   if (wantHome && (tren.mode === "station" || (tren.mode === "aside" && battle))) goTo(TREN.home, "home");
   if (wantHome && tren.mode === "walk" && tren.spot !== TREN.home) goTo(TREN.home, "home");
   tren.moving = false; tren.action = null; tren.talkTo = null;
   if (tren.mode === "walk") {
-    const px = tren.x, py = tren.y;
-    let remain = 0, rx = tren.x, ry = tren.y;
-    for (let i = tren.pathI; i < tren.path.length; i++) { remain += dDist(tren.path[i][0], tren.path[i][1], rx, ry); rx = tren.path[i][0]; ry = tren.path[i][1]; }
-    const sf = clamp(Math.min(remain, tren.walkDist + 12) / 80, 0.22, 1);
-    let guard = 0;
-    while (tren.pathI < tren.path.length && guard++ < 8) {
-      const wp = tren.path[tren.pathI], dxp = (wp[0] - tren.x) * 960, dyp = (wp[1] - tren.y) * 640, dist = Math.hypot(dxp, dyp);
-      const step = TREN.speed * sf * 960 * dt;
-      if (dist <= Math.max(step, 2)) { tren.x = wp[0]; tren.y = wp[1]; tren.pathI++; continue; }
-      tren.x += (dxp / dist) * step / 960; tren.y += (dyp / dist) * step / 640;
-      tren.dir = faceDir(dxp, dyp); tren.moving = true;
-      break;
-    }
-    if (tren.pathI >= tren.path.length) arrive();
-    const moved = dDist(tren.x, tren.y, px, py);
-    if (moved > 0) { tren.walkPhase += moved / STEP_LEN * Math.PI; tren.walkDist += moved; }
+    // give way to the Lt when he is right in front of her; after AVOID.yieldMaxS re-path around him, or keep waiting
+    const ltHere = L.deck === TREN.deck && !L.lift ? [L] : [];
+    // on a detour route (checked clear of him) she only stops if he steps right into her way
+    if (tren.detour ? blockedAhead(tren, ltHere, 16) : blockedAhead(tren, ltHere)) {
+      tren.yieldT = (tren.yieldT || 0) + dt;
+      if (tren.yieldT >= AVOID.yieldMaxS && !L.moving) {
+        const p = detour(L); tren.yieldT = 0;
+        if (p) { tren.path = p; tren.pathI = 0; tren.destWait = 0; tren.detour = true; }
+        else if ((tren.destWait = (tren.destWait || 0) + AVOID.yieldMaxS) >= 4.5 && tren.next === "station") { tren.destWait = 0; goTo(TREN.home, "home"); }   // he's working her console: she goes back to the chair
+      }
+      else if (tren.yieldT >= AVOID.yieldMaxS) tren.yieldT = 0;   // he's walking: he'll clear; hold
+    } else { tren.yieldT = 0; if (walkStep(tren, "tren", TREN.speed * 960, dt)) arrive(); }
   } else if (tren.mode === "aside") {
     // made room for the Lt: wait (facing him) until he has moved on from her old spot, then go back
     const back = tren.resume || TREN.home, who = chatPartner();
@@ -95,10 +125,14 @@ export function tickTren(dt) {
     else {
       tren.dir = TREN.home.face;
       tren.t -= dt;
-      if (tren.t <= 0) goTo(TREN.stations[Math.floor(Math.random() * TREN.stations.length)], "station");
+      if (tren.t <= 0) {   // pass 09 (4): only a console nobody is standing at (or heading for)
+        const free = TREN.stations.filter(st => !standersNear(st.x, st.y));
+        if (free.length) goTo(free[Math.floor(Math.random() * free.length)], "station"); else tren.t = 3;
+      }
     }
   }
   tren.swingAmp += clamp((tren.moving ? 1 : 0) - tren.swingAmp, -dt / 0.16, dt / 0.16);
+  walkSettle(tren, dt);
 }
 // debug / screenshots: put her somewhere specific
 export function trenTo(kind, i = 0) {

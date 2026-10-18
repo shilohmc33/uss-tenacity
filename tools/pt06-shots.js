@@ -105,7 +105,7 @@ const regular = p => p.evaluate(() => { const s = __T.G.prog.crew.slots; return 
       const lN = i.left; PA.playerInput(); SIM.stepSim(0.1); out.freshAfterNight = { left: Math.round(i.left), before: Math.round(lN), ack: i.ack };   // pass 07: the clock RESUMES (never a fresh, longer window), needs seeing again
       // (f) date tampering: backward, repeated, forward jumps
       const p = G.prog, keep = { pd: p.playDays, d: p.lastPlayDate, at: p.lastPlayAt }, day = (y, m, d, h = 12) => new Date(y, m - 1, d, h);
-      p.playDays = 10; p.lastPlayDate = null; p.lastPlayAt = null;
+      p.playDays = 10; p.lastPlayDate = null; p.lastPlayAt = null; const ptKeep = p.presentTotal; p.presentTotal = 1e7;   // pass 08: calendar rules only (present-time cap tested in pt07)
       const seq = [], mark = (label, dt, pres = 999) => { PR.markPlayDay(dt, pres); seq.push([label, p.playDays]); };   // pass 07: a day also needs ~3 min of present play (999 = played)
       mark('first day', day(2026, 10, 1)); mark('same date again', day(2026, 10, 1, 20)); mark('backward a week', day(2026, 9, 24));
       mark('next real day', day(2026, 10, 2)); mark('backward again', day(2026, 10, 1, 23)); mark('repeat next day', day(2026, 10, 2, 22));
@@ -115,7 +115,7 @@ const regular = p => p.evaluate(() => { const s = __T.G.prog.crew.slots; return 
       mark('midnight hop (2 min later, new date)', day(2026, 11, 3, 0));
       out.tamper = { seq: seq.filter(([l]) => !/^flip [1-9]/.test(l) || l === 'flip 21'), final: p.playDays, flipsAdded: seq.find(x => x[0] === 'flip 21')[1] - seq.find(x => x[0] === 'back to real')[1] };
       // the playtest's 22-flip attack: count days gained purely from flips
-      p.playDays = keep.pd; p.lastPlayDate = keep.d; p.lastPlayAt = keep.at;
+      p.playDays = keep.pd; p.lastPlayDate = keep.d; p.lastPlayAt = keep.at; p.presentTotal = ptKeep;
       // (f) an injury from day 13 can't kill until it resolves on day 14 or later
       const K = __T.PROG.deaths, kc = [K.deathChance, K.maxChance]; K.deathChance = 1; K.maxChance = 1;
       p.playDays = 13; G.prog.med.lastDeathPD = null; G.prog.med.lastDeathPT = null; G.prog.crew.rolls.hist = [];

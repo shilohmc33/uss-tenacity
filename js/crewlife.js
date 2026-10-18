@@ -98,7 +98,7 @@ export function transferOff(id, posting = null, why = "roll") {
   const fr = Math.max(0, Math.floor((frOp - (1 - PROG.gifts.fleetShare) * Math.min(giftShare(id), frOp)) / PROG.fleet.perOpinion));   // gifts phase: gift opinion counts 50%
   const alum = { id, name: o.name, short: o.short, species: o.species, pronoun: o.pronoun || "they", tags: [...(o.tags || [])], rank: o.rank, ladder: sl.ladder, slot: o.slot, dept: sl.dept, role: sl.role,
     opinion: op, posting: post, leftDay: p.day, leftPD: p.playDays, fr };
-  p.alumni.push(alum); p.fleetRep += fr;
+  p.alumni.push(alum); p.fleetRep = Math.min(FLEET_REP_MAX, p.fleetRep + fr);
   cr.slots[o.slot] = null; delete cr.occ[id]; crewTouch();
   cr.pending.push({ slot: o.slot, at: G.ship.elapsed + rnd(PROG.crewEvents.replaceAfter) });
   const bye = op >= PROG.fleet.contactMin ? `${o.short}, kit bag over one shoulder, stops by the ${addr()}: 'I'll tell them about you. Call if you ever need anything.'`
@@ -194,7 +194,9 @@ export function friendliestAlum(posting = null) {
   const L = P().alumni.filter(a => a.opinion >= PROG.fleet.contactMin && (!posting || a.posting === posting));
   return L.sort((x, y) => y.opinion - x.opinion)[0] || null;
 }
-export function addFleetRep(n, why) { if (n > 0) { P().fleetRep += n; log(`Fleet Reputation +${n} — ${why}.`, "good"); } }
+// the sanitizer's cap (progression.js int(fleetRep, 0, 100000)); increments clamp to it too (save-fuzz 'everything maxed')
+const FLEET_REP_MAX = 100000;
+export function addFleetRep(n, why) { if (n > 0) { P().fleetRep = Math.min(FLEET_REP_MAX, P().fleetRep + n); log(`Fleet Reputation +${n} — ${why}.`, "good"); } }
 export function onDiplomatic(dest) {   // +2 Fleet Reputation per diplomatic visit, credited at most once per PROG.fleet.diplomaticEvery days of play
   const cr = C(), pd = P().playDays;
   if (cr.dipPD != null && pd - cr.dipPD < PROG.fleet.diplomaticEvery) return;

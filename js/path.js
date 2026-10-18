@@ -81,7 +81,7 @@ export function findPath(deck, fx0, fy0, fx1, fy1) {
         }
         out.push(pts[p]);
       }
-      return out;
+      return smooth(deck, fx0, fy0, out);
     }
     closed[cur] = 1;
     const cx = cur % COLS, cy = (cur / COLS) | 0;
@@ -95,6 +95,31 @@ export function findPath(deck, fx0, fy0, fx1, fy1) {
     }
   }
   return null;
+}
+// String-pull a cell path (pass 08, audit C6): from each kept point, skip ahead to the farthest waypoint still in clear
+// line of sight on the walk mask (sampled every 4 px, with +/-6 px of shoulder room), then drop waypoints closer than
+// 8 px. Removes the 4-connected grid's short perpendicular jogs that flipped the walkers' facing.
+function clearLine(deck, x0, y0, x1, y1) {
+  const dx = (x1 - x0) * 960, dy = (y1 - y0) * 640, d = Math.hypot(dx, dy);
+  if (d < 1) return true;
+  const nx = -dy / d * 6 / 960, ny = dx / d * 6 / 640;
+  for (let s = 0; s <= d; s += 4) {
+    const k = s / d, x = x0 + (x1 - x0) * k, y = y0 + (y1 - y0) * k;
+    if (!isWalkable(deck, x, y) || !isWalkable(deck, x + nx, y + ny) || !isWalkable(deck, x - nx, y - ny)) return false;
+  }
+  return true;
+}
+export function smooth(deck, fx0, fy0, pts) {
+  if (!pts || pts.length < 2 || !isWalkable(deck, fx0, fy0)) return pts;
+  const out = []; let ax = fx0, ay = fy0, i = 0;
+  while (i < pts.length) {
+    let j = pts.length - 1;
+    while (j > i && !clearLine(deck, ax, ay, pts[j][0], pts[j][1])) j--;
+    out.push(pts[j]); ax = pts[j][0]; ay = pts[j][1]; i = j + 1;
+  }
+  const res = []; let px = fx0, py = fy0;
+  out.forEach((p, k) => { if (k === out.length - 1 || Math.hypot((p[0] - px) * 960, (p[1] - py) * 640) >= 8) { res.push(p); px = p[0]; py = p[1]; } });
+  return res;
 }
 // Is the Lt standing somewhere sane? (used after load / mask swap)
 export function snapToFloor(L) {

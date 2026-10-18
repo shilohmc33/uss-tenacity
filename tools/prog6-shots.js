@@ -183,7 +183,7 @@ const logHas = (p, re) => p.evaluate(re => __T.G.log.slice(-40).some(e => new Re
     deathAuditPresent: aud.every(a => a.present === true && !a.offline && !a.hidden && a.ack === true),
     offlineStabilised: C.offlineStabilised.alive && C.offlineStabilised.deaths === 0 && C.offlineStabilised.state === 'stable',
     offlineAfterSeenHeld: C.offlineAfterSeen.alive && C.offlineAfterSeen.deaths === 0 && C.offlineAfterSeen.state === 'warning' && C.offlineAfterSeen.away === true,
-    freshWindowOnReturn: C.freshOnReturn.left <= C.freshOnReturn.window && C.freshOnReturn.ack === false,   // pass 07: the clock resumes (never longer than before), needs seeing again
+    freshWindowOnReturn: C.freshOnReturn.left <= Math.max(C.freshOnReturn.window, 30) && C.freshOnReturn.ack === false,   // pass 07: the clock resumes (never longer than before), needs seeing again; pass 08 (3): except the one-time 30 s return floor
     idlePausesClock: C.idleNoDeath.alive && C.idleNoDeath.deaths === 0 && C.idleNoDeath.left > 0,
     hiddenNotPresent: C.hiddenCheck === 'not present',
     deathScene: R.deathScene && R.deathScene.phase === 'lost' && R.deathScene.shown,

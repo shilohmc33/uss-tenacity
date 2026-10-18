@@ -1,6 +1,9 @@
 // Deck renderer: plate + camera (follow, pinch/wheel zoom, drag pan), Lt sprites, rings, fx, turbolift overlay.
 import { G } from "../state.js";
-import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, charFrame, DECK_LIGHT } from "../data.js";
+import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT } from "../data.js";
+import { actionFrame, animSeed, walkPose } from "../anim.js";
+import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
+import { SLOTMAP, DEPTS } from "../roster.js";
 import { tren } from "../npc.js";
 import { ambientOnDeck, ltChatPartner } from "../npc-ambient.js";
 import { IMG } from "../assets.js";
@@ -151,37 +154,70 @@ function drawFrameLit(ctx, img, f, px, py, s) {
   if (!t) return drawFrame(ctx, img, f, px, py, s);
   ctx.drawImage(t, 0, 0, f.w, f.h, px - f.ax * s, py - f.ay * s, f.w * s, f.h * s);
 }
-function drawChar2(ctx, f, x, y) { drawFrameLit(ctx, IMG[f.img], f, x, y, FIG_H / f.refH); }
+// sy = vertical scale about the feet (breathing): the anchor row never moves, so planted feet stay planted
+// tint = department colour for a tint-ready base sheet (art hook: data.js TINT_BASES), applied to its grey uniform
+function drawChar2(ctx, f, x, y, sy = 1, tint = null) {
+  const img = (tint && tintedSheet(f.img, tint)) || IMG[f.img];
+  if (sy === 1) return drawFrameLit(ctx, img, f, x, y, FIG_H / f.refH);
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, sy); drawFrameLit(ctx, img, f, 0, 0, FIG_H / f.refH); ctx.restore();
+}
 // A standing/walking/working character from a v3-format sheet. c = {x, y, dir, moving, swingAmp, walkPhase};
 // act = action loop name (computer/talk/eat/weld/kneel) or null for walk/idle.
-function drawWalker(ctx, who, c, act, t, seed = 0) {
+const LT_AS = animSeed("lt"), TREN_AS = animSeed("tren");
+function drawWalker(ctx, who, c, act, t, as = LT_AS) {
   const px = c.x * DW, py = c.y * DH;
   ctx.fillStyle = "rgba(20,10,0,0.38)"; ctx.beginPath(); ctx.ellipse(px, py - 1, 13 * K, 4.2 * K, 0, 0, 6.29); ctx.fill();
   if (!charReady(who, "walk")) { ctx.fillStyle = "#c9a14a"; ctx.fillRect(px - 8 * K, py - FIG_H, 16 * K, FIG_H); return; }   // art missing
-  const F = CHAR_FRAMES[who];
-  // action loops (weld/kneel, computer, eat, talk): A, M, B, M on a timer. No seated poses.
-  if (act && charReady(who, act)) { drawChar2(ctx, charFrame(who, act, c.dir, t + seed), px, py); return; }
-  // walk: frame advance tied to distance (walkPhase += moved/STEP_LEN*PI) so feet don't skate;
-  // one quadrant (PI/2) per frame -> A, M, B, M = two steps per cycle. Idle = walk M + breathing.
-  const idle = !c.moving, striding = !idle && c.swingAmp >= 0.35;
-  const q = Math.floor(c.walkPhase / (Math.PI / 2)) % 4;
-  const bob = -Math.abs(Math.cos(c.walkPhase)) * 1.2 * K * c.swingAmp;
-  const tt = t + seed, breath = idle ? Math.sin(tt * 1.7) * 0.7 * K : 0, sway = idle ? Math.sin(tt * 0.45) * 0.8 * K : 0;
-  const f = striding ? F.walk[c.dir][LT2_LOOP[q]] : F[LT2_IDLE[0]][c.dir][LT2_IDLE[1]];
-  drawChar2(ctx, f, px + sway, py + bob + breath);
+  const F = CHAR_FRAMES[who], tint = isTintBase(who) ? c.tint || "#c8463c" : null;
+  // action loops (weld/kneel, computer, eat, talk): A, M, B, M with per-action holds and seeded rests (anim.js
+  // ACTION_TIMING); every character has its own seed + tempo, so nobody works in lockstep.
+  if (act && charReady(who, act)) { drawChar2(ctx, F[act][c.dir][actionFrame(act, t, as)], px, py, 1, tint); return; }
+  // walk: frame advance tied to distance (walkPhase += moved / stepLen(who, dir) * PI, js/anim.js) so feet don't skate;
+  // one quadrant (PI/2) per frame -> A, M, B, M = two steps per cycle. No code bob: the v3 art carries its own head
+  // bob and the anchor (feet) must stay on the floor (audit C7). Idle = walk M + breathing as a 1 +/- 0.6% vertical
+  // scale about the feet (no sway, no translation: audit C8).
+  // walkPose (anim.js): the stride frame, or after a stop the last stride held for one beat before M (finish the step,
+  // C10), or one beat of M side-on on a 180-degree turn (C13).
+  const wp = walkPose(c), idle = wp.idle;
+  const tt = t + as.offset, breath = idle && !c.moving ? 1 + Math.sin(tt * 1.7) * 0.006 : 1;
+  const f = !idle ? F.walk[c.dir][LT2_LOOP[wp.q]] : F[LT2_IDLE[0]][wp.dir || c.dir][LT2_IDLE[1]];
+  drawChar2(ctx, f, px, py, breath, tint);
 }
 // phase 6: crew in sickbay lie on the biobeds either side of the Lt's (Medical deck). Name tag + medical cross;
 // a serious injury still in its warning window pulses red with the system that needs fixing.
 export const PATIENT_BEDS = [[0.205, 0.556], [0.205, 0.345], [0.205, 0.70]];
 const patients = () => ((G.prog.med && G.prog.med.inj) || []).slice(0, PATIENT_BEDS.length);
+function patientTint(id) { try { const o = G.prog.crew.occ[id], sl = o && SLOTMAP[o.slot]; return (sl && DEPTS[sl.dept] && DEPTS[sl.dept].tint) || "red"; } catch (e) { return "red"; } }
+const PAT_AS = [0, 1, 2].map(i => animSeed("patient" + i));
 function drawPatient(ctx, t, i) {
-  const [bx, by] = PATIENT_BEDS[i], x = bx * DW, y = by * DH;
-  if (!IMG["crew-atlas"]) return;
-  const len = 140, f = CREW_FRAMES.lying, s = len / f.refH;
-  ctx.save(); ctx.translate(x, y); ctx.rotate(-Math.PI / 2);
+  const [bx, by] = PATIENT_BEDS[i], p = patients()[i];
+  drawLying(ctx, t, bx * DW, by * DH, -Math.PI / 2, "patient", p && patientTint(p.id), PAT_AS[i]);
+}
+// A lying figure centred on (x, y), rotated like the bed (rot 0 = head up). One length (LIE_FIG, the standing height)
+// wherever the bed is long enough (biobed 150, the bigger quarters racks), so the Lt matches the patients (pass 08 /
+// audit C4); a shorter bed (berthing bunk 96, the shared-room rack 120) scales the whole figure down to the bed's
+// length so he never overhangs it (pass 09 item 1). lieFit is exported for tools/pt09-metrics.js.
+export const LIE_FIG = 138;
+export const lieFit = bedLen => Math.min(1, (bedLen > 0 ? bedLen : LIE_FIG) / LIE_FIG);
+// Art hook: a LIE_ART sprite for `who` (384x160 cell, head at the left, hip-centre anchor, breathing A/B) replaces the
+// legacy frame when present; it is drawn at the standing sheets' scale, turned with the bed (rot + 90 degrees, since
+// the legacy frame is upright).
+function drawLying(ctx, t, x, y, rot, who = "lt", tint = null, as = LT_AS, bedLen = 0) {
+  const art = lieArt(who, tint), fit = lieFit(bedLen), L = LIE_FIG * fit;
+  if (art) {
+    const fr = art.frames > 1 ? actionFrame("lying", t, as) : 0, s = ART_SCALE * fit;
+    ctx.save(); ctx.translate(x, y); ctx.rotate((rot || 0) + Math.PI / 2);
+    ctx.fillStyle = "rgba(20,10,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 3, L * 0.52, L * 0.17, 0, 0, 6.29); ctx.fill();
+    drawFrameLit(ctx, art.im, { x: fr * art.w, y: 0, w: art.w, h: art.h, ax: art.ax, ay: art.ay }, 0, 0, s); ctx.restore();
+    return true;
+  }
+  if (!IMG["crew-atlas"]) return false;
+  const len = L, f = CREW_FRAMES.lying, s = len / f.refH;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0);
   ctx.fillStyle = "rgba(20,10,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 2, len * 0.17, len * 0.52, 0, 0, 6.29); ctx.fill();
-  const b = 1 + Math.sin(t * 1.3 + i) * 0.005; ctx.scale(b, b);
+  const b = 1 + Math.sin(t * 1.4) * 0.006; ctx.scale(b, 1);   // breathing widens the chest only, so the length stays inside the bed
   drawFrameLit(ctx, IMG["crew-atlas"], f, 0, 0, s); ctx.restore();
+  return true;
 }
 // name tags over the lighting (like the fault markers): at the foot of the bed, clear of the walkway
 function drawPatientTags(ctx, t) {
@@ -200,24 +236,46 @@ function drawPatientTags(ctx, t) {
     }
   });
 }
+// lie-down / get-up (and sit-down / stand-up, art hook) cross-fade, runtime only: a = 0 standing .. 1 lying or seated,
+// over LIE_FADE s each way
+export const LIE_FADE = 0.3;
+const lieFx = { a: 0, node: null };
+export const lieBlend = () => lieFx.a;   // tools
+const posed = n => !!(n && (n.lie || (n.seat && seatArt("lt"))));
+function lieNode() { const n = lieFx.node && NODEMAP[lieFx.node]; return posed(n) && n.deck === G.lt.deck ? n : null; }
+const poseY = n => n.lie ? n.lie[1] : n.seat.at[1];
+// seated Lt (art hook): SEAT_ART.lt cell, column by the seat's facing, idle A/B (talk A/B with T'Ren when provided),
+// anchored at the hip on node.seat.at + node.seat.hip[face]
+function drawSeated(ctx, t, n) {
+  const art = seatArt("lt"); if (!art) return false;
+  const st = n.seat, face = st.face === "up" ? "up" : "down", off = (st.hip && st.hip[face]) || [0, 0];
+  const talk = art.talk && L_talking(), row = (talk ? 2 : 0) + actionFrame("seated", t, LT_AS);
+  const x = st.at[0] * DW + off[0], y = st.at[1] * DH + off[1];
+  drawFrameLit(ctx, art.im, { x: SEAT_COLS[face] * 160, y: row * 384, w: 160, h: 384, ax: art.ax, ay: art.ay }, x, y, ART_SCALE);
+  return true;
+}
+const L_talking = () => G.lt.deck === "bridge" && tren.talkTo === G.lt;
+function tickLie(dt) {
+  const L = G.lt, nd = L.mode === "use" && L.node ? NODEMAP[L.node] : null, lying = !!(posed(nd) && !L.lift);
+  if (lying) lieFx.node = L.node;
+  lieFx.a = clamp(lieFx.a + (lying ? 1 : -1) * Math.min(dt, 0.1) / LIE_FADE, 0, 1);
+  if (!lieNode()) lieFx.a = lying ? lieFx.a : 0;
+}
 function drawLt(ctx, t) {
-  const L = G.lt, nd = L.mode === "use" && L.node ? NODEMAP[L.node] : null;
-  if (nd && nd.lie && IMG["crew-atlas"]) {   // lying pose: legacy crew-atlas frame (no v3 equivalent)
-    const len = Math.min(LIE_LEN, nd.lieLen || LIE_LEN);   // 2x, clamped to the bed painted in the plate
-    const f = CREW_FRAMES.lying, s = len / f.refH;
-    ctx.save(); ctx.translate(nd.lie[0] * DW, nd.lie[1] * DH); ctx.rotate(nd.lieRot || 0);
-    ctx.fillStyle = "rgba(20,10,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 2, len * 0.17, len * 0.52, 0, 0, 6.29); ctx.fill();
-    const b = 1 + Math.sin(t * 1.5) * 0.006; ctx.scale(b, b);
-    drawFrameLit(ctx, IMG["crew-atlas"], f, 0, 0, s); ctx.restore();
-    zzz(ctx, nd.lie[0] * DW + 12 * K, nd.lie[1] * DH - 20 * K, t);
-    return;
+  const L = G.lt, nd = L.mode === "use" && L.node ? NODEMAP[L.node] : null, ln = lieNode(), a = ln ? lieFx.a : 0;
+  if (a > 0) {   // lying pose (LIE_ART when present, else the legacy crew-atlas frame) or seated (SEAT_ART), fading over LIE_FADE
+    ctx.globalAlpha = a; const ok = ln.lie ? drawLying(ctx, t, ln.lie[0] * DW, ln.lie[1] * DH, ln.lieRot || 0, "lt", null, LT_AS, ln.lieLen) : drawSeated(ctx, t, ln); ctx.globalAlpha = 1;
+    if (ok && a >= 1) { if (ln.lie) zzz(ctx, ln.lie[0] * DW + 12 * K, ln.lie[1] * DH - 20 * K, t); return; }
+    if (!ok) return;
   }
+  if (a > 0) ctx.globalAlpha = 1 - a;   // the standing figure fades out at the bed's stand spot (and back in on getting up)
   const chat = L.mode === "use" ? ltChatPartner() : null;   // turn to face whoever he's talking to
   const c = chat ? { ...L, dir: Math.abs((chat.x - L.x) * 960) > Math.abs((chat.y - L.y) * 640) ? (chat.x > L.x ? "right" : "left") : (chat.y > L.y ? "down" : "up") } : L;
-  drawWalker(ctx, "lt", c, ltAction(L, nd), t);
+  drawWalker(ctx, "lt", c, posed(nd) ? null : ltAction(L, nd), t);
+  ctx.globalAlpha = 1;
 }
 // Captain T'Ren (bridge only; js/npc.js drives her)
-function drawTren(ctx, t) { drawWalker(ctx, "tren", tren, tren.action, t, 1.3); }
+function drawTren(ctx, t) { drawWalker(ctx, "tren", tren, tren.action, t, TREN_AS); }
 function zzz(ctx, x, y, t) { ctx.fillStyle = "rgba(200,220,255,0.8)"; ctx.font = `bold ${11 * K}px Antonio, sans-serif`; for (let i = 0; i < 3; i++) { const p = (t * 0.5 + i / 3) % 1; ctx.globalAlpha = 1 - p; ctx.fillText("z", x + p * 10 * K, y - p * 26 * K); } ctx.globalAlpha = 1; }
 function speech(ctx, x, y, t) { if ((t % 6) > 3.5) return; ctx.fillStyle = "rgba(255,240,210,0.92)"; rr(ctx, x, y, 26, 14, 6); ctx.fill(); ctx.fillStyle = "#333"; const n = 1 + Math.floor(t * 3) % 3; ctx.fillText("•".repeat(n), x + 6, y + 11); }
 function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
@@ -299,14 +357,16 @@ export function drawDeck(ctx, t, dt) {
   if (L.mode === "walk" && L.path && L.path.length) { const e = L.path[L.path.length - 1]; ring(ctx, e[0] * DW, e[1] * DH, 8 * K, 1, "rgba(127,224,255,0.6)", 1.5); }
   if (DBG.walk) drawWalkGrid(ctx, dk);
   // characters, back to front by feet y: the Lt, T'Ren (bridge) and any ambient crew on this deck
-  const ltY = (L.mode === "use" && L.node && NODEMAP[L.node] && NODEMAP[L.node].lie) ? NODEMAP[L.node].lie[1] : L.y;
-  const cast = [{ y: ltY, draw: () => drawLt(ctx, t) }];
+  tickLie(dt);
+  const ln = lieNode(), ltY = ln && lieFx.a >= 0.5 ? poseY(ln) : L.y;
+  const cast = [{ y: ltY, x: L.x, id: "lt", draw: () => drawLt(ctx, t) }];
   if (!L.lift) {
-    if (L.deck === "bridge") cast.push({ y: tren.y, draw: () => drawTren(ctx, t) });
-    for (const n of ambientOnDeck(L.deck)) cast.push({ y: n.y, draw: () => drawWalker(ctx, n.who, n, n.action, t, n.seed) });
-    if (L.deck === "medical") patients().forEach((_, i) => cast.push({ y: PATIENT_BEDS[i][1], draw: () => drawPatient(ctx, t, i) }));   // phase 6: patients on the biobeds
+    if (L.deck === "bridge") cast.push({ y: tren.y, x: tren.x, id: "tren", draw: () => drawTren(ctx, t) });
+    for (const n of ambientOnDeck(L.deck)) cast.push({ y: n.y, x: n.x, id: n.occId, draw: () => drawWalker(ctx, n.who, n, n.action, t, n.anim) });
+    if (L.deck === "medical") patients().forEach((_, i) => cast.push({ y: PATIENT_BEDS[i][1], x: PATIENT_BEDS[i][0], id: "patient" + i, draw: () => drawPatient(ctx, t, i) }));   // phase 6: patients on the biobeds
   }
-  cast.sort((a, b) => a.y - b.y).forEach(c => c.draw());
+  // back to front by feet y; equal y breaks by x, then id, so the order never flickers (audit C5)
+  cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck
   lighting(ctx, t);
   if (L.deck === "medical" && !L.lift) drawPatientTags(ctx, t);   // phase 6

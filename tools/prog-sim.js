@@ -67,7 +67,7 @@ const ROMSIM = process.argv[5] === 'romance';   // Personal Log phase 4: regular
       if (Math.random() < 0.6) { dur = 35 + Math.random() * 365; P.PACE_RT.hidden = true; if (dur > 30) { const d0 = m.n.deaths; sim.catchUp(dur); window.__offDeaths = (window.__offDeaths || 0) + m.n.deaths - d0; } P.PACE_RT.hidden = false; dmon(); }
       else { dur = 70 + Math.random() * 130; for (let s2 = 0; s2 < dur; s2 += 0.1) { sim.stepSim(0.1); dmon(); } }
       P.playerInput(); sim.stepSim(0.1); dmon();
-      for (const x of m.inj) { const k = x.id + '@' + x.at; if (x.state === 'warning' && before[k] != null && x.left > before[k] + 0.01) d.winUp++; }   // the clock never grows back while away
+      for (const x of m.inj) { const k = x.id + '@' + x.at; if (x.state === 'warning' && before[k] != null && x.left > before[k] + 0.01 && !(x.floored && x.left <= 30.01)) d.winUp++; }   // the clock never grows back while away (pass 08: except the one-time 30 s return floor)
       return dur;
     }
     function live(seconds, opts = {}) {

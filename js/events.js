@@ -3,12 +3,14 @@ import { G } from "./state.js";
 import { awardXP, taskMult, PROG, milestone, taskDone, hooks } from "./progression.js";
 import { NODEMAP, DESTS, DECKS } from "./data.js";
 import { clamp, rand, dDist } from "./util.js";
-import { log, toast, shipNews, fx } from "./bus.js";
+import { log, toast, shipNews, fx, cheerful, cheer } from "./bus.js";
 import { spawnFault } from "./faults.js";
 import { ZONE } from "./crew.js";
 import { startBattle as _sb, battleAllowed } from "./battle.js";
 import { PACE, PACE_RT, rr } from "./pacing.js";
 
+// pass 09 (4): light events skipped in the quiet period after a death (bus.js cheerful gate)
+const LIGHT_EVENTS = ["crewmoment", "ferengi"];
 export const EV_POOL = [
   { id: "distress", w: 14, name: "Distress call" }, { id: "refugee", w: 12, name: "Refugee convoy" }, { id: "defector", w: 12, name: "Cardassian defector" },
   { id: "anomaly", w: 13, name: "Sensor anomaly" }, { id: "storm", w: 12, name: "Ion storm" }, { id: "ferengi", w: 11, name: "Ferengi trader" },
@@ -20,10 +22,10 @@ export function evResetLeg(dest) {
   ev.legTarget = Math.round(rr(PACE.eventsPerLeg)); ev.legFired = 0; ev.nextT = dur * rr(PACE.eventAt);
 }
 function pickEvent() {
-  const ev = G.sp.ev, pool = EV_POOL.filter(e => e.id !== ev.lastId);
+  const ev = G.sp.ev, pool = EV_POOL.filter(e => e.id !== ev.lastId && !(LIGHT_EVENTS.includes(e.id) && !cheerful()));   // pass 08 (5): no birthday / mail call in the quiet period after a death
   let r = Math.random() * pool.reduce((a, e) => a + e.w, 0);
   for (const e of pool) { r -= e.w; if (r <= 0) return e.id; }
-  return "crewmoment";
+  return cheerful() ? "crewmoment" : "warnews";
 }
 function evTask(nodeId, need, dur, label) {
   const n = NODEMAP[nodeId];
@@ -56,7 +58,7 @@ export function fireEvent(id) {
       evBegin(id, null);
       log("Diallo: Captain — a refugee convoy out of the Bajoran colonies requests escort and supplies. Six hundred colonists.", "comm");
       S.power = clamp(S.power - 12, 0, 100); SP.rep += 2;
-      log("Diallo coordinates the hand-off: replicator stock, medical supplies, shields spread over the convoy. Power −12. The colonists' elder names a newborn for the ship: reputation +2.", "good");
+      log("Diallo coordinates the hand-off: replicator stock, medical supplies, shields spread over the convoy. Power −12. " + cheer("The colonists' elder names a newborn for the ship: reputation +2.", "Reputation +2."), "good");
       evScheduleNext(); break;
     case "defector":
       evBegin(id, evTask("pads", 2.5, 30, "Prep the Transporter Pads for the defector's beam-in — ENGINEERING"));
@@ -73,8 +75,9 @@ export function fireEvent(id) {
       log("Diallo: 'Ion shear building dead ahead, Captain.' T'Ren: 'All hands, brace. Okafor — your deck, your storm.'", "comm");
       break;
     case "ferengi": {
+      if (!cheerful()) { evScheduleNext(); break; }   // pass 09 (4): a comic event: not in the quiet period
       evBegin(id, null);
-      log("Bridge: A Ferengi marauder hails — DaiMon Pesk. His opening offer for two spare parts is 'one Miranda-class starship, slightly used.'", "comm");
+      log("Bridge: A Ferengi marauder hails — DaiMon Pesk. His opening offer for two spare parts is 'one Miranda-class starship, slightly used.'", "comm");   // cheer-gated: the ferengi case opens with cheerful()
       if (Math.random() < 0.5) { const got = Math.min(2, S.partsCap - S.parts); S.parts += got; log(`T'Ren negotiates for eleven minutes in perfect Ferengi, quoting Rule of Acquisition 190 back at him${got > 0 ? `: +${got} spare parts` : " (the locker is already full)"}.`, "good"); }
       else log("T'Ren declines the final offer with arctic courtesy. Pesk: 'Call me when you're desperate, Captain. Everyone does.'", "comm");
       evScheduleNext(); break;
@@ -92,6 +95,7 @@ export function fireEvent(id) {
       else { SP.rep = Math.max(0, SP.rep - 1); log("Subspace dispatch: a task group has fallen back from the Kalandra sector, losses 'regretted.' Reputation −1.", "comm"); }
       evScheduleNext(); break;
     default:
+      if (!cheerful()) { evScheduleNext(); break; }   // pass 08 (5): never cheerful during the hush
       evBegin("crewmoment", null);
       log(Math.random() < 0.5 ? "The mess hall, off-watch: Ensign Park's birthday — replicated cake and an off-key rendition led by Hale. The Lieutenant is dragged in for one verse. It helps more than it should."
         : "Mail call: a letter from home catches up by courier buoy — three weeks old, read in one sitting. It helps more than it should.", "comm");
@@ -140,7 +144,7 @@ export function tickEvents(dt) {
   if (ev.nextT <= 0 && SP.travel.t < SP.travel.dur - 20) fireEvent(pickEvent());
 }
 const dGood = (L, tk) => L.mode === "use" && L.node === tk.node && dDist(L.x, L.y, tk.x, tk.y) <= ZONE;   // must man it, not walk past
-function resolveEvent(bonus) {
+export function resolveEvent(bonus) {   // exported for tools (pt07 hush checks)
   const SP = G.sp, act = SP.ev.active, S = G.ship;
   if (!act) return;
   SP.ev.active = null;
@@ -158,12 +162,12 @@ function resolveEffects(act, bonus, SP, S) {
     if (act.trap && battleAllowed("defector")) { log("The galor's transporter signal was a targeting lock wearing a costume — the 'defector' was bait.", "fault"); _sb("defector"); return; }
     if (act.trap) { log("Diallo catches it at the last second: the galor's transporter signal is a targeting lock wearing a costume. T'Ren drops the beam-in and the 'defector' runs before Hale can return the favour.", "comm"); evScheduleNext(); return; }
     SP.rep += bonus ? 3 : 2; SP.preScanned = true;
-    log(`Gul Revan beams aboard${bonus ? " onto a pad the Lieutenant had prepped and swept" : ""}; his intelligence checks out. Asylum granted: reputation +${bonus ? 3 : 2}. The next fighter we meet starts pre-scanned.`, "good");
+    log(`Gul Revan beams aboard${bonus ? " onto a pad the Lieutenant had prepped and swept" : ""}; his intelligence checks out. ${cheer("Asylum granted: reputation", "Reputation")} +${bonus ? 3 : 2}. The next fighter we meet starts pre-scanned.`, "good");
   } else if (act.id === "anomaly") {
     if (bonus) { SP.rep += 3; log("The sweep closes with the Lieutenant at the Master Systems Display — the data set is beautiful and complete. Reputation +3.", "good"); }
     else { SP.rep += 1; log("Diallo archives the anomaly with half the readings she'd have liked. Reputation +1.", "comm"); }
   } else if (act.id === "storm") {
-    if (bonus) { S.shields = clamp(S.shields - 15, 0, 100); log("The Tenacity rides the shear with the Lieutenant's hands on the core — shields −15 only. Okafor: 'My Lieutenant weathered that. Personally.'", "good"); const id = spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "storm", sys: id, bonus: true })); }
+    if (bonus) { S.shields = clamp(S.shields - 15, 0, 100); log("The Tenacity rides the shear with the Lieutenant's hands on the core — shields −15 only." + cheer(" Okafor: 'My Lieutenant weathered that. Personally.'", ""), "good"); const id = spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "storm", sys: id, bonus: true })); }
     else { S.shields = clamp(S.shields - 35, 0, 100); log("The shear hits like a fist — shields −35, and the deck reports fresh damage.", "fault"); const id = spawnFault("hazard"); if (Math.random() < 0.5) spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "storm", sys: id, bonus: false })); }
   }
   evScheduleNext();

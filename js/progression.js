@@ -2,7 +2,7 @@
 // ship's day counter. ALL progression tuning lives in PROG below (one config). Phases 2-4 hang off the stubs at
 // the bottom (ranks / relationships / daily rolls / fleet rep / boards / specialisations).
 import { G } from "./state.js";
-import { log, toast, fx, hushed } from "./bus.js";
+import { log, toast, fx, cheerful, cheer } from "./bus.js";
 import { clamp } from "./util.js";
 import { PACE_RT, nightActive } from "./pacing.js";
 import { NODEMAP } from "./data.js";
@@ -58,6 +58,7 @@ export const PROG = {
   dayLength: 16 * 3600,
   playDayGapH: 20,                         // pass 06 (f): at least 20 h of real time between two counted play days
   playDayPresentS: 180,                    // pass 07 (1): ... AND ~3 min of PRESENT play (in-session timer, not the device clock) once the day is due
+  playDayPerPresentS: 600,                 // pass 08 (1): AND playDays never exceeds 1 + presentTotal / 600 (10 min of real present play per day), so a clock step can't add a day
   // ---- rank track (data-driven; append to extend). guaranteeDay = days of play (real calendar days with a session),
   // null = no safety net (Shiloh: only the first promotion is guaranteed; later ranks come from readiness + call-up);
   // socialFull = average positive crew opinion that counts as full social credit; repFull = lifetime rep earned since
@@ -248,6 +249,7 @@ export const PROG = {
     serious: { battleCrit: 0.9, battle: 0.45, hazard: 0.85 },   // pass 07 tune (was 0.8 / 0.3 / 0.65);   // serious share (retune v2: 0.6 / 0.15 / 0.45 -> 0.8 / 0.3 / 0.65; phase 6 final was 0.45 / 0 / 0.30 -> 1.2 serious/month and no deaths in 120 days); only serious can end in a death, and battle deaths still need a CRITICAL fault open (memo)
     linkSystems: ["coolant", "eps"],         // a serious injury needs this system (or the fault the hit opened) stable
     window: 180,                             // pass 06: warning window = 180 s of PRESENT time (was 120 s of 'seen' time)
+    returnFloor: 30,                         // pass 08 (3): back from AWAY (locked / offline catch-up) with the system still down: at least 30 s on the clock (~2x the 12-16 s fix), once per injury; re-tap still needed
     presentIdle: 60,                         // pass 06: 'present' = app visible, not offline, and input within the last 60 s; the clock only runs then
     offlineMinSeen: 60,                      // (legacy, unused since pass 06: nothing about an injury ever runs while away)
     heal: { minor: [7200, 14400], serious: [21600, 36000], pulled: [36000, 57600] },
@@ -259,7 +261,10 @@ export const PROG = {
     // Every death safeguard still applies at the moment of the outcome (day 14 / Lt, gap, caps, favourites, gentle, seniors, protected, battle = critical fault).
     // pass 07 (4): base 0.30 x fast-fix 0.4 (~12% after a fast fix, ~9% if the Lt also assists); a crew fix or a slow fix
     // ~30% ('touch and go'); EPS open too ~38% ('grim'). Odds shown as a band: <= bands.good / <= bands.touch / above.
-    surgery: { scene: 8, chance: 0.30, fastS: 60, fastMult: 0.4, excellentMult: 0.7, excellentMax: 2, visitMult: 0.7, epsOpenMult: 1.25, max: 0.55, assistMult: 0.75, bands: { good: 0.15, touch: 0.35 } },   // v3 sim (21 runs each): 0.2 -> regular p50 0 mean 0.57; 0.35 -> p50 0 mean 0.67 (11/21 zero); 0.5 -> regular p50 1 mean 1.05, casual p50 0 mean 0.48 (shipped)
+    // pass 08 (4): the fast-fix bonus is smooth, not one step at 60 s: the full x0.4 up to fastFullS (20 s: the 12-16 s
+    // walk + lift + repair plus a reaction, so a prompt fix still lands at the 12% target), then easing linearly to x1.0 at
+    // fastEndS (90 s). fastS (60) only labels a fix as 'fast' in the text.
+    surgery: { scene: 8, chance: 0.30, fastS: 60, fastMult: 0.4, fastFullS: 20, fastEndS: 90, excellentMult: 0.7, excellentMax: 2, visitMult: 0.7, epsOpenMult: 1.25, max: 0.55, assistMult: 0.75, bands: { good: 0.15, touch: 0.35 } },   // v3 sim (21 runs each): 0.2 -> regular p50 0 mean 0.57; 0.35 -> p50 0 mean 0.67 (11/21 zero); 0.5 -> regular p50 1 mean 1.05, casual p50 0 mean 0.48 (shipped)
     hush: 600,                               // pass 06 m1: ~10 min of ship time after a death: no cheerful ambient lines, no floaters
     memorialDelay: 600,                      // ... and the Mess & Bar service waits at least this long after the death
     gentlePromptAt: 12,                      // pass 06 m5: one-time Crew safety prompt from play day 12 (deaths are possible from day 14)
@@ -490,7 +495,6 @@ export function hardenRomance(p) {
   if (out.opt !== true) { out.signal = null; }
   p.romance = out;
 }
-// v11 -> v12: romance starts unasked (opt null = off until the player answers), no bonds
 // v12 -> v13 (pass 07): present-time play days. The first day after the update must count, so the present-time
 // requirement starts already met (the date + 20 h marks still apply; lastPlayAt is never moved to 'now')
 export function migrateProg13(prog) {
@@ -500,6 +504,8 @@ export function migrateProg13(prog) {
   if (isObj(p.med) && p.med.lastDeathPD != null) p.med.lastDeathPT = Math.max(0, p.presentTotal - Math.max(0, pd - num(p.med.lastDeathPD, pd)) * PROG.deaths.presentPerDayEst);
   return p;
 }
+// v11 -> v12: romance starts unasked (opt null = off until the player answers), no bonds. Chain: v11 -> v12 (romance,
+// memo 'v10') -> v13 (pass 07 present time); romance was committed (v12) before pass 07 took v13, so no renumbering.
 export function migrateProg12(prog) { const p = isObj(prog) ? prog : freshProg(); p.romance = freshRomance(); return p; }
 // anti-farm (Shiloh): a partner's opinion never counts above friendship (+50) for readiness or Fleet Rep, and 0 for readiness once
 // the Lt holds station authority over the partner (Lt Cmdr, partner not a senior officer: memo "chain of command")
@@ -627,7 +633,7 @@ export function repairOutcome(sev, manual, energy, sysId = null, resp = 0) {
   hooks.repair.forEach(f => f(tier, sev, manual, sysId));
   const rations = earnRations(PROG.rations.repair[tier] * (manual ? 1 : PROG.rations.autoMult), "repair");
   // pt07 m4: no cheerful quips in the quiet period after a death — a sober line instead (marginal / standard lines are already plain)
-  const quiet = hushed() && (tier === "good" || tier === "excellent"), qline = quiet ? HUSH_REPAIR[Math.floor(Math.random() * HUSH_REPAIR.length)] : lines[Math.floor(Math.random() * lines.length)];
+  const quiet = !cheerful() && (tier === "good" || tier === "excellent"), qline = quiet ? HUSH_REPAIR[Math.floor(Math.random() * HUSH_REPAIR.length)] : lines[Math.floor(Math.random() * lines.length)];
   return { tier, xp, rep, parts, rations, line: qline.replace(/Lieutenant/g, addr()), reopen: tier === "marginal", src: manual ? "manual" : "auto" };
 }
 // live idle (app open, hands off): the night crew's fixes credit the Lt at the AUTO rate (offline XP is time-based)
@@ -704,6 +710,7 @@ export function markPlayDay(now = new Date(), present = null) {
   if (!playDayDue(now)) return false;
   const s = present == null ? num(p.dayPresent, 0) : present;
   if (!(s >= PROG.playDayPresentS)) return false;
+  if (p.playDays + 1 > 1 + num(p.presentTotal, 0) / PROG.playDayPerPresentS) return false;   // pass 08 (1): cap by total present time (the day stays due)
   p.lastPlayDate = localDate(now); p.lastPlayAt = now.getTime(); p.playDays++; p.dayPresent = 0; return true;
 }
 // main loop (real seconds, not time-scaled): accrue present time only while a new play day is due; count it at ~3 min
@@ -895,7 +902,7 @@ function hardenMed10(p) {
     const oc = p.crew && p.crew.occ && p.crew.occ[x.id];   // pt07 fuzz: names the scenes print always come from the crewmate
     if (typeof x.short !== "string") x.short = oc && typeof oc.short === "string" ? oc.short : "the patient";
     if (typeof x.name !== "string") x.name = oc ? fullName(oc) : x.short;
-    x.left = clamp(num(x.left, K.window), 0, K.window); x.ack = !!x.ack; x.pendT = Math.max(0, num(x.pendT, 0)); x.ackT = Math.max(0, num(x.ackT, 0)); x.away = !!x.away;
+    x.left = clamp(num(x.left, K.window), 0, K.window); x.ack = !!x.ack; x.pendT = Math.max(0, num(x.pendT, 0)); x.ackT = Math.max(0, num(x.ackT, 0)); x.acked = !!x.acked || x.ack || x.ackT > 0;   /* pass 09 (2): first-ack flag; older saves: acked if ever acked */ x.away = !!x.away; x.paused = !!x.paused; x.floored = !!x.floored;   // pass 08 (3): optional flags, default false (no version bump)
     if (x.state === "surgery") { x.surg = clamp(num(x.surg, K.surgery.scene), 0, K.surgery.scene); x.sx = clamp(num(x.sx, K.surgery.chance), 0, K.surgery.max); x.assist = x.assist === true; x.held = x.held === true; x.fast = x.fast === true; }
     if (x.state !== "warning" && x.state !== "surgery" && x.healAt == null) x.healAt = 0;
   }
@@ -999,7 +1006,11 @@ export function nudge(id, delta, why = "", raw = false, max = null) {   // raw: 
 export const giftShare = id => { const g = P().gifts; return g && g.giftOp[id] ? Math.min(g.giftOp[id], Math.max(0, opinionOf(id))) : 0; };
 export function socialPoints() { return Math.round(crewList().reduce((t, c) => t + Math.max(0, opinionOf(c.id)), 0)); }
 // social credit: the average of your best PROG.readiness.socialTop positive opinions (18 crew: your circle, not the census)
-const avgPositive = () => { const v = crewList().map(c => romanceCap(c.id, Math.max(0, opinionOf(c.id) - (1 - PROG.gifts.readinessShare) * giftShare(c.id)))).sort((a, b) => b - a).slice(0, PROG.readiness.socialTop || 99); return v.reduce((t, x) => t + x, 0) / Math.max(1, v.length); };
+// romance anti-farm: the partner's OPINION is capped first (+50, or 0 under station authority), then the usual gift discount
+// applies to that capped value, exactly as for a friend at +50. (Capping after the discount let opinion above +50 soak up the
+// gift discount: up to +1 readiness over the friendship counterfactual, the da943e7 sim finding.)
+export const socialCredit = id => { const op = romanceCap(id, Math.max(0, opinionOf(id))); return Math.max(0, op - (1 - PROG.gifts.readinessShare) * Math.min(giftShare(id), op)); };
+const avgPositive = () => { const v = crewList().map(c => socialCredit(c.id)).sort((a, b) => b - a).slice(0, PROG.readiness.socialTop || 99); return v.reduce((t, x) => t + x, 0) / Math.max(1, v.length); };
 function addService() {
   if (Math.random() < PROG.repEvents.perTask) repEvent(); const p = P(); p.service = Math.min(PROG.readiness.serviceCap, p.service + PROG.readiness.servicePer); }
 // deck task done (events.js) -> opinion of the area's owners + service
@@ -1076,7 +1087,7 @@ export function promote(reason = "readiness") {
   p.history.push({ rank: n.id, day: p.day, playDays: p.playDays, level: p.level, reason });
   p.rankSince = { rep: p.repLifetime, lost: p.repLost, day: p.day, playDays: p.playDays }; p.service = 0; p.readyPeak = 0; p.readyBonus = 0;
   const why = reason === "callup" ? "The board called early." : reason === "guaranteed" ? "Time in grade served." : "Your fitness report is complete.";
-  log(`T'Ren, at the chair, without preamble: 'By order of Starfleet Command, you are promoted to ${n.name}. ${why} Carry on, ${n.addr}.' The crew applauds — Hale loudest.`, "good");
+  log(`T'Ren, at the chair, without preamble: 'By order of Starfleet Command, you are promoted to ${n.name}. ${why} Carry on, ${n.addr}.'${cheer(" The crew applauds — Hale loudest.", "")}`, "good");
   toast(`PROMOTED — ${n.name}`, "good");
   fx("promotion", { name: n.name, short: n.short });
   hooks.promoted.forEach(f => f(n, reason));
@@ -1185,7 +1196,7 @@ export function repEvent(forceKind = null, forceId = null) {
   if (ev.rep < 0) p.repLost += -ev.rep;            // the full loss counts against readiness (floored), even at 0 balance
   if (who && ev.opinion) nudge(who.id, ev.opinion, ev.id);
   p.repEv[kind]++; p.repEv.net += ev.rep;
-  const evLines = kind === "good" && hushed() ? HUSH_PRAISE : ev.lines;   // pt07 m4
+  const evLines = kind === "good" && !cheerful() ? HUSH_PRAISE : ev.lines;   // pt07 m4
   const line = evLines[Math.floor(Math.random() * evLines.length)].replace("{crew}", who ? who.short : "Someone").replace("{pos}", who ? pr(who, "pos") : "their").replace(/Lieutenant/g, addr());
   log(`${line} Reputation ${ev.rep > 0 ? "+" : ""}${ev.rep}.`, kind === "good" ? "good" : "fault");
   toast(`${ev.toast} — reputation ${ev.rep > 0 ? "+" : ""}${ev.rep}`, kind === "good" ? "good" : "warn");

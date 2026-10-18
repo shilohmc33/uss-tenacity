@@ -73,6 +73,13 @@ Static ES-module build. There's no build step.
   the patient's pronoun, homesick is a 3-day spell every 15 ship's days, the gift that reveals a loved item doesn't start the
   repeat decay, no cheerful repair quips in the hush, care-made good words count at 50% (max +2 readiness, x1.25 call-up),
   generated crew never love a disliked category, the injury note shows the clock state, the phone gift picker footer is solid.
+  **Pass 08 (playtest-08 notes):** play days are also capped at 1 + presentTotal / 600 (10 min of present play per day), so
+  stepping the clock can't mint days; the surgery scene counts as seen when the player is present (an auto-fix before the alert
+  tap can't leave a patient unkillable; no fast bonus for it); back from away with the system still down the clock is at least
+  30 s (once per injury, `returnFloor`), re-tap kept, and a short lock / hide / idle under 30 s also needs the re-tap; the
+  fast-fix bonus eases (x0.4 to 20 s, linear to x1.0 at 90 s: `fastFullS` / `fastEndS`); the 600 s hush also blocks the
+  birthday / mail-call moment, Okafor's deck line and the specialisation quip; the crew panel says IN SURGERY; '1 second';
+  sickbay lines and the panel say 'the duty medic' when Dr. Orvin is the patient. Proof: pt07-shots, shots/prog6-sim-v5.txt.
 - js/plog.js (Personal Log phase 1 = design memo 2026-10-17 phase A; save v8, the memo's "v7" — memo v8/v9/v10 become v9/v11/v12; pass 06 took v10):
   CREW > PERSONAL LOG opens a read-only modal: one page per crewmate with standing (bar + label + 7-day trend arrow; the number stays
   hidden until Insight 3+ in phase C), "What moved it" (last 5 nudge(why) reasons, consecutive repeats merge ×n) and a stardated journal
@@ -103,17 +110,27 @@ Static ES-module build. There's no build step.
   gift-data.js; gifts.tastesFor). No effect on readiness or promotion. Save: G.prog.insight { xp, lvl, today, n, seen, beat, apol,
   l2, notes } (migrateProg11 pins pool 0 where a second like was already learned; hardenInsight re-derives lvl from xp).
   Proof: tools/plog3-shots.js, save-fuzz v10->v11 cases + invariants, prog-sim `insight` mode (shots/plog3-sim.txt).
-- js/romance.js (Personal Log phase 4 = memo phase D, romance; save v12, the memo's "v10"). Opt-in (prog.romance.opt null = off;
-  card in the Personal Log index, toggle any time). Any gender; everyone except T'Ren and Okafor (PROG.romance.excluded). The crewmate
+- js/romance.js (Personal Log phase 4 = memo phase D, romance; save v12, the memo's "v10"; chain v11 -> v12 romance -> v13
+  pass 07). Off by default, asked once as the memo says: prog.romance.opt null = off, and the "Allow romantic storylines?" card
+  sits at the top of the Personal Log until answered (no boot-time popup); toggle any time. Any gender; everyone except T'Ren and Okafor (PROG.romance.excluded). The crewmate
   signals first: at opinion +50 after 3 shared moments (chat / dinner / pleased gift, one a day), 30% a day, 5-day gap; decline costs
   nothing (never asked again by that crewmate unless the player reopens). Per-crew FRIENDS ONLY toggle. Dates (dinner 40 rations,
   holosuite 30, Promenade free at DS9; every 2 days) end in a PG fade to black; Courting after 2 dates, Together after 5 dates and
   5 days. Disclosure (memo): senior partner -> to the captain at Together; Lt Cmdr over a non-senior partner -> outrank disclosure.
   Partner below +20 ends it; END IT GENTLY costs -3. Transfer -> letter thread (alumni page, reply warm/light/end, +1 alumni opinion,
   no Fleet Rep). Partners are not auto-protected (excluded from the auto top-2 favourites; normal safeguards only); their death gives a
-  heavier memorial + personal log entry. Anti-farm: romanceCap() caps partner opinion at +50 in readiness social share and transfer
-  Fleet Rep, and 0 for readiness under authority. Tuning in PROG.romance. Proof: tools/plog4-shots.js, save-fuzz v11->v12 cases +
+  heavier memorial + personal log entry. Anti-farm: romanceCap() caps the partner's OPINION at +50 (0 for readiness under authority)
+  before the gift discount (progression.js socialCredit) and in transfer Fleet Rep, so a partner never counts more than a friend
+  at +50. Tuning in PROG.romance. Proof: tools/plog4-shots.js, save-fuzz v11->v12 cases +
   invariants, prog-sim `romance` mode (shots/plog4-sim.txt, anti-farm and safeguard assertions).
+- js/anim.js + js/art-hooks.js (animation pass): walk frames advance by distance with a step length per character and
+  direction (anim.js STEP: side 44 / Lt 45, up-down 30, T'Ren up 26), so speed bonuses raise cadence; seeded per-crew action
+  timelines (ACTION_TIMING) instead of lockstep; facing from a look-ahead with hysteresis; give-way and step-aside (AVOID);
+  crew type only at data.js CONSOLES. ART HOOKS (data.js LIE_ART / SEAT_ART / TINT_BASES, empty = current render): lying =
+  assets/<img>.webp, one row of 384x160 cells (A, B), head left, hip anchor (192,80); seated = 160x384 cells, columns up/down,
+  rows idle A/B (+ talk A/B), hip anchor (80,300), seat spot on the node (`seat: { at, face, hip: { up, down }, stand }`);
+  tint base = a v3 crew sheet with mid-grey uniform panels, department colour applied at draw time (optional <img>-mask).
+  Proof: tools/anim-strips.js (shots/anim-before-* / anim-after-*), tools/anim-hook-check.js.
 - assets/: harvested art. Ships are pre-keyed from magenta to alpha.
 - reference/: original HTML, assets, and attachments.
 - tools/: Playwright e2e scripts (tools/lt2-shots.js: Lt sprite screenshots -> shots/lt2_*.png; tools/tren-shots.js: T'Ren -> shots/tren_*.png).

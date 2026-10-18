@@ -6,7 +6,7 @@
 // Tuning: PROG.jobs. State: G.prog.jobs (not saved across sessions in a meaningful way; safe to drop).
 import { G } from "./state.js";
 import { DECKS, NODEMAP } from "./data.js";
-import { log, toast, fx } from "./bus.js";
+import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, awardXP, taskMult, taskDone, nudge, crewList, opinionOf, addr } from "./progression.js";
 import { PACE_RT, nightActive } from "./pacing.js";
 
@@ -32,7 +32,7 @@ export const JOBS = {
     { deck: "engineering", node: "shield", thing: "a field-coil test" },
     { deck: "engineering", node: "pads", thing: "a pattern-buffer cycle" },
     { deck: "bridge", node: "msd", thing: "a sensor sweep that won't converge" },
-    { deck: "lounge", node: "bar", thing: "the drinks replicator (it only makes broth again)" },
+    { deck: "lounge", node: "bar", thing: "the drinks replicator", quip: " (it only makes broth again)" },   // cheer-gated: the quip goes through cheer() in spawn()
     { deck: "lounge", node: "mess", thing: "the galley's food synthesiser" },
     { deck: "medical", node: "biobed", thing: "a tricorder that needs re-syncing" },
   ],
@@ -48,7 +48,7 @@ function spawn() {
   let job = null;
   if (Math.random() < k.requestShare) {
     const opts = JOBS.request.filter(r => NODEMAP[r.node]).map(r => ({ r, who: crewList().filter(c => c.deck === r.deck && !c.senior && !(G.prog.med && G.prog.med.inj.some(x => x.id === c.id))) })).filter(o => o.who.length);
-    if (opts.length) { const o = pick(opts), c = pick(o.who); job = { kind: "request", node: o.r.node, deck: o.r.deck, who: c.id, short: c.short, label: `${c.short} asks for a hand with ${o.r.thing}` }; }
+    if (opts.length) { const o = pick(opts), c = pick(o.who); job = { kind: "request", node: o.r.node, deck: o.r.deck, who: c.id, short: c.short, label: `${c.short} asks for a hand with ${o.r.thing}${cheer(o.r.quip || "", "")}` }; }
   }
   if (!job) { const opts = JOBS.console.filter(j => NODEMAP[j.node] && j.node !== L.node); const j = pick(opts); job = { kind: "console", node: j.node, deck: NODEMAP[j.node].deck, label: j.label }; }
   Object.assign(job, { t: k.expire, dur: k.expire, need: rr(k.work), acc: 0, xp: k.xp, id: ++J().n });
@@ -71,7 +71,7 @@ export function tickJobs(dt) {
         if (a.kind === "request" && a.who) nudge(a.who, k.opinion, "odd job");
         taskDone(a.node, a.deck);
         j.done++; j.xp += xp; j.active = null; j.next = rr(k.gap);
-        log(a.kind === "request" ? `${a.short} — sorted. 'I owe you one, ${addr()}.' (+${xp} XP)` : `Odd job done — ${a.label.replace(/^./, c => c.toLowerCase())}. (+${xp} XP)`, "good");
+        log(a.kind === "request" ? `${a.short} — sorted.${cheer(` 'I owe you one, ${addr()}.'`, "")} (+${xp} XP)` : `Odd job done — ${a.label.replace(/^./, c => c.toLowerCase())}. (+${xp} XP)`, "good");
         toast(`Odd job done · +${xp} XP${k.rep > 0 ? ` · +${k.rep} rep` : ""}`, "good");
         fx("floater", { x: L.x, y: L.y - 0.235, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 });
       }

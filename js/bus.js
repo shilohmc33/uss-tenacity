@@ -18,4 +18,13 @@ export function toast(msg, kind = "") { if (!quiet) subs.toast.forEach(f => f(ms
 export function shipNews(html) { G.news = { html, sd: G.ship.stardate.toFixed(1) }; if (!quiet) subs.news.forEach(f => f(G.news)); }
 // pass 06 m1: ~10 min of ship time after a death (G.prog.med.hushUntil): no floaters and no cheerful ambient lines
 export const hushed = () => { const m = G.prog && G.prog.med; return !!(m && G.ship && G.ship.elapsed < (m.hushUntil || 0)); };
-export function fx(kind, data) { if (kind === "floater" && hushed()) return; if (!quiet) subs.fx.forEach(f => f(kind, data)); }
+// pass 09 (4): THE quiet-period gate. Every light / cheerful line, toast and floater goes through it, so a new line
+// can't leak into the quiet period: cheerful() is the one test, cheer(text, sober) picks the line or its sober variant
+// (null = say nothing), cheerLog / cheerToast log or toast through it, and fx() drops floaters + milestone toasts.
+// tools/cheer-scan.js fails if code outside bus.js calls hushed() itself or a known light line skips cheer().
+export const cheerful = () => !hushed();
+export const cheer = (text, sober = null) => hushed() ? sober : text;
+export function cheerLog(text, cls = "comm", sober = null) { const t = cheer(text, sober); if (t) log(t, cls); return t; }
+export function cheerToast(text, kind = "good", sober = null) { const t = cheer(text, sober); if (t) toast(t, kind); return t; }
+const CHEER_FX = new Set(["floater", "milestone"]);
+export function fx(kind, data) { if (CHEER_FX.has(kind) && hushed()) return; if (!quiet) subs.fx.forEach(f => f(kind, data)); }

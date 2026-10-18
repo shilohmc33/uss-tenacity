@@ -33,6 +33,7 @@ import { SYSTEMS } from "./data.js";
 import { PACE_RT, nightActive, isPresent, presentIdle } from "./pacing.js";
 import { spawnFault } from "./faults.js";
 import { transferOff, crewNote, crewCapsOk, medFx } from "./crewlife.js";
+const secs = n => `${n} second${n === 1 ? "" : "s"}`;   // pass 08 (7)
 
 const P = () => G.prog;
 const K = () => PROG.deaths;
@@ -43,8 +44,8 @@ export const M = () => P().med || (P().med = freshMed());
 export const gentle = () => (M().gentle == null ? !!K().gentle : !!M().gentle);
 export const injuryOf = id => M().inj.find(x => x.id === id) || null;
 export const isInjured = id => !!injuryOf(id);
-const docPron = () => { const id = P().crew.slots.doctor, o = id && P().crew.occ[id]; return o ? pr(o) : "they"; };   // pt07 m1: Orvin is they
-const docName = () => { const id = P().crew.slots.doctor, o = id && P().crew.occ[id]; return o ? `Dr. ${o.short}` : "The duty medic"; };
+const docPron = (patient = null) => { const id = P().crew.slots.doctor, o = id && P().crew.occ[id]; return o && o.id !== patient ? pr(o) : "they"; };   // the duty medic is "they"   // pt07 m1: Orvin is they
+export const docName = (patient = null) => { const id = P().crew.slots.doctor, o = id && P().crew.occ[id]; return o && o.id !== patient ? `Dr. ${o.short}` : "The duty medic"; };   // pass 08 (6b): never the patient themself
 // the 2 protected favourites: the player's pins first, topped up with the highest opinions (regular crew; seniors are protected anyway)
 export function favourites() {
   const list = crewList().filter(c => !c.senior && !c.protected), n = K().protectFavourites, m = M();
@@ -115,17 +116,17 @@ export function injure(cause, opts = {}) {
   if (sev === "serious") { sys = linkSystem(cause, opts.sys); if (!sys) sev = "minor"; }
   const now = G.ship.elapsed, live = !PACE_RT.offline && !nightActive();
   const inj = { id: c.id, slot: c.slot, short: c.short, name: c.name, cause, what: opts.what || (cause === "battle" ? "a hit through the shields" : "a hazard"),
-    sev, sys, state: sev === "serious" ? "warning" : "recovering", at: now, pd: p.playDays, day: p.day, left: k.window, seen: live, seenT: 0, offline: !!PACE_RT.offline, ack: false, pendT: 0, ackT: 0, away: false,
+    sev, sys, state: sev === "serious" ? "warning" : "recovering", at: now, pd: p.playDays, day: p.day, left: k.window, seen: live, seenT: 0, offline: !!PACE_RT.offline, ack: false, acked: false, pendT: 0, ackT: 0, away: false,
     visited: false, excellent: 0, crewSave: Math.random() < k.crewStabilise, healAt: sev === "minor" ? now + rnd(k.heal.minor) : null, crit: !!opts.crit };
   m.inj.push(inj); m.day.n++; m.n.injuries++; m.n[sev]++; if (inj.offline) m.n.offlineInj++;
   crewTouch();
   const role = SLOTMAP[c.slot].role.split(" ·")[0];
   if (sev === "minor") {
-    log(`Medical: ${c.name} (${role}) was hurt by ${inj.what} — ${docName()} has ${pr(c, "obj")} on a biobed in sickbay. Minor; back on duty in a few hours.`, "fault");
+    log(`Medical: ${c.name} (${role}) was hurt by ${inj.what} — ${docName(inj.id)} has ${pr(c, "obj")} on a biobed in sickbay. Minor; back on duty in a few hours.`, "fault");
     toast(`Injured — ${c.short} in sickbay (minor)`, "warn");
   } else {
     const sn = SYSTEMS[sys].name;
-    log(`Medical alert: ${c.name} (${role}) was seriously hurt by ${inj.what} and is on a biobed in sickbay. ${docName()}: 'I can hold ${pr(c, "obj")}, ${addr()}, but sickbay needs the ${sn} stable. Soon.'`, "fault");
+    log(`Medical alert: ${c.name} (${role}) was seriously hurt by ${inj.what} and is on a biobed in sickbay. ${docName(inj.id)}: 'I can hold ${pr(c, "obj")}, ${addr()}, but sickbay needs the ${sn} stable. Soon.'`, "fault");
     toast(`MEDICAL ALERT — ${c.short} · restore the ${sn}`, "crit");
     if (isPresent()) alertFx();
   }
@@ -152,11 +153,15 @@ export function alertFx() {
   } catch (e) {}
   return true;
 }
+// pass 09 (2): the fast-fix clock starts on the FIRST acknowledgement only. A re-tap after leaving (or after a short
+// hide under the return floor) re-arms the patient's clock but never restarts ackT, and ackT keeps running while the Lt
+// is away/idle (only the patient's clock pauses), so leaving and re-tapping can never buy back the fast-fix bonus.
+function firstAck(x) { if (!x.acked) { x.acked = true; x.ackT = 0; } x.ack = true; }
 // the alert has been seen: tapping the pill / opening DUTY or CREW (UI calls this), or any input after it appeared
 export function ackInjury(id = null) {
   let n = 0;
   if (!isPresent()) return 0;
-  for (const x of M().inj) if (x.state === "warning" && !x.ack && (!id || x.id === id)) { x.ack = true; x.ackT = 0; n++; }
+  for (const x of M().inj) if (x.state === "warning" && !x.ack && (!id || x.id === id)) { firstAck(x); n++; }
   if (n) crewTouch();
   return n;
 }
@@ -173,21 +178,28 @@ function savedFx(inj, by, away) {
 // away / offline (c): the night crew restored the system and the doctor stabilised the patient. No roll, nobody lost.
 function awaySave(inj) {
   const d = savedFx(inj, "crew", true); M().n.awaySaved = (M().n.awaySaved || 0) + 1;
-  log(`While you were away, Okafor's night crew restored the ${SYSTEMS[inj.sys].name} and ${docName()} stabilised ${inj.short}. '${inj.short} is going to make it — I kept ${pr(P().crew.occ[inj.id] || inj, "obj")} alive for you.' (${inj.short}'s opinion +${Math.max(1, Math.round(d))})`, "good");
+  log(`While you were away, Okafor's night crew restored the ${SYSTEMS[inj.sys].name} and ${docName(inj.id)} stabilised ${inj.short}. '${inj.short} is going to make it — I kept ${pr(P().crew.occ[inj.id] || inj, "obj")} alive for you.' (${inj.short}'s opinion +${Math.max(1, Math.round(d))})`, "good");
   toast(`${inj.short} will pull through`, "good");
 }
 // live: the system is back — Dr. Orvin operates while the player watches (the outcome roll, PROG.deaths.surgery)
+// pass 08 (4): the fast-fix multiplier eases with the seconds since the alert was answered (no cliff at 60 s)
+export function fastMult(sec) {
+  const S = K().surgery, a = S.fastFullS ?? S.fastS, b = S.fastEndS ?? S.fastS, u = b > a ? Math.min(1, Math.max(0, (num0(sec) - a) / (b - a))) : (num0(sec) <= a ? 0 : 1);
+  return S.fastMult + (1 - S.fastMult) * u;
+}
 function toSurgery(inj, by) {
   const k = K(), S = k.surgery, F = G.ship.faults;
   let ch = S.chance;
-  const fast = by === "lt" && inj.ack && isPresent() && inj.ackT <= S.fastS;   // pass 07: only the Lt's own fast fix, landing while the player is present (an idle / away clock is frozen, so it must not earn "fast")
-  if (fast) ch *= S.fastMult;
+  const own = by === "lt" && inj.ack && isPresent();   // pass 07: only the Lt's own fix, landing while the player is present (an idle / away clock is frozen, so it must not earn "fast")
+  const fast = own && inj.ackT <= S.fastS;
+  if (own) ch *= fastMult(inj.ackT);
   ch *= Math.pow(S.excellentMult, Math.min(S.excellentMax, inj.excellent || 0));
   if (inj.visited) ch *= S.visitMult;
   if (F.eps && F.eps.sev !== "low" && inj.sys !== "eps") ch *= S.epsOpenMult;
+  if (isPresent()) inj.ack = true;   // pass 08 (2): they're watching the surgery scene, so it counts as seen (an auto-fix before the first tap can't leave a patient unkillable); set after 'fast', which still needs the player's own response
   inj.state = "surgery"; inj.surg = S.scene; inj.sx = Math.min(S.max, ch); inj.sx0 = inj.sx; inj.fast = fast; inj.assist = false; inj.savedBy = by; inj.held = !isPresent(); crewTouch();
   M().scene = surgScene(inj);
-  log(`${SYSTEMS[inj.sys].name} restored ${by === "lt" ? `by the ${addr()}` : "by Okafor's team"} — sickbay has power. ${docName()} takes ${inj.short} straight into surgery.`, "comm");
+  log(`${SYSTEMS[inj.sys].name} restored ${by === "lt" ? `by the ${addr()}` : "by Okafor's team"} — sickbay has power. ${docName(inj.id)} takes ${inj.short} straight into surgery.`, "comm");
 }
 function surgScene(inj) { const o = P().crew.occ[inj.id]; return { id: inj.id, name: o ? fullName(o) : String(inj.name || "a crewmate"), short: o ? o.short : String(inj.short || "the patient"), sys: inj.sys, phase: "surgery", fast: !!inj.fast, exc: inj.excellent || 0, visited: !!inj.visited, by: inj.savedBy, assist: !!inj.assist }; }
 // pass 07 (4): the odds as a band (live; updates as factors land)
@@ -198,7 +210,7 @@ export function assistSurgery() {
   const s = M().scene, x = s && M().inj.find(i => i.id === s.id && i.state === "surgery");
   if (!x || x.assist || !isPresent()) return false;
   x.assist = true; x.sx = Math.min(K().surgery.max, x.sx * K().surgery.assistMult); s.assist = true; M().n.assists = (M().n.assists || 0) + 1; crewTouch();
-  log(`The ${addr()} takes the instrument tray and keeps the biobed's power steady. ${docName()} doesn't look up: 'Good. Stay right there.'`, "comm");
+  log(`The ${addr()} takes the instrument tray and keeps the biobed's power steady. ${docName(x.id)} doesn't look up: 'Good. Stay right there.'`, "comm");
   return true;
 }
 function surgeryOutcome(inj) {
@@ -207,8 +219,8 @@ function surgeryOutcome(inj) {
   if (grave && (chk.why === "favourite" || chk.why === "gentle") && crewCapsOk()) { evacuate(inj, chk.why); return "transfer"; }
   const d = savedFx(inj, inj.savedBy || "lt");
   if (grave) m.n.closeCalls = (m.n.closeCalls || 0) + 1;
-  m.scene = { ...(m.scene || {}), id: inj.id, name: inj.name, short: inj.short, phase: "saved", d: Math.max(1, Math.round(d)), close: grave, docPr: docPron() };
-  log(`${docName()} steps out of surgery: '${inj.short} is going to make it.'${grave ? ` It was closer than ${docPron()} ${docPron() === "they" ? "let" : "lets"} on.` : ""} (${inj.short}'s opinion +${Math.max(1, Math.round(d))})`, "good");
+  m.scene = { ...(m.scene || {}), id: inj.id, name: inj.name, short: inj.short, phase: "saved", d: Math.max(1, Math.round(d)), close: grave, docPr: docPron(inj.id) };
+  log(`${docName(inj.id)} steps out of surgery: '${inj.short} is going to make it.'${grave ? ` It was closer than ${docPron(inj.id)} ${docPron(inj.id) === "they" ? "let" : "lets"} on.` : ""} (${inj.short}'s opinion +${Math.max(1, Math.round(d))})`, "good");
   toast(`${inj.short} will pull through`, "good");
   return "saved";
 }
@@ -216,8 +228,8 @@ function evacuate(inj, why) {
   const m = M(), hosp = why === "favourite" ? "hospital" : "hospitalship";
   m.inj = m.inj.filter(x => x !== inj); m.n[why === "favourite" ? "hospital" : "evac"]++;
   const o = P().crew.occ[inj.id] || inj, S = Pr(o), they = S === "They";   // pt07 m1: the patient's own pronoun
-  log(why === "favourite" ? `${inj.name} is badly injured — ${docName()} arranges a transfer to ${POSTINGS[hosp].name} for specialist care. ${S}'ll recover there.`
-    : `${inj.name} is critically injured and evacuated to ${POSTINGS[hosp].name}. ${docName()}: '${S}${they ? "'re" : "'s"} in the best hands in the quadrant now.'`, "comm");
+  log(why === "favourite" ? `${inj.name} is badly injured — ${docName(inj.id)} arranges a transfer to ${POSTINGS[hosp].name} for specialist care. ${S}'ll recover there.`
+    : `${inj.name} is critically injured and evacuated to ${POSTINGS[hosp].name}. ${docName(inj.id)}: '${S}${they ? "'re" : "'s"} in the best hands in the quadrant now.'`, "comm");
   m.scene = { id: inj.id, name: inj.name, short: inj.short, phase: why === "favourite" ? "hospital" : "evac", post: POSTINGS[hosp].name, pron: o.pronoun || "they" };
   transferOff(inj.id, hosp, why === "favourite" ? "hospital" : "evac");
 }
@@ -232,7 +244,7 @@ function resolve(inj) {
   if (grave && (chk.why === "favourite" || chk.why === "gentle") && crewCapsOk()) { evacuate(inj, chk.why); return "transfer"; }
   inj.state = "stable"; inj.healAt = G.ship.elapsed + rnd(k.heal.pulled); m.n.pulled++; crewTouch(); (hooks.medEvent || []).forEach(f => f("stable", inj));
   m.scene = { id: inj.id, name: inj.name, short: inj.short, phase: "expired" };
-  log(`${inj.name} pulls through a long night in sickbay — ${docName()} never left the biobed. Recovery will take a while.`, "comm");
+  log(`${inj.name} pulls through a long night in sickbay — ${docName(inj.id)} never left the biobed. Recovery will take a while.`, "comm");
   return "pulled";
 }
 const MEMORIAL = [
@@ -259,9 +271,9 @@ function die(inj, how = "expired") {
   m.memorial.push(entry);
   m.memPending = { id: o.id, until: p.playDays + k.memorialDays, notBefore: G.ship.elapsed + k.memorialDelay };
   m.hushUntil = G.ship.elapsed + k.hush;
-  const why = how === "surgery" ? `${docName()} restored ${pr(o, "pos")} heartbeat twice on the table. The third time, it didn't come back.` : `The ${SYSTEMS[inj.sys] ? SYSTEMS[inj.sys].name : "system"} was still down when the window closed; ${docName()} did everything sickbay could do without it.`;
+  const why = how === "surgery" ? `${docName(inj.id)} restored ${pr(o, "pos")} heartbeat twice on the table. The third time, it didn't come back.` : `The ${SYSTEMS[inj.sys] ? SYSTEMS[inj.sys].name : "system"} was still down when the window closed; ${docName(inj.id)} did everything sickbay could do without it.`;
   // pass 07 (4): after a surgery loss the doctor tells the Lt it wasn't them
-  const orvin = how === "surgery" ? `${docName()}, quietly: 'It wasn't you, ${addr()}.${inj.fast ? ` You got the power back in ${Math.max(1, Math.round(inj.ackT || 0))} seconds.` : inj.savedBy === "lt" ? " You got sickbay its power back." : ""} Some injuries are past what any of us can do.'` : null;
+  const orvin = how === "surgery" ? `${docName(inj.id)}, quietly: 'It wasn't you, ${addr()}.${inj.fast ? ` You got the power back in ${secs(Math.max(1, Math.round(inj.ackT || 0)))}.` : inj.savedBy === "lt" ? " You got sickbay its power back." : ""} Some injuries are past what any of us can do.'` : null;
   m.scene = { id: o.id, name: entry.name, short: o.short, phase: "lost", why, role: entry.role, partner, orvin, how };
   if (orvin) log(orvin, "comm");
   log(why, "fault");
@@ -312,22 +324,29 @@ export function tickMed(dt) {
       log(`The ${addr()} sits with ${inj.short} in sickbay for a minute. It helps more than either of them says. (opinion +${Math.max(1, Math.round(d))})`, "comm");
     }
     if (inj.state === "warning") {
+      if (inj.ack && !inj.acked) { inj.acked = true; inj.ackT = 0; }   // acked by another path (scene watched, tools)
+      if (inj.acked) inj.ackT += dt;   // pass 09 (2): fix time since the first ack, present or not (see firstAck)
       // pass 07 (2): looking away never beats watching. Once the player has seen the alert live (seenT > 0), a fix that
       // lands while they're away / idle goes to surgery like any other; the surgery simply waits for them (no free save).
       // Only a patient the player never saw live is stabilised with no roll (the pass-06 safety promise).
       if (!G.ship.faults[inj.sys]) { if ((pres && inj.ack) || inj.seenT > 0) toSurgery(inj, inj.fixBy || (pres && inj.ack ? "lt" : "crew")); else awaySave(inj); continue; }
-      if (!pres) { if (away) inj.away = true; continue; }   // (b) paused; (c) away = held by the doctor
+      if (!pres) { if (away) inj.away = true; inj.paused = true; continue; }   // (b) paused; (c) away = held by the doctor
       if (inj.away) {   // (c) back from away with the system still down: the clock resumes where it paused (pass 07: never a
-        inj.away = false; inj.ack = false; inj.pendT = 0;   // fresh, longer window — that would make leaving pay); it needs seeing again
-        log(`${docName()}: '${inj.short} held while you were off watch, ${addr()}, but sickbay still needs the ${SYSTEMS[inj.sys].name}.' ${Math.max(0, Math.ceil(inj.left))} s on the clock once you're back on it.`, "fault");
+        inj.away = false; inj.paused = false; inj.ack = false; inj.pendT = 0;   // fresh, full window — that would make leaving pay); it needs seeing again
+        // pass 08 (3): ...but never below k.returnFloor (a clock shorter than the fastest fix is unwinnable), once per injury
+        if (!inj.floored && inj.left < k.returnFloor) { inj.left = k.returnFloor; inj.floored = true; }
+        log(`${docName(inj.id)}: '${inj.short} held while you were off watch, ${addr()}, but sickbay still needs the ${SYSTEMS[inj.sys].name}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault");
         alertFx();
+      } else if (inj.paused) {   // pass 08 (3): a short lock / hide / idle (no catch-up): the clock resumes, but under the floor it waits for a re-tap
+        inj.paused = false;
+        if (inj.ack && inj.left < k.returnFloor) { inj.ack = false; inj.pendT = 0; log(`${docName(inj.id)}: '${inj.short} is still waiting on the ${SYSTEMS[inj.sys].name}, ${addr()}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault"); alertFx(); }
       }
       if (!inj.ack) {   // (a) seen = input after the alert appeared (idleT resets on input)
         inj.pendT += dt;
-        if (inj.pendT > 1 && PACE_RT.idleT < inj.pendT - 0.5) { inj.ack = true; inj.ackT = 0; crewTouch(); }
+        if (inj.pendT > 1 && PACE_RT.idleT < inj.pendT - 0.5) { firstAck(inj); crewTouch(); }
         continue;
       }
-      inj.ackT += dt; inj.left -= dt; if (inj.left <= 0) resolve(inj);
+      inj.left -= dt; if (inj.left <= 0) resolve(inj);
     } else if (inj.state === "surgery") {
       // pass 07 (2): away (hidden, locked, offline, idle >= 60 s) the surgery PAUSES and resumes on return. Never auto-saved.
       if (!pres) { if (!inj.held) { inj.held = true; m.n.held = (m.n.held || 0) + 1; } continue; }

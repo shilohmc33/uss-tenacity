@@ -1,9 +1,10 @@
 // The Lieutenant: movement, intents, station work, repair, rest, turbolift.
 import { G } from "./state.js";
-import { DECKS, NODEMAP, SYSTEMS, STEP_LEN, CHAIR_LINES, BAR_LINES, ENG_ROOM } from "./data.js";
+import { DECKS, NODEMAP, SYSTEMS, CHAIR_LINES, BAR_LINES, ENG_ROOM } from "./data.js";
+import { walkStep, walkSettle, keepPace } from "./anim.js";
 import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
-import { log, toast, fx, shipNews, hushed } from "./bus.js";
+import { log, toast, fx, shipNews, cheerful, cheerLog } from "./bus.js";
 import { faultPriority, shieldCap } from "./faults.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
 import { ltChatPartner } from "./npc-ambient.js";
@@ -44,7 +45,8 @@ export function sendTo(tx, ty, intent) {
   fx("recenter");                                       // BUG-18: a new order hands the camera back to the Lt
   L.repairSys = null; L.node = null; L.seatSide = null; L.note = null;
   if (!path || !path.length) { L.path = null; arrive(); return true; }
-  L.path = path; L.pathI = 0; L.mode = "walk"; L.walkDist = 0;
+  const pace = L.mode === "walk" && keepPace(L);   // re-tap mid-walk keeps his speed
+  L.path = path; L.pathI = 0; L.mode = "walk"; if (!pace) L.walkDist = 0;
   return true;
 }
 function intentTarget(it) {
@@ -106,8 +108,8 @@ export function tickLift(dt) {
 export function retrigger(nodeId) {
   const n = NODEMAP[nodeId];
   fx("pulse", { x: n.x, y: n.y });
-  if (nodeId === "chair") { if (!hushed()) log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); }
-  else if (nodeId === "bar") { if (!hushed()) log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); }
+  if (nodeId === "chair") { if (cheerful()) log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); }
+  else if (nodeId === "bar") { if (cheerful()) log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); }
   else if (nodeId === "msd") msdReport();
   const S = G.ship;
   const what = nodeId === "torpbay" ? (S.torps >= S.torpCap ? "complement full" : `torpedo ${Math.round(S.charge)}% built`)
@@ -178,8 +180,8 @@ function arrive() {
     faceToward(n.mx, n.my);
     if (n.face) setFacing(n.face);
     if (it.node === "msd") msdReport();
-    if (it.node === "chair") { if (!hushed()) log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); chatXP("tren"); }
-    if (it.node === "bar") { if (!hushed()) log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); chatXP("bar"); }
+    if (it.node === "chair") { if (cheerful()) log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); chatXP("tren"); }
+    if (it.node === "bar") { if (cheerful()) log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); chatXP("bar"); }
     fx("pulse", { x: n.x, y: n.y });
     return;
   }
@@ -201,8 +203,11 @@ export function beginRepair(sysId, manual = false) {
   faceToward(s.mx, s.my);
   log(`Repairing ${s.name} — ${f.cost} spare part(s) committed.`);
 }
-// walk speed (deck fraction of 960 px per s); 1.35x the 1x-figure speed so the 2x Lt doesn't look slow-motion
-export const engSpeed = () => (G.ship.energy < 15 ? 0.078 : 0.155) * walkMult();   // x level walk bonus
+// walk speed (deck fraction of 960 px per s). Pass 08: 110 design px/s (was 149) so his ~45 px side step reads at ~2.4
+// steps/s; tired = half. x level walk bonus: the walk frames advance by distance (anim.js stepLen), so the bonus raises
+// the cadence with the speed and the feet stay planted.
+export const LT_SPEED = 110 / 960, LT_SPEED_TIRED = 55 / 960;
+export const engSpeed = () => (G.ship.energy < 15 ? LT_SPEED_TIRED : LT_SPEED) * walkMult();
 
 export function stepLt(dt) {
   const L = lt(), S = G.ship, D = PACE.ltDrain, eTempo = (G.sp.battle ? PACE.ltDrainBattle : 1) * drainMult();   // phase 4: Refreshed (slept in his own quarters)
@@ -213,23 +218,9 @@ export function stepLt(dt) {
   }
   L.moving = false;
   if (L.mode === "walk" && L.path) {
-    let remain = 0, rx = L.x, ry = L.y;
-    for (let i = L.pathI; i < L.path.length; i++) { remain += dDist(L.path[i][0], L.path[i][1], rx, ry); rx = L.path[i][0]; ry = L.path[i][1]; }
-    const sf = clamp(Math.min(remain, L.walkDist + 12) / 80, 0.22, 1);
-    const px = L.x, py = L.y;
-    let guard = 0;
-    while (L.pathI < L.path.length && guard++ < 8) {
-      const wp = L.path[L.pathI], dxp = (wp[0] - L.x) * 960, dyp = (wp[1] - L.y) * 640, dist = Math.hypot(dxp, dyp);
-      const step = engSpeed() * sf * 960 * dt;
-      if (dist <= Math.max(step, 2)) { L.x = wp[0]; L.y = wp[1]; L.pathI++; if (L.pathI >= L.path.length) { arrive(); break; } continue; }
-      L.x += (dxp / dist) * step / 960; L.y += (dyp / dist) * step / 640;
-      setFacing(Math.abs(dxp) > Math.abs(dyp) ? (dxp > 0 ? "right" : "left") : (dyp > 0 ? "down" : "up"));
-      L.moving = true;
-      S.energy = clamp(S.energy - D.walk * eTempo * dt, 0, 100);
-      break;
-    }
-    const moved = dDist(L.x, L.y, px, py);
-    if (moved > 0) { L.walkPhase += moved / STEP_LEN * Math.PI; L.walkDist += moved; }
+    const done = walkStep(L, "lt", engSpeed() * 960, dt);
+    if (L.moving) S.energy = clamp(S.energy - D.walk * eTempo * dt, 0, 100);
+    if (done) arrive();
   } else if (L.mode === "repair") {
     const sys = SYSTEMS[L.repairSys];
     if (!sys || !S.faults[L.repairSys]) { L.mode = "idle"; L.repairSys = null; }
@@ -261,6 +252,7 @@ export function stepLt(dt) {
     S.energy = clamp(S.energy - D.idle * eTempo * dt, 0, 100);
   }
   L.swingAmp += clamp((L.moving ? 1 : 0) - L.swingAmp, -dt / 0.16, dt / 0.16);
+  walkSettle(L, dt);
   tickRecharge(dt);
   tickReplication(dt);
 }
@@ -295,7 +287,7 @@ function finishRepair() {
     log(`The ${sys.name} slips back to amber — the marginal patch didn't hold. LOW fault reopened.`, "fault");
   }
   if (pri === 1) log(`T'Ren: 'Noted, ${addr()}. The bridge has its ship back.'`, "comm");
-  else if (pri === 2) log(`Okafor: 'Good work, ${addr()}. That's how my deck runs.'`, "comm");
+  else if (pri === 2) cheerLog(`Okafor: 'Good work, ${addr()}. That's how my deck runs.'`, "comm");   // pass 08 (5): not in the quiet period
   const n = sys.node ? NODEMAP[sys.node] : null;
   if (n && n.deck === L.deck && dDist(L.x, L.y, n.x, n.y) <= ZONE) {
     L.mode = "use"; L.node = sys.node; faceToward(n.mx, n.my);

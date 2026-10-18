@@ -5,7 +5,7 @@
 // readiness (PROG.boards.odds); a pass runs the normal promote() flow (quarters move, rank unlocks).
 // Specs: at each PROG.specs.picks level the Lt picks a focus (or upgrades one); progression.specFx applies it.
 import { G } from "./state.js";
-import { log, toast, fx } from "./bus.js";
+import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, hooks, promote, nextRank, computeReadiness, addr, rankName, crewList, opinionOf } from "./progression.js";
 import { PACE_RT } from "./pacing.js";
 
@@ -141,7 +141,7 @@ export function pickSpec(id) {
   if (!specPending() || !o || !o.ok) return false;
   p.spec[id] = o.next; p.specPicks = (p.specPicks || 0) + 1;
   const what = o.next > 1 ? `${o.f.name} upgraded to tier ${o.next}` : `${o.f.name} focus`;
-  log(`Specialisation: ${what}. Okafor signs it off: 'About time you picked a lane.' (repairs on ${o.f.desc} +${Math.round(o.speed * 100)}% speed, Excellent +${Math.round(o.quality * 100)}%)`, "good");
+  log(`Specialisation: ${what}. ${cheer("Okafor signs it off: 'About time you picked a lane.' ", "Okafor signs it off without a word. ")}(repairs on ${o.f.desc} +${Math.round(o.speed * 100)}% speed, Excellent +${Math.round(o.quality * 100)}%)`, "good");
   toast(`Specialisation — ${what}`, "good");
   return true;
 }
