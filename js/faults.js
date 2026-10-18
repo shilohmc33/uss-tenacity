@@ -1,9 +1,12 @@
 import { G } from "./state.js";
+import { nightCredit } from "./progression.js";
 import { SYSTEMS, SEV_LABEL, SEV_RANK, OKAFOR_SHORT, GATE_SYSTEMS, NODEMAP } from "./data.js";
 import { pick } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
 import { sendRepair, cancelRepairIf } from "./crew.js";
 import { PACE, rr, nightActive } from "./pacing.js";
+import { activeJob } from "./oddjobs.js";
+import { nightFixMult } from "./crewlife.js";
 
 export function rollSeverity(src) {
   const r = Math.random();
@@ -17,6 +20,7 @@ export const shieldCap = () => (impairing("shields") ? 50 : 100);
 export function faultPriority(id) {
   const f = G.ship.faults[id];
   if (!f) return 3;
+  if (G.prog.med && G.prog.med.inj.some(x => x.state === "warning" && x.sys === id)) return 1;   // phase 6: a life hangs on it
   if (G.sp.battle && GATE_SYSTEMS[id] && f.sev !== "low") return 1;
   return f.sev === "low" ? 3 : 2;
 }
@@ -24,6 +28,7 @@ export function dutyItems() {
   const items = Object.entries(G.ship.faults).map(([id, f]) => ({ kind: "fault", id, pri: faultPriority(id), sev: f.sev, t: f.t }));
   const act = G.sp.ev.active;
   if (act && act.task) items.push({ kind: "task", id: act.id, pri: 1, sev: null, t: 0, task: act.task });
+  const job = activeJob(); if (job) items.push({ kind: "job", id: job.id, pri: 4, sev: null, t: 0, job });   // pt04: odd jobs sit below every fault
   items.sort((a, b) => a.pri - b.pri || (a.sev ? SEV_RANK[a.sev] : -1) - (b.sev ? SEV_RANK[b.sev] : -1) || b.t - a.t);
   return items;
 }
@@ -96,7 +101,7 @@ export function nightHandover() {
     const [k, f] = list[0], s = SYSTEMS[k];
     if (f.sev === "crit") { f.sev = "med"; f.cost = 1; f.escT = 0; continue; }
     if (f.sev === "med" && S.parts >= PACE.nightMedParts) S.parts -= PACE.nightMedParts;
-    delete S.faults[k]; cancelRepairIf(k); fixes++;
+    delete S.faults[k]; cancelRepairIf(k); fixes++; nightCredit(f.sev);
     G.night.fixes = (G.night.fixes || 0) + 1; G.stats.nightFixes = (G.stats.nightFixes || 0) + 1;
     log(`Shift handover: Okafor's night crew clears the ${s.name} fault (${SEV_LABEL[f.sev]}) before you come on watch.`, "good");
   }
@@ -120,13 +125,14 @@ export function tickNightCrew(dt) {
   }
   const f = S.faults[N.sys], need = f.sev === "low" ? PACE.nightFix.low : f.sev === "crit" ? PACE.nightFix.critToMed
     : PACE.nightFix.med * (S.parts >= PACE.nightMedParts ? 1 : 2);
-  N.t += dt * (G.sp.battle ? 0.5 : 1);
+  // (phase 3: a Starbase 375 loaner team cuts fix times for one offline stretch)
+  N.t += dt * (G.sp.battle ? 0.5 : 1) / nightFixMult();
   if (N.t < need) return;
   const s = SYSTEMS[N.sys];
-  if (f.sev === "crit") { f.sev = "med"; f.cost = 1; f.escT = 0; log(`Night watch: Okafor's damage-control team stabilises the ${s.name} — down from CRITICAL to MEDIUM.`, "good"); }
+  if (f.sev === "crit") { f.sev = "med"; f.cost = 1; f.escT = 0; nightCredit("crit", true); log(`Night watch: Okafor's damage-control team stabilises the ${s.name} — down from CRITICAL to MEDIUM.`, "good"); }
   else {
     if (f.sev === "med" && S.parts >= PACE.nightMedParts) S.parts -= PACE.nightMedParts;
-    delete S.faults[N.sys]; cancelRepairIf(N.sys);
+    delete S.faults[N.sys]; cancelRepairIf(N.sys); nightCredit(f.sev);   // the Lt's share of the rota: automated XP
     N.fixes = (N.fixes || 0) + 1; G.stats.nightFixes = (G.stats.nightFixes || 0) + 1;
     log(`Night watch: the damage-control team clears the ${s.name} fault (${SEV_LABEL[f.sev]}).`, "good");
   }

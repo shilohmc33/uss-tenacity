@@ -2,9 +2,14 @@
 import { G } from "../state.js";
 import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, charFrame, DECK_LIGHT } from "../data.js";
 import { tren } from "../npc.js";
+import { ambientOnDeck, ltChatPartner } from "../npc-ambient.js";
 import { IMG } from "../assets.js";
 import { clamp, dDist } from "../util.js";
 import { ZONE, LIFT_T } from "../crew.js";
+import { drawCabin, slots as cabinSlots } from "../cabin.js";
+import { isWalkable } from "../path.js";
+import { activeJob } from "../oddjobs.js";
+import { PROG } from "../progression.js";
 import { TORP_BUILD_T } from "../crew.js";
 
 // debug overlay (?debug=1: "Walk grid" button, or ?debug=1&walk=1)
@@ -15,7 +20,14 @@ export const cam = { x: 0.45 * DW, y: 0.62 * DH, zoom: 2.2, scale: 1, fit: 1, w:
 const fxl = { sparks: [], floaters: [], pulses: [] };
 export function deckFx(kind, d) {
   if (kind === "spark") for (let i = 0; i < 2; i++) fxl.sparks.push({ x: d.x * DW, y: d.y * DH, vx: (Math.random() - 0.5) * 90, vy: -Math.random() * 80, t: 0, life: 0.4 + Math.random() * 0.3 });
-  if (kind === "floater") fxl.floaters.push({ x: d.x * DW, y: d.y * DH, text: d.text, color: d.color, t: -(d.delay || 0), life: d.life || 1.4 });
+  if (kind === "floater") fxl.floaters.push({ x: d.x * DW, y: d.y * DH, text: d.text, color: d.color, t: -(d.delay || 0), life: d.life || 1.4, big: !!d.big });
+  if (kind === "milestone") { const L = G.lt; fxl.floaters.push({ x: L.x * DW, y: (L.y - 0.235) * DH - 14 * K, text: d.text, color: "#7fe0ff", t: -2.2, life: 2.6, big: true }); }
+  if (kind === "promotion") { const L = G.lt, x = L.x * DW, y = (L.y - 0.235) * DH; fxl.floaters.push({ x, y: y - 30 * K, text: `PROMOTED: ${d.name.toUpperCase()}`, color: "#ffd75e", t: -0.1, life: 4, big: true }); for (let i = 0; i < 5; i++) fxl.pulses.push({ x, y: L.y * DH, t: -i * 0.15, gold: true }); }
+  if (kind === "levelUp") {   // progression: gold burst + big floater over the Lt (deck view only; the toast covers space view)
+    const L = G.lt, x = L.x * DW, y = (L.y - 0.235) * DH;
+    fxl.floaters.push({ x, y: y - 14 * K, text: `LEVEL ${d.level}!`, color: "#ffd75e", t: -0.2, life: 3.2, big: true });
+    for (let i = 0; i < 3; i++) fxl.pulses.push({ x: L.x * DW, y: L.y * DH, t: -i * 0.18, gold: true });
+  }
   if (kind === "pulse") fxl.pulses.push({ x: d.x * DW, y: d.y * DH, t: 0 });
   if (kind === "deckChanged") { fxl.sparks.length = 0; fxl.floaters.length = 0; cam.snap = true; cam.manualT = 0; }
   if (kind === "recenter") cam.manualT = 0;
@@ -86,8 +98,19 @@ export function hitTest(fx, fy) {
   for (const [k, f] of Object.entries(G.ship.faults)) { const s = SYSTEMS[k]; if (s.deck === L.deck) { cands.push({ kind: "repair", id: k, x: s.mx, y: s.my }); cands.push({ kind: "repair", id: k, x: s.x, y: s.y }); } }
   for (const [id, n] of Object.entries(dk.nodes)) { cands.push({ kind: "use", id, x: n.x, y: n.y }); cands.push({ kind: "use", id, x: n.mx, y: n.my }); }
   cands.push({ kind: "lift", x: dk.lift.x, y: dk.lift.y }, { kind: "lift", x: dk.lift.mx, y: dk.lift.my });
+  // phase 4: tap a decor slot. pt04 m5: walking wins on open floor: a slot that sits on walkable floor only answers a tap
+  // right on a placed item (tight radius); empty floor slots are edited from CREW > Lt's Quarters instead.
+  // Also, any tap that lands on walkable floor only reaches a slot within that tight radius (big wall/shelf zones overhang the floor).
+  if (dk.cabin) {
+    const tapFloor = isWalkable(L.deck, fx, fy), tight = PROG.cabin.floorSlotTap / cam.scale;
+    for (const sl of cabinSlots()) {
+      const onFloor = isWalkable(L.deck, sl.x, sl.y), placed = !!G.prog.cabin.placed[sl.id];
+      if (onFloor && !placed) continue;
+      cands.push({ kind: "slot", id: sl.id, x: sl.x, y: sl.y, ...(onFloor || tapFloor ? { r: tight } : {}) });
+    }
+  }
   let best = null, bd = Infinity;
-  for (const c of cands) { const d = dDist(fx, fy, c.x, c.y); if (d < r && d < bd - 4) { bd = d; best = c; } }
+  for (const c of cands) { const d = dDist(fx, fy, c.x, c.y); if (d < (c.r || r) && d < bd - 4) { bd = d; best = c; } }
   return best;
 }
 
@@ -95,6 +118,7 @@ export function hitTest(fx, fy) {
 function drawFrame(ctx, img, f, px, py, s) { ctx.drawImage(img, f.x, f.y, f.w, f.h, px - f.ax * s, py - f.ay * s, f.w * s, f.h * s); }
 // Which Lt action loop is playing right now; null = standing / walking (walk sheet).
 function ltAction(L, nd) {
+  if (L.mode === "use" && ltChatPartner()) return "talk";   // chatting with an ambient crew member (mess / bar)
   if (L.mode === "repair") { const sy = SYSTEMS[L.repairSys]; return (sy && sy.repairPose) || "weld"; }
   if (L.mode === "use" && nd) {
     if (L.node === "mess") return "eat";
@@ -146,6 +170,36 @@ function drawWalker(ctx, who, c, act, t, seed = 0) {
   const f = striding ? F.walk[c.dir][LT2_LOOP[q]] : F[LT2_IDLE[0]][c.dir][LT2_IDLE[1]];
   drawChar2(ctx, f, px + sway, py + bob + breath);
 }
+// phase 6: crew in sickbay lie on the biobeds either side of the Lt's (Medical deck). Name tag + medical cross;
+// a serious injury still in its warning window pulses red with the system that needs fixing.
+export const PATIENT_BEDS = [[0.205, 0.556], [0.205, 0.345], [0.205, 0.70]];
+const patients = () => ((G.prog.med && G.prog.med.inj) || []).slice(0, PATIENT_BEDS.length);
+function drawPatient(ctx, t, i) {
+  const [bx, by] = PATIENT_BEDS[i], x = bx * DW, y = by * DH;
+  if (!IMG["crew-atlas"]) return;
+  const len = 140, f = CREW_FRAMES.lying, s = len / f.refH;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = "rgba(20,10,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 2, len * 0.17, len * 0.52, 0, 0, 6.29); ctx.fill();
+  const b = 1 + Math.sin(t * 1.3 + i) * 0.005; ctx.scale(b, b);
+  drawFrameLit(ctx, IMG["crew-atlas"], f, 0, 0, s); ctx.restore();
+}
+// name tags over the lighting (like the fault markers): at the foot of the bed, clear of the walkway
+function drawPatientTags(ctx, t) {
+  patients().forEach((p, i) => {
+    const [bx, by] = PATIENT_BEDS[i], x = bx * DW, y = by * DH, warn = p.state === "warning", pulse = warn ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
+    if (warn) { const g = ctx.createRadialGradient(x, y, 4, x, y, 44 * K); g.addColorStop(0, `rgba(255,70,60,${0.16 + 0.18 * pulse})`); g.addColorStop(1, "rgba(255,70,60,0)"); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 44 * K, 0, 6.29); ctx.fill(); }
+    ctx.font = `bold ${6 * K}px Antonio, sans-serif`; ctx.textAlign = "left";
+    const label = `${p.short.toUpperCase()} · ${warn ? "SERIOUS" : p.sev === "serious" ? "STABLE" : "INJURED"}`, w = ctx.measureText(label).width + 15 * K, tx = x - 4 * K, ty = y - 19 * K;
+    ctx.fillStyle = warn ? `rgba(120,16,12,${0.85 + 0.12 * pulse})` : "rgba(8,40,44,0.88)"; rr(ctx, tx, ty - 7 * K, w, 10 * K, 3 * K); ctx.fill();
+    ctx.fillStyle = warn ? "#ff6b5e" : "#7fe8d0"; ctx.fillRect(tx + 3 * K, ty - 3 * K, 7 * K, 2 * K); ctx.fillRect(tx + 5.5 * K, ty - 5.5 * K, 2 * K, 7 * K);
+    ctx.fillStyle = "#f4f7ff"; ctx.fillText(label, tx + 12 * K, ty + 0.5 * K);
+    if (warn && SYSTEMS[p.sys]) {
+      const sub2 = `NEEDS ${SYSTEMS[p.sys].name.toUpperCase()} · ${Math.max(0, Math.ceil(p.left))}s`; ctx.font = `600 ${5 * K}px Antonio, sans-serif`;
+      const w2 = ctx.measureText(sub2).width + 6 * K; ctx.fillStyle = "rgba(10,8,14,0.78)"; rr(ctx, tx, ty + 4 * K, w2, 8 * K, 2 * K); ctx.fill();
+      ctx.fillStyle = "#ffb3a8"; ctx.fillText(sub2, tx + 3 * K, ty + 10 * K);
+    }
+  });
+}
 function drawLt(ctx, t) {
   const L = G.lt, nd = L.mode === "use" && L.node ? NODEMAP[L.node] : null;
   if (nd && nd.lie && IMG["crew-atlas"]) {   // lying pose: legacy crew-atlas frame (no v3 equivalent)
@@ -158,7 +212,9 @@ function drawLt(ctx, t) {
     zzz(ctx, nd.lie[0] * DW + 12 * K, nd.lie[1] * DH - 20 * K, t);
     return;
   }
-  drawWalker(ctx, "lt", L, ltAction(L, nd), t);
+  const chat = L.mode === "use" ? ltChatPartner() : null;   // turn to face whoever he's talking to
+  const c = chat ? { ...L, dir: Math.abs((chat.x - L.x) * 960) > Math.abs((chat.y - L.y) * 640) ? (chat.x > L.x ? "right" : "left") : (chat.y > L.y ? "down" : "up") } : L;
+  drawWalker(ctx, "lt", c, ltAction(L, nd), t);
 }
 // Captain T'Ren (bridge only; js/npc.js drives her)
 function drawTren(ctx, t) { drawWalker(ctx, "tren", tren, tren.action, t, 1.3); }
@@ -201,6 +257,7 @@ export function drawDeck(ctx, t, dt) {
   ctx.setTransform(cam.scale * dpr, 0, 0, cam.scale * dpr, (cam.w / 2 - cam.x * cam.scale) * dpr, (cam.h / 2 - cam.y * cam.scale) * dpr);
   const plate = IMG[dk.plate];
   if (plate) { drawEdges(ctx, plate, dk); ctx.drawImage(plate, 0, 0, DW, DH); } else { ctx.fillStyle = "#1b2233"; ctx.fillRect(0, 0, DW, DH); ctx.fillStyle = "#8af"; ctx.fillText(dk.name + " (plate missing)", 20, 30); }
+  if (dk.cabin) drawCabin(ctx, t, !L.lift);   // phase 4: decor in the Lt's quarters (placeholder boxes until the art lands)
   // node rings
   for (const [id, n] of Object.entries(dk.nodes)) {
     const active = L.mode === "use" && L.node === id;
@@ -227,18 +284,32 @@ export function drawDeck(ctx, t, dt) {
     ctx.fillStyle = low ? "#ff6a5a" : "#ffb347"; ctx.font = "bold 13px Antonio, sans-serif"; ctx.textAlign = "center";
     ctx.fillText(`TASK ${Math.ceil(tk.t)}s`, x, y - 12 * K); ctx.textAlign = "left";
   }
+  // pt04: odd job marker (soft teal ring + label; progress ring while the Lt works it)
+  const job = activeJob();
+  if (job && job.deck === L.deck) {
+    const n = NODEMAP[job.node], x = n.x * DW, y = n.y * DH;
+    ring(ctx, x, y, 22 * K, 0.5 + 0.5 * Math.sin(t * 2.4), "rgba(120,230,210,0.75)", 2);
+    if (job.acc > 0) ring(ctx, x, y, 17 * K, job.acc / job.need, "#9fe8b1", 3);
+    ctx.fillStyle = "#9ff0de"; ctx.font = `bold ${7 * K}px Antonio, sans-serif`; ctx.textAlign = "center";
+    ctx.fillText("ODD JOB", x, y + 14 * K); ctx.textAlign = "left";   // under his feet so the Lt never hides it
+  }
   // repair progress ring
   if (L.mode === "repair" && L.repairSys) ring(ctx, L.x * DW, L.y * DH + 2, 16 * K, L.repairT / SYSTEMS[L.repairSys].dur, "#ffb27a", 3);
   // destination marker
   if (L.mode === "walk" && L.path && L.path.length) { const e = L.path[L.path.length - 1]; ring(ctx, e[0] * DW, e[1] * DH, 8 * K, 1, "rgba(127,224,255,0.6)", 1.5); }
   if (DBG.walk) drawWalkGrid(ctx, dk);
-  // characters, back to front by feet y
-  if (L.deck === "bridge" && !L.lift) {
-    const ltY = (L.mode === "use" && L.node && NODEMAP[L.node] && NODEMAP[L.node].lie) ? NODEMAP[L.node].lie[1] : L.y;
-    if (tren.y < ltY) { drawTren(ctx, t); drawLt(ctx, t); } else { drawLt(ctx, t); drawTren(ctx, t); }
-  } else drawLt(ctx, t);
+  // characters, back to front by feet y: the Lt, T'Ren (bridge) and any ambient crew on this deck
+  const ltY = (L.mode === "use" && L.node && NODEMAP[L.node] && NODEMAP[L.node].lie) ? NODEMAP[L.node].lie[1] : L.y;
+  const cast = [{ y: ltY, draw: () => drawLt(ctx, t) }];
+  if (!L.lift) {
+    if (L.deck === "bridge") cast.push({ y: tren.y, draw: () => drawTren(ctx, t) });
+    for (const n of ambientOnDeck(L.deck)) cast.push({ y: n.y, draw: () => drawWalker(ctx, n.who, n, n.action, t, n.seed) });
+    if (L.deck === "medical") patients().forEach((_, i) => cast.push({ y: PATIENT_BEDS[i][1], draw: () => drawPatient(ctx, t, i) }));   // phase 6: patients on the biobeds
+  }
+  cast.sort((a, b) => a.y - b.y).forEach(c => c.draw());
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck
   lighting(ctx, t);
+  if (L.deck === "medical" && !L.lift) drawPatientTags(ctx, t);   // phase 6
   // fault markers stay readable over the lighting. BUG-14: the "!" floats above the spot where the Lt actually
   // works (it used to sit on the gantry top, up to 171 px from the welding sparks); facing still uses mx/my.
   for (const [k, f] of Object.entries(G.ship.faults)) {
@@ -247,7 +318,7 @@ export function drawDeck(ctx, t, dt) {
   }
   // fx
   for (let i = fxl.sparks.length - 1; i >= 0; i--) { const p = fxl.sparks[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 260 * dt; if (p.t > p.life) { fxl.sparks.splice(i, 1); continue; } ctx.fillStyle = `rgba(255,210,122,${1 - p.t / p.life})`; ctx.fillRect(p.x, p.y, 2, 2); }
-  for (let i = fxl.pulses.length - 1; i >= 0; i--) { const p = fxl.pulses[i]; p.t += dt; if (p.t > 0.7) { fxl.pulses.splice(i, 1); continue; } ctx.globalAlpha = 1 - p.t / 0.7; ring(ctx, p.x, p.y, 18 + p.t * 50, 1, "#7fe0ff", 2); ctx.globalAlpha = 1; }
+  for (let i = fxl.pulses.length - 1; i >= 0; i--) { const p = fxl.pulses[i]; p.t += dt; if (p.t > 0.7) { fxl.pulses.splice(i, 1); continue; } if (p.t < 0) continue; ctx.globalAlpha = 1 - p.t / 0.7; ring(ctx, p.x, p.y, (18 + p.t * 50) * (p.gold ? 1.6 : 1), 1, p.gold ? "#ffd75e" : "#7fe0ff", p.gold ? 3 : 2); ctx.globalAlpha = 1; }
   ctx.font = `bold ${12 * K}px Antonio, sans-serif`; ctx.textAlign = "center";
   for (let i = fxl.floaters.length - 1; i >= 0; i--) {
     const p = fxl.floaters[i], life = p.life || 1.4; p.t += dt;
@@ -255,8 +326,11 @@ export function drawDeck(ctx, t, dt) {
     if (p.t < 0) continue;   // staggered reward floaters wait their turn
     const a = p.t < 0.15 ? p.t / 0.15 : 1 - Math.max(0, p.t - life * 0.45) / (life * 0.55);
     ctx.globalAlpha = clamp(a, 0, 1);
+    ctx.font = `bold ${(p.big ? 16 : 12) * K}px Antonio, sans-serif`;
+    if (p.big) { ctx.shadowColor = p.color; ctx.shadowBlur = 10; }
     ctx.lineWidth = 4; ctx.strokeStyle = "rgba(5,8,16,0.75)"; ctx.strokeText(p.text, p.x, p.y - p.t * 22 * K);
     ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y - p.t * 22 * K);
+    ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1; ctx.textAlign = "left";
   // screen-space overlays

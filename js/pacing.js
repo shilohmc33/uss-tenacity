@@ -14,6 +14,8 @@ export const PACE = {
   firstLegTime: [270, 330],        // the very first leg of a new game is short (~5 min) so the first session reaches a destination
   diploEvery: 6,                   // force a diplomatic trip after this many legs without one (never locked out)
   ds9PartEvery: 15,                // DS9 quartermaster: +1 spare part every N s while docked
+  quartermasterAllot: 0.6,         // progression phase 2: quartermasters only top the locker up to this share of its cap
+                                   // (standard allotment); salvage and fabrication still fill it to the cap
   ds9TorpEvery: 15,                // DS9 ordnance crews: +1 torpedo every N s while docked (T'Ren's "rearm")
   ds9MinTorps: 0.5,                // T'Ren holds at DS9 until the tubes are at least this fraction full
   // --- events ---
@@ -45,8 +47,7 @@ export const PACE = {
   ltDrain: { walk: 0.042, repair: 0.10, station: 0.046, idle: 0.012 },
   ltDrainBattle: 2.5,
   // --- rewards for the Lt's own repairs (shown as floaters over his head) ---
-  repairRep: { low: 1, med: 2, crit: 3 },
-  repairParts: { low: 0, med: 1, crit: 1 },   // salvaged components handed back after a MED / CRITICAL repair
+  // repair rewards (repairRep / repairParts) moved to js/progression.js (PROG) with the quality roll
 };
 // runtime-only pacing state (not saved)
 export const PACE_RT = { offline: false, idleT: 0, sessionT: 0 };

@@ -6,13 +6,23 @@ import { tickFaults, impairing, syncFaultEffects, tickNightCrew, nightHandover }
 import { stepLt } from "./crew.js";
 import { tickBattle } from "./battle.js";
 import { tickEvents } from "./events.js";
+import { tickJobs } from "./oddjobs.js";
 import { tickVoyage } from "./voyage.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
+import { tickDay, offlineXP, tickProg, rankShort } from "./progression.js";
+import { tickCrew, endOffline } from "./crewlife.js";
+import { tickCabin } from "./cabin.js";
+import { tickMed } from "./injuries.js";
 
 export function stepSim(dt) {
   const S = G.ship, SP = G.sp, L = G.lt;
   S.elapsed += dt;
   S.stardate += dt * 0.022;
+  tickDay(dt);   // ship's day
+  tickCabin(dt); // phase 4: quarters tier sync, Refreshed buff, standing-order trade-in of a full locker while away
+  tickMed(dt);   // phase 6: sickbay (injury warning windows, recoveries, memorial); offline rules inside
+  tickCrew(dt);  // phase 3: replacement crew arriving (crewlife.js; the daily crew roll hangs off the ship's day)
+  tickProg(dt);  // relationships (ignored faults, station help), readiness, promotion checks (progression.js PROG.dayLength); offline catch-up advances it too
   PACE_RT.idleT += dt;
   if (!PACE_RT.offline) PACE_RT.sessionT += dt;
   tickFaults(dt);
@@ -50,6 +60,7 @@ export function stepSim(dt) {
   tickBattle(dt);
   syncFaultEffects();
   tickEvents(dt);
+  tickJobs(dt);   // pt04: odd jobs between repairs
   tickVoyage(dt);
   applyNightFloors();
 }
@@ -59,13 +70,15 @@ export function stepSim(dt) {
 function applyNightFloors() {
   const S = G.ship;
   if (nightActive()) S.power = Math.max(S.power, G.sp.battle ? PACE.powerFloorBattle : PACE.powerFloor);
-  if (PACE_RT.offline) S.hull = Math.max(S.hull, PACE.offlineHullFloor);
+  // pass-03 N-2: the same hull floor while the tab is open but idle (no input for PACE.idleAfter s)
+  if (nightActive()) S.hull = Math.max(S.hull, PACE.offlineHullFloor);
 }
-const NODE_REST = L => L.node === "bunk" || L.node === "biobed" || L.node === "mess" || L.node === "bar";
+const NODE_REST = L => L.node === "bunk" || L.node === "biobed" || L.node === "mess" || L.node === "bar" || L.node === "rack";
 
 // Idle-game catch-up: simulate time away (up to PACE.offlineMaxSim) with the night crew on, and summarise it.
 export function catchUp(seconds) {
-  const S = G.ship, before = { hull: S.hull, parts: S.parts, torps: S.torps, rep: G.sp.rep, energy: S.energy, stats: { ...G.stats }, loc: G.sp.location, fixes: G.night.fixes || 0, avoided: G.night.avoided || 0 };
+  const S = G.ship, before = { hull: S.hull, parts: S.parts, torps: S.torps, rep: G.sp.rep, energy: S.energy, stats: { ...G.stats }, loc: G.sp.location, fixes: G.night.fixes || 0, avoided: G.night.avoided || 0,
+    lvl: G.prog.level, xp: G.prog.totalXp, xpM: G.prog.xpManual, xpA: G.prog.xpAuto, day: G.prog.day, rank: G.prog.rank, crewN: G.prog.crew.evN || 0, maint: G.prog.sinks.n.maintain || 0, trades: G.prog.sinks.n.autoTrade || 0, rr: G.prog.rationsLife };
   const sim = Math.min(seconds, PACE.offlineMaxSim);
   const entries = [];
   setQuiet(true); capture.list = entries; PACE_RT.offline = true;
@@ -79,12 +92,14 @@ export function catchUp(seconds) {
       if (S.power < 1) powerZeroS += step;
     }
     nightHandover();   // the night crew hands over at most PACE.nightFaultCap open faults
+    endOffline(sim);   // phase 3: a Starbase 375 loaner team covers one offline stretch
+    offlineXP(sim);    // progression: watch-officer XP for the night crew's work (1/min first 2 h, then 0.25/min)
   } finally { setQuiet(false); capture.list = null; PACE_RT.offline = false; PACE_RT.idleT = 0; }
   const st = G.stats;
   // highlights: keep the latest copy of each repeated line, listed in chronological order
   const seen = new Map();
   // non-actionable noise stays out of the report (NEW-06): routine resupply pallets, task countdowns, handover chores
-  const ROUTINE = /^(Torpedo replicated|Spare part fabricated|Deep Space Nine ordnance crews begin|Quartermaster's pallet|Spacedock quartermaster|Deck task|Shift handover|Night watch: the damage-control team clears|Reputation \+)/;
+  const ROUTINE = /^(Torpedo replicated|Spare part fabricated|Deep Space Nine ordnance crews begin|Quartermaster's pallet|Spacedock quartermaster|Deck task|Shift handover|Night watch: the damage-control team clears|Reputation \+|\+\d+ XP)/;
   entries.forEach((e, i) => {
     if ((e.cls === "good" || e.cls === "fault") && !ROUTINE.test(e.msg)) seen.set(e.msg.replace(/[\d.%]+/g, "#").slice(0, 40), i);
   });
@@ -95,6 +110,8 @@ export function catchUp(seconds) {
     events: st.events - before.stats.events, repairs: st.repairs - before.stats.repairs, torpsBuilt: st.torpsBuilt - before.stats.torpsBuilt, tows: st.tows - before.stats.tows,
     crewFixes: (G.night.fixes || 0) - before.fixes, avoided: (G.night.avoided || 0) - before.avoided,
     d: { hull: S.hull - before.hull, parts: S.parts - before.parts, torps: S.torps - before.torps, rep: G.sp.rep - before.rep, energy: S.energy - before.energy },
+    prog: { xp: G.prog.totalXp - before.xp, auto: G.prog.xpAuto - before.xpA, manual: G.prog.xpManual - before.xpM, from: before.lvl, to: G.prog.level, days: G.prog.day - before.day, promoted: G.prog.rank > before.rank ? rankShort() : null, crew: (G.prog.crew.evN || 0) > before.crewN ? G.prog.crew.log.slice(-((G.prog.crew.evN || 0) - before.crewN)) : [] },
+    maint: (G.prog.sinks.n.maintain || 0) - before.maint, trades: (G.prog.sinks.n.autoTrade || 0) - before.trades, rations: Math.round(G.prog.rationsLife - before.rr),
     faults: Object.keys(S.faults).length, minPower, minHull, powerZeroS, highlights,
   };
 }

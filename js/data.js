@@ -3,11 +3,13 @@
 // Walkable floor comes from the painted walk masks assets/walk-<deck>.png (see tools/make-walk-masks.py, sampled into the
 // 60x40 grid by path.js). The base/blocks rectangles below are only a coarse fallback if a mask fails to load.
 // Node x,y = where the Lt's feet stand (always on mask floor); mx,my = what he faces / where markers sit.
+import { CABIN_TIERS } from "./cabin-data.js";
 export const DW = 960, DH = 640;
 export const COLS = 60, ROWS = 40;
 const R = (x0, y0, x1, y1) => [x0, y0, x1, y1];
 
-export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "lounge"];
+export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "quarters", "lounge"];
+export const CREW_DECKS = ["bridge", "engineering", "medical", "berthing", "lounge"];   // decks with painted plates + walk masks
 export const DECKS = {
   bridge: {
     name: "Bridge", plate: "deck-bridge", glow: [0.50, 0.255, "140,180,255"],
@@ -59,6 +61,16 @@ export const DECKS = {
       bunk: { name: "Bunk", chip: "Bunk", x: 0.80, y: 0.2625, mx: 0.80, my: 0.16, lie: [0.80, 0.162], lieLen: 96, rest: 6.5 },
     },
   },
+  // phase 4: the Lt's Quarters (a berthing cabin with its own turbolift stop). Plate, walk grid, lift and the rack are
+  // re-pointed to the current rank's CABIN_TIERS entry by js/cabin.js applyTier(); these are the Lt jg defaults.
+  quarters: {
+    name: "Lt's Quarters", plate: "cabin-ph-ltjg", glow: [0.50, 0.30, "255,205,140"], cabin: true,
+    lift: { ...CABIN_TIERS.ltjg.lift },
+    base: CABIN_TIERS.ltjg.floor, blocks: CABIN_TIERS.ltjg.blocks,
+    nodes: {
+      rack: { name: "Your Rack", chip: "Rest (quarters)", ...CABIN_TIERS.ltjg.bed, rest: CABIN_TIERS.ltjg.rest, quarters: true },
+    },
+  },
   lounge: {
     name: "Mess & Bar", plate: "deck-lounge", glow: [0.42, 0.27, "255,190,110"],
     lift: { x: 0.145, y: 0.6625, mx: 0.145, my: 0.555 },
@@ -82,6 +94,7 @@ export const DECK_LIGHT = {
   medical:     { tint: "120,255,215", a: 0.13 },   // dim sickbay teal
   berthing:    { tint: "255,196,110", a: 0.14 },   // warm amber cabin light
   lounge:      { tint: "255,190,110", a: 0.15 },   // warm bar amber
+  quarters:    { tint: "255,214,160", a: 0.10 },   // warm cabin lamp
 };
 export const NODEMAP = {};
 for (const d of DECK_ORDER) for (const [id, n] of Object.entries(DECKS[d].nodes)) { n.deck = d; n.id = id; NODEMAP[id] = n; }
@@ -100,7 +113,7 @@ export const OKAFOR_SHORT = { warpcore: "core", shields: "shield generator", pha
   coolant: "coolant line", transporter: "transporter", loader: "loader" };
 export const SEV_LABEL = { low: "LOW", med: "MEDIUM", crit: "CRITICAL" };
 export const SEV_RANK = { crit: 0, med: 1, low: 2 };
-export const PRI_LABEL = { 1: "CAPTAIN", 2: "CHIEF", 3: "ROUTINE" };
+export const PRI_LABEL = { 1: "CAPTAIN", 2: "CHIEF", 3: "ROUTINE", 4: "ODD JOB" };
 export const GATE_SYSTEMS = { warpcore: 1, loader: 1, eps: 1, shields: 1 };
 // main engine room rect (Okafor's "supported" zone)
 export const ENG_ROOM = R(0.26, 0.06, 0.68, 0.73);
@@ -123,6 +136,8 @@ export const OFFICERS = [
   { id: "scan", who: "Lt Cmdr Amara Diallo", role: "Science Officer", ability: "Weak-Point Scan", desc: "Weapon damage +50% 15s", img: "crew-science" },
   { id: "spread", who: "Lt Cmdr Viktor Hale", role: "Security / Tactical", ability: "Torpedo Spread", desc: "Fires all loaded torpedoes", img: "crew-security" },
 ];
+
+// ---- crew roster: moved to js/roster.js in phase 3 (CREW_ROSTER slots + occupants, SPECIES, TAGS, POSTINGS) ----
 
 export const CHAIR_LINES = [
   "T'Ren, standing at the chair's shoulder, eyes still on the viewscreen: 'Probability, Lieutenant, is simply honesty with numbers attached.'",
@@ -221,6 +236,18 @@ export const LT2_IDLE = ["walk", 1];                    // standing idle = walk 
 export const CHAR_SHEETS = {
   lt: { "lt-v3": ["walk", "talk", "eat", "computer", "kneel", "weld"] },      // sprites/lt_topdown_v3
   tren: { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },  // sprites/tren_topdown_v1 (Captain T'Ren)
+  // Andorian crewwoman (mess hall ambient NPC, AMBIENT_NPCS below). STAND-IN: her art is delayed, so she borrows
+  // T'Ren's sheet. When assets/andorian-v1.webp lands, change the key "tren-v1" on the next line to "andorian-v1"
+  // (one-line swap; it is preloaded automatically via IMAGES). The new sheet must use the same v3 layout: 160x384
+  // cells, feet anchor (80,376), columns up/down/right/left, rows walk/talk/eat/computer/kneel/weld x A/M/B
+  // (played A,M,B,M), standing height ~252 px in the cell (refH LT2_STAND_H). Fewer actions = shorten the list.
+  andorian: { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
+  // phase 3 roster fallbacks (own sheet -> species base sheet -> these): the generic crew sheet is T'Ren's for now, in
+  // department uniform colours (tools/make-uniform-sheets.py recolours only the red shoulder panels).
+  // When a species gets real art, add it here and set SPECIES[id].sheet in js/roster.js (Thelev: "andorian" above).
+  "crew-red": { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
+  "crew-gold": { "crew-gold-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
+  "crew-blue": { "crew-blue-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
 };
 // CHAR_FRAMES[who][action][dir] = [A, M, B]; each frame also carries `img` (its sheet key).
 export const CHAR_FRAMES = {};
@@ -256,9 +283,54 @@ export const TREN = {
   homeT: [25, 50], stationT: [15, 30], speed: 0.10,   // s at home, s at a console, walk speed (deck fraction/s)
 };
 
-export const IMAGES = ["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
+// ---- ambient crew NPCs (js/npc-ambient.js): visual only, never saved or simulated offline ----
+// One entry per NPC; adding another crew member = a CHAR_SHEETS entry + one block here. Everything below is a tunable.
+//   spots: where she drifts. Either absolute deck fractions {x, y} or {near: <Lt node id>, dx, dy} relative to that
+//          node, so they follow the node when the deck art (lounge is being redrawn) moves it. Every spot is snapped
+//          to the nearest walkable cell of the deck's walk mask at runtime, so nothing here has to be pixel-exact.
+//          action: talk | eat | computer | null (stand idle); t: [min, max] seconds she stays; w: pick weight.
+//   social: when the Lt is using one of social.nodes and she is within joinRange (design px), she walks to the chat
+//          spot beside him (offset from that node), turns to him and both play "talk" for chatDur seconds.
+//          lineCooldown: min seconds between chat lines in the log; perk: small energy bump with its own cooldown
+//          (perk/line cooldowns are the only things saved: G.npc[id], in ship-elapsed seconds).
+export const AMBIENT_NPCS = [
+  {
+    // Thelev is a crewwoman (she/her; Shiloh: "a regular crew woman andorian"). "Crewman" is the Starfleet rank title only.
+    id: "thelev", who: "andorian", rank: "Crewman", name: "Thelev sh'Zarath", short: "Thelev", pronoun: "she",
+    deck: "lounge", speed: 0.09, seed: 2.1, start: "mess-east",
+    spots: [
+      { id: "mess-east", near: "mess", dx: 0.125, dy: 0.0, face: "down", action: "eat", t: [25, 45], w: 3 },    // next table east of the Lt's
+      { id: "mess-west", near: "mess", dx: -0.125, dy: 0.0, face: "down", action: "eat", t: [25, 45], w: 2 },   // next table west
+      { id: "bar", near: "bar", dx: 0.10, dy: 0.0, face: "up", action: "talk", t: [20, 35], w: 3 },              // a stool along from the Lt's
+      { id: "replicator", near: "bar", dx: 0.17, dy: 0.01, face: "up", action: "computer", t: [8, 14], w: 2 },  // replicator slot, bar's east end
+      { id: "window", x: 0.70, y: 0.55, face: "right", action: null, t: [15, 30], w: 1 },                         // idle by the viewports
+      { id: "floor", x: 0.33, y: 0.56, face: "down", action: null, t: [8, 16], w: 1 },                           // idle mid-room
+    ],
+    social: {
+      // chat spot candidates per Lt node, tried in order; the first whose walkable snap moves it <= maxSnap design px wins.
+      // mess: across the table from him (the side away from the bar; the Lt's mess spot sits between table and bar),
+      // then beside him to the east. bar: a stool along to the east.
+      nodes: { mess: [{ dx: 0.0, dy: 0.125 }, { dx: 0.075, dy: 0.0 }], bar: [{ dx: 0.075, dy: 0.0 }] }, maxSnap: 28,
+      joinRange: 360, chatRange: 150,      // design px: she comes over from up to joinRange; a chat breaks off past 1.4x chatRange
+      chatDur: [18, 30], lingerT: [4, 8],  // s of talking per chat; s she lingers after he walks off
+      lineCooldown: 90,
+      perk: { energy: 8, cooldown: 300 },
+      lines: [
+        "{name}, antennae tilting toward the Lieutenant: 'Lieutenant. They say you keep the core from eating us. Next raktajino is mine.'",
+        "{short}: 'On Andor we'd call this a mild evening.' She taps the frost on her glass. 'You run your ships like greenhouses.'",
+        "{short}: 'Okafor chewed you out again? Good. She only shouts at the ones she plans to keep.'",
+        "{short}: 'My zhavey wrote. She asks if the Tenacity is a real starship or a museum piece. I told her: both, proudly.'",
+        "{short}: 'The Jem'Hadar don't eat, don't sleep, don't laugh. That's why we'll win, Lieutenant.'",
+        "{short}, antennae twitching at the hum through the deck: 'Core's sweet tonight. That's you, isn't it?'",
+      ],
+    },
+  },
+];
+
+export const IMAGES = [...new Set(["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
-  "ship-tenacity", "ship-jemhadar", ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o))];
+  "ship-tenacity", "ship-jemhadar", ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
+  ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)
 // walk masks (PNG, white = floor), loaded alongside the plates
-export const WALK_MASKS = DECK_ORDER.map(d => "walk-" + d);
+export const WALK_MASKS = [...CREW_DECKS.map(d => "walk-" + d), ...Object.values(CABIN_TIERS).map(t => t.mask).filter(Boolean)];

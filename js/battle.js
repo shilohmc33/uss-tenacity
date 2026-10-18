@@ -6,6 +6,7 @@ import { log, toast, shipNews } from "./bus.js";
 import { spawnFault, impairing, shieldCap } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
+import { hooks } from "./progression.js";
 
 // transient presentation state (not saved)
 export const SFX = { beams: [], shots: [], booms: [], floaters: [], smoke: [], flares: [], shieldFlare: null, shakeT: 0,
@@ -57,7 +58,7 @@ function damageEnemy(dmg, label) {
   const B = G.sp.battle;
   if (!B || B.dying) return;
   if (G.ab.scan.active > 0) { dmg = Math.round(dmg * 1.5); label += " (weak-point scan: +50%)"; }
-  B.hull -= dmg;
+  B.hull = Math.max(0, B.hull - dmg);   // pass-03 N-3: never negative
   SFX.jink.next = Math.min(SFX.jink.next, 0.4);
   const jp = jemPoint(0.45, 0.2);
   SFX.floaters.push({ x: jp[0], y: jp[1], t: 0, text: "−" + dmg, color: "#ffb3ab" });
@@ -97,14 +98,16 @@ export function damageShip(dmg, label) {
   SFX.booms.push({ x: tp[0], y: tp[1], t: 0, dur: 0.5, big: false });
   for (let i = 0; i < 9; i++) SFX.smoke.push({ x: tp[0] + rand(-0.02, 0.02), y: tp[1] + rand(-0.015, 0.015), vx: rand(-0.05, 0.05), vy: rand(-0.05, 0.02), t: 0, life: rand(0.3, 0.7), r: 0.006, kind: "spark" });
   const through = (dmg - S.shields) * 0.6;
-  S.shields = 0; S.hull = Math.max(PACE_RT.offline ? PACE.offlineHullFloor : 0, S.hull - through);   // offline: damage control holds the line
+  S.shields = 0; S.hull = Math.max(nightActive() ? PACE.offlineHullFloor : 0, S.hull - through);   // offline / idle tab (N-2): damage control holds the line
   SFX.floaters.push({ x: tp[0], y: tp[1] - 0.05, t: 0, text: "HULL −" + Math.round(through), color: "#ff8a7a" });
   log(`${label} — shields down, the hull takes ${Math.round(through)}%. Hull at ${Math.round(S.hull)}%.`, "fault");
   if (S.hull <= 0) { towToDS9(); return; }
+  let id = null;
   if (Math.random() < 0.5) {
-    const id = spawnFault("battle");
+    id = spawnFault("battle");
     if (id) log("Damage control: the hit started a fault aboard — it's on the DECK, and the Lieutenant can reach it mid-battle.", "fault");
   }
+  hooks.shipHit.forEach(f => f({ sys: id }));   // phase 6: a hull hit can injure someone (js/injuries.js)
 }
 function enemyFire() {
   const B = G.sp.battle, SP = G.sp;

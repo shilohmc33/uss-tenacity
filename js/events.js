@@ -1,5 +1,6 @@
 // Random voyage events between legs; about half hand the Lt a timed deck task.
 import { G } from "./state.js";
+import { awardXP, taskMult, PROG, milestone, taskDone, hooks } from "./progression.js";
 import { NODEMAP, DESTS, DECKS } from "./data.js";
 import { clamp, rand, dDist } from "./util.js";
 import { log, toast, shipNews, fx } from "./bus.js";
@@ -114,8 +115,16 @@ export function tickEvents(dt) {
         toast(`10s left: ${DECKS[tk.deck].name} — ${NODEMAP[tk.node].name}`, "warn");
       }
       if (L.deck === tk.deck && !L.lift && dGood(L, tk)) {
-        tk.acc += dt;
-        if (tk.acc >= tk.need) { tk.done = true; toast("Deck task complete — bonus earned", "good"); resolveEvent(true); return; }
+        tk.acc += dt * taskMult();
+        if (tk.acc >= tk.need) {
+          tk.done = true;
+          const man = !!L.useManual, xp = awardXP(PROG.xp.task * (man ? PROG.manual.xp : PROG.auto.xp), man ? "manual" : "auto", "task");
+          milestone("firstTask", "First deck task");
+          taskDone(tk.node, tk.deck);   // phase 2: opinion of the area's crew + readiness service
+          toast(`Deck task complete — bonus earned · +${xp} XP`, "good");
+          fx("floater", { x: L.x, y: L.y - 0.235, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.8, life: 2.2 });
+          resolveEvent(true); return;
+        }
       }
       if (tk.t <= 0) {
         log(`Deck task window closed — ${tk.label.split(" — ")[0]}. The bridge handles it without the bonus.`, "comm");
@@ -154,8 +163,8 @@ function resolveEffects(act, bonus, SP, S) {
     if (bonus) { SP.rep += 3; log("The sweep closes with the Lieutenant at the Master Systems Display — the data set is beautiful and complete. Reputation +3.", "good"); }
     else { SP.rep += 1; log("Diallo archives the anomaly with half the readings she'd have liked. Reputation +1.", "comm"); }
   } else if (act.id === "storm") {
-    if (bonus) { S.shields = clamp(S.shields - 15, 0, 100); log("The Tenacity rides the shear with the Lieutenant's hands on the core — shields −15 only. Okafor: 'My Lieutenant weathered that. Personally.'", "good"); spawnFault("hazard"); }
-    else { S.shields = clamp(S.shields - 35, 0, 100); log("The shear hits like a fist — shields −35, and the deck reports fresh damage.", "fault"); spawnFault("hazard"); if (Math.random() < 0.5) spawnFault("hazard"); }
+    if (bonus) { S.shields = clamp(S.shields - 15, 0, 100); log("The Tenacity rides the shear with the Lieutenant's hands on the core — shields −15 only. Okafor: 'My Lieutenant weathered that. Personally.'", "good"); const id = spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "storm", sys: id, bonus: true })); }
+    else { S.shields = clamp(S.shields - 35, 0, 100); log("The shear hits like a fist — shields −35, and the deck reports fresh damage.", "fault"); const id = spawnFault("hazard"); if (Math.random() < 0.5) spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "storm", sys: id, bonus: false })); }
   }
   evScheduleNext();
 }

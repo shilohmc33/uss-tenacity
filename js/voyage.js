@@ -1,5 +1,6 @@
 // T'Ren runs the voyage. One voyage state (G.sp) feeds every display.
 import { G } from "./state.js";
+import { PROG, milestone, hooks } from "./progression.js";
 import { DESTS, isHomeworld } from "./data.js";
 import { clamp, pick, rand } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
@@ -7,6 +8,7 @@ import { spawnFault } from "./faults.js";
 import { startBattle } from "./battle.js";
 import { evResetLeg } from "./events.js";
 import { PACE, rr } from "./pacing.js";
+import { onDock, onUndock, onDiplomatic, ds9Mult } from "./crewlife.js";
 
 export function captainOrder(dest, reason) {
   const SP = G.sp;
@@ -15,6 +17,7 @@ export function captainOrder(dest, reason) {
   // first leg of a new career is short (PACE.firstLegTime, ~5 min) so the first session reaches somewhere
   const first = (G.stats.legs || 0) === 0 && !SP.firstLegSet;
   SP.firstLegSet = true;
+  if (SP.location === "ds9") onUndock();   // phase 3: a priority dock slot lasts one visit
   SP.travel = { dest, t: 0, dur: Math.round(rr(first ? PACE.firstLegTime : (PACE.legTime[dest] || [300, 600]))), from: SP.location };
   if (isHomeworld(dest)) SP.cap.sinceDiplo = 0; else SP.cap.sinceDiplo = (SP.cap.sinceDiplo || 0) + 1;
   SP.travelPaused = false; SP.encAcc = 0; SP.escortDone = true;
@@ -102,10 +105,17 @@ export function arriveAtDest() {
   SP.cap.decideT = rr(PACE.arriveDwell); SP.cap.dest = null;
   SP.cap.reason = `Arrived at ${DESTS[id].name} — the Captain is evaluating her next orders.`;
   toast(`Arrived: ${DESTS[id].name}`, "info");
+  if (!G.prog.milestones.firstArrival) {   // session-1 milestone: T'Ren's commendation + DS9's welcome-aboard crate
+    const fa = PROG.firstArrival, got = Math.min(fa.parts, S.partsCap - S.parts);
+    SP.rep += fa.rep; S.parts += got;
+    log(`T'Ren: 'First arrival logged, Lieutenant. I've noted your conduct in the record.' Reputation +${fa.rep}. DS9's welcome-aboard crate caught up with us: +${got} spare parts.`, "good");
+    milestone("firstArrival", "First arrival");
+  }
   if (id === "ds9") {
     SP.cap.dest = "convoy";
     SP.cap.decideT = rr(PACE.dockDwell); SP.torpT = 0;
     SP.cap.reason = "Docked at Deep Space Nine — patching, resupply and rearming before the next convoy. Departure pending my hull minimum of 40%.";
+    onDock();   // phase 3: favours waiting at the dock (parts shipment, priority slot)
     log(`Docking clamps away — the Tenacity holds station at Deep Space Nine. Station crews begin hull patching; the quartermaster opens resupply${S.torps < S.torpCap ? " and the ordnance crews start loading torpedoes" : ""}.`, "good");
   } else if (id === "convoy") {
     log("Convoy rendezvous made — twelve freighters falling in behind the old girl's shields.");
@@ -121,7 +131,7 @@ export function arriveAtDest() {
     log(`Diallo: Alongside the hulk — her holds are intact. Cutting parties strip her: +${haul} spare parts.`, "good");
     if (Math.random() < 0.10 && startBattle("hulk")) { /* ambush */ }
     else if (Math.random() < 0.35) {
-      if (Math.random() < 0.5) { log("Something was still aboard the hulk — and it got into the ship's systems before security flushed it out.", "fault"); spawnFault("hazard"); }
+      if (Math.random() < 0.5) { log("Something was still aboard the hulk — and it got into the ship's systems before security flushed it out.", "fault"); const id = spawnFault("hazard"); hooks.hazard.forEach(f => f({ kind: "hulk", sys: id })); }
       else { S.hull = Math.max(1, S.hull - 6); log("The hulk's hull gives way as she rolls — debris scrapes the Tenacity's flank. Hull −6%.", "fault"); }
     } else log("The hulk gives up her parts quietly. Nothing aboard but ghosts and good salvage.");
   } else if (isHomeworld(id)) arriveHomeworld(id);
@@ -129,6 +139,7 @@ export function arriveAtDest() {
 function arriveHomeworld(id) {
   const S = G.ship, SP = G.sp;
   SP.visit = { id, t: 0, dur: Math.round(rr(PACE.visitTime)), done: false };
+  onDiplomatic(id);   // phase 3: +2 Fleet Reputation per diplomatic visit (memo §3)
   SP.cap.dest = null;
   if (id === "earth") {
     SP.cap.reason = "In spacedock at Earth — yard patching at full rate, resupply, and shore leave.";
@@ -164,11 +175,12 @@ export function tickVoyage(dt) {
   if (SP.location === "ds9" && !SP.travel && !SP.battle) {
     S.hull = clamp(S.hull + 0.5 * dt, 0, 100);
     SP.resupT += dt;
-    if (SP.resupT >= PACE.ds9PartEvery) { SP.resupT = 0; if (S.parts < S.partsCap) { S.parts++; log("Quartermaster's pallet beamed over — +1 spare part from Deep Space Nine stores.", "good"); } }
+    // phase 3: quartermaster perk / priority dock favour shorten the pallet interval (crewlife.ds9Mult)
+    if (SP.resupT >= PACE.ds9PartEvery * ds9Mult()) { SP.resupT = 0; if (S.parts < Math.round(S.partsCap * PACE.quartermasterAllot)) { S.parts++; log("Quartermaster's pallet beamed over — +1 spare part from Deep Space Nine stores.", "good"); } }
     // rearm: DS9 ordnance crews load the tubes (what T'Ren's "return to Deep Space Nine to rearm" promises)
     if (S.torps < S.torpCap) {
       SP.torpT = (SP.torpT || 0) + dt;
-      if (SP.torpT >= PACE.ds9TorpEvery) {
+      if (SP.torpT >= PACE.ds9TorpEvery * (G.prog.fav.fx.dock === "active" ? PROG.favourFx.dockMult : 1)) {
         SP.torpT = 0; S.torps++; S.tubeFlash = S.elapsed;
         if (S.torps >= S.torpCap) log(`Deep Space Nine ordnance crews seal the last tube — torpedoes ${S.torps}/${S.torpCap}. Hale: 'Fully armed, Captain.'`, "good");
         else if (S.torps === 1) log("Deep Space Nine ordnance crews begin loading photon torpedoes into the Tenacity's tubes.", "good");
@@ -179,7 +191,7 @@ export function tickVoyage(dt) {
     if (SP.location === "earth") {
       S.hull = clamp(S.hull + 1.2 * dt, 0, 100); S.energy = clamp(S.energy + 2.2 * dt, 0, 100);
       SP.resupT += dt;
-      if (SP.resupT >= 6) { SP.resupT = 0; if (S.parts < S.partsCap) { S.parts++; log("Spacedock quartermaster's pallet secured — +1 spare part.", "good"); } }
+      if (SP.resupT >= 6) { SP.resupT = 0; if (S.parts < Math.round(S.partsCap * PACE.quartermasterAllot)) { S.parts++; log("Spacedock quartermaster's pallet secured — +1 spare part.", "good"); } }
     }
     if (SP.visit && !SP.visit.done) {
       SP.visit.t += dt;

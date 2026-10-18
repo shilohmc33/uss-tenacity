@@ -5,7 +5,17 @@ import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
 import { log, toast, fx, shipNews } from "./bus.js";
 import { faultPriority, shieldCap } from "./faults.js";
-import { PACE } from "./pacing.js";
+import { PACE, PACE_RT, nightActive } from "./pacing.js";
+import { ltChatPartner } from "./npc-ambient.js";
+import { drainMult } from "./cabin.js";
+import { PROG, repairOutcome, awardXP, repairMult, taskMult, walkMult, tickStationXP, chatXP, milestone, addr } from "./progression.js";
+
+// ---- manual vs automated (progression): an order is MANUAL when it is issued from inside a player input event
+// (tap / click / key). main.js raises ORDER.manual in capture-phase input listeners and drops it at the start of
+// every frame, so anything the sim decides on its own (auto-repair of a fault at his station, the loader fault at
+// the torpedo bay, resuming after a repair) is AUTOMATED. The flag is stamped onto the intent and survives lifts.
+export const ORDER = { manual: false };
+export function playerOrder(fn) { const was = ORDER.manual; ORDER.manual = true; try { return fn(); } finally { ORDER.manual = was; } }
 
 export const ZONE = 40;          // activation radius, design px (tap zones, task proximity, resume-at-station)
 export const ARRIVE_R = 3;       // walk all the way to the stand spot (2x figure: early stops looked like clipping)
@@ -29,6 +39,7 @@ export function sendTo(tx, ty, intent) {
   const c = cellCenter(...nearestWalkable(L.deck, tx, ty));
   const path = findPath(L.deck, L.x, L.y, c[0], c[1]);
   L.intent = intent || { kind: "walk" };
+  L.intent.manual = ORDER.manual;
   if (L.intent.kind !== "liftPanel") fx("closeLift");   // NEW-05: a new order supersedes an open turbolift panel
   fx("recenter");                                       // BUG-18: a new order hands the camera back to the Lt
   L.repairSys = null; L.node = null; L.seatSide = null; L.note = null;
@@ -61,11 +72,12 @@ export function rideLiftTo(deckId, then) {
   const L = lt();
   if (deckId === L.deck) { if (then) dispatchIntent(then); return; }
   const lf = DECKS[L.deck].lift;
+  if (then) then.manual = ORDER.manual;
   sendTo(lf.x, lf.y, { kind: "liftRide", dest: deckId, then: then || null });
 }
 function dispatchIntent(it) {
-  if (it.kind === "use") sendUse(it.node, { force: true });
-  else if (it.kind === "repair") sendRepair(it.sys);
+  const go = () => { if (it.kind === "use") sendUse(it.node, { force: true }); else if (it.kind === "repair") sendRepair(it.sys); };
+  if (it.manual) playerOrder(go); else go();   // a player order keeps its MANUAL credit across the turbolift ride
 }
 function beginLift(dest, then) {
   const L = lt();
@@ -114,6 +126,7 @@ const USE_STATUS = {
   biobed: "On the <b>Biobed</b> — the doctor's scanner does its work. Energy recovering.",
   mess: "Eating at the <b>Mess Table</b> — standing at a high-top, trading mess-hall talk. Energy recovering.",
   bunk: "Off his feet in <b>Berthing</b> — rack time in his own bunk.",
+  rack: "Asleep in <b>his own quarters</b> — the best rest aboard.",
   locker: "At the <b>Parts Locker</b> — fabricating spares from stock.",
   pads: "Standing by the <b>Transporter Pads</b> — pattern buffers warm.",
   msd: "At the <b>Master Systems Display</b> — sensor support for Diallo.",
@@ -144,6 +157,9 @@ export function ltStatus() {
     else if (L.node === "shield") extra = ` Shields ${Math.round(S.shields)}%.`;
     else if (L.node === "locker") extra = ` Parts ${S.parts}/${S.partsCap}.`;
     else if (n.rest) extra = ` (${Math.round(S.energy)}%)`;
+    // ambient crew chatting with him (mess / bar): the chat leads the line so it survives the playbar's ellipsis
+    const pal = ltChatPartner();
+    if (pal) return `Chatting with <b>${pal.cfg.rank ? pal.cfg.rank + " " : ""}${pal.cfg.name}</b> at the <b>${n.name}</b>.${extra}`;
     return base + extra;
   }
   return L.note || `Standing by on <b>${dk}</b>. Tap a console, room, or open floor.`;
@@ -156,20 +172,20 @@ function arrive() {
   if (it.kind === "liftRide") { beginLift(it.dest, it.then); return; }
   if (it.kind === "use") {
     const n = NODEMAP[it.node];
-    if (n.system && G.ship.faults[n.system]) { beginRepair(n.system); return; }
-    L.mode = "use"; L.node = it.node;
+    if (n.system && G.ship.faults[n.system]) { beginRepair(n.system, it.manual); return; }
+    L.mode = "use"; L.node = it.node; L.useManual = !!it.manual;
     settleAt(n.x, n.y);
     faceToward(n.mx, n.my);
     if (n.face) setFacing(n.face);
     if (it.node === "msd") msdReport();
-    if (it.node === "chair") log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm");
-    if (it.node === "bar") log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm");
+    if (it.node === "chair") { log(CHAIR_LINES[G.lines.chair++ % CHAIR_LINES.length], "comm"); chatXP("tren"); }
+    if (it.node === "bar") { log(BAR_LINES[G.lines.bar++ % BAR_LINES.length], "comm"); chatXP("bar"); }
     fx("pulse", { x: n.x, y: n.y });
     return;
   }
-  if (it.kind === "repair") beginRepair(it.sys);
+  if (it.kind === "repair") beginRepair(it.sys, it.manual);
 }
-export function beginRepair(sysId) {
+export function beginRepair(sysId, manual = false) {
   const L = lt(), s = SYSTEMS[sysId], f = G.ship.faults[sysId];
   if (!f) { L.mode = "idle"; ltNote(`The <b>${s.name}</b> is already nominal. Awaiting orders.`); return; }
   if (G.ship.parts < f.cost) {
@@ -180,16 +196,16 @@ export function beginRepair(sysId) {
     return;
   }
   G.ship.parts -= f.cost;
-  L.mode = "repair"; L.repairSys = sysId; L.repairT = 0; L.path = null;
+  L.mode = "repair"; L.repairSys = sysId; L.repairT = 0; L.path = null; L.repairManual = !!manual; L.repairResp = f.t || 0;
   if (dDist(L.x, L.y, s.x, s.y) < 20) settleAt(s.x, s.y);
   faceToward(s.mx, s.my);
   log(`Repairing ${s.name} — ${f.cost} spare part(s) committed.`);
 }
 // walk speed (deck fraction of 960 px per s); 1.35x the 1x-figure speed so the 2x Lt doesn't look slow-motion
-export const engSpeed = () => (G.ship.energy < 15 ? 0.078 : 0.155);
+export const engSpeed = () => (G.ship.energy < 15 ? 0.078 : 0.155) * walkMult();   // x level walk bonus
 
 export function stepLt(dt) {
-  const L = lt(), S = G.ship, D = PACE.ltDrain, eTempo = G.sp.battle ? PACE.ltDrainBattle : 1;
+  const L = lt(), S = G.ship, D = PACE.ltDrain, eTempo = (G.sp.battle ? PACE.ltDrainBattle : 1) * drainMult();   // phase 4: Refreshed (slept in his own quarters)
   tickLift(dt);
   if (L.mode === "walk" && L.path) {
     const zt = intentTarget(L.intent);
@@ -218,7 +234,7 @@ export function stepLt(dt) {
     const sys = SYSTEMS[L.repairSys];
     if (!sys || !S.faults[L.repairSys]) { L.mode = "idle"; L.repairSys = null; }
     else {
-      L.repairT += dt * (S.energy < 10 ? 0.55 : 1);
+      L.repairT += dt * (S.energy < 10 ? 0.55 : 1) * repairMult(L.repairSys);
       S.energy = clamp(S.energy - D.repair * eTempo * dt, 0, 100);
       faceToward(sys.mx, sys.my);
       if (Math.random() < dt * 14) fx("spark", { x: L.x + (L.dir === "left" ? -0.03 : L.dir === "right" ? 0.03 : 0), y: L.y - 0.07 });
@@ -230,12 +246,14 @@ export function stepLt(dt) {
     if (nd.rest) S.energy = clamp(S.energy + nd.rest * dt, 0, 100);
     else {
       S.energy = clamp(S.energy - D.station * eTempo * dt, 0, 100);
+      tickStationXP(dt);   // station work: 1 XP / 10 s (40% when hands-off; none offline)
       if (L.node === "locker") {
         S.lockerT += dt;
-        if (S.lockerT >= 2.5) {
+        if (S.lockerT >= 2.5 / taskMult()) {
           S.lockerT = 0;
-          if (S.parts < S.partsCap) { S.parts++; fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "+1 PART", color: "#e6b8ff" }); }
-          else fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "LOCKER FULL", color: "#93a5c4" });
+          const fillTo = nightActive() ? Math.ceil(S.partsCap * (PROG.sinks.lockerAwayFill ?? 1)) : S.partsCap;   // away: stock the night crew, don't flood the locker
+          if (S.parts < fillTo) { S.parts++; fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "+1 PART", color: "#e6b8ff" }); }
+          else fx("floater", { x: L.x, y: L.y - HEAD_Y, text: fillTo < S.partsCap ? "STOCKED" : "LOCKER FULL", color: "#93a5c4" });
         }
       }
     }
@@ -252,21 +270,32 @@ function finishRepair() {
   delete G.ship.faults[id];
   L.repairSys = null;
   G.stats.repairs++;
-  log(`Repairs complete — ${sys.name} back to full function.`, "good");
-  fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "REPAIRED", color: "#9fe8b1" });
-  // visible rewards (first-session feel): reputation by severity, salvaged parts for MED/CRIT, and Okafor's
-  // welcome-aboard spare on each of a new Lieutenant's first five repairs
-  const S = G.ship, rep = PACE.repairRep[sev] || 1;
-  let parts = PACE.repairParts[sev] || (G.stats.repairs <= 5 ? 1 : 0);
-  parts = Math.min(parts, S.partsCap - S.parts);
+  // progression: quality roll (poor / good / excellent) -> XP, reputation, salvage; manual orders pay more
+  const S = G.ship, manual = !!L.repairManual, q = repairOutcome(sev, manual, S.energy, id, L.repairResp || 0);
+  const bonusPart = q.tier !== "marginal" && G.stats.repairs <= 5 ? 1 : 0;           // Okafor's welcome-aboard spare (first five)
+  const parts = Math.min(q.parts + bonusPart, S.partsCap - S.parts), rep = q.rep;
   G.sp.rep += rep; S.parts += parts;
-  fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${rep} REP`, color: "#ffaa77", delay: 0.6, life: 2.2 });
-  if (parts > 0) fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${parts} PART${parts > 1 ? "S" : ""}`, color: "#e6b8ff", delay: 1.2, life: 2.2 });
-  log(`Reputation +${rep}${parts ? ` · ${parts} spare part${parts > 1 ? "s" : ""} salvaged from the old components` : ""}.`, "good");
+  const xp = awardXP(q.xp, q.src, "repair");
+  L.repairManual = false;
+  const TITLE = { marginal: ["MARGINAL — WILL RECUR", "#c9a27a"], standard: ["REPAIRED · STANDARD", "#bfe8c8"], good: ["REPAIRED · GOOD", "#9fe8b1"], excellent: ["EXCELLENT REPAIR!", "#ffe27a"] }[q.tier];
+  const H = L.y - HEAD_Y;
+  fx("floater", { x: L.x, y: H, text: TITLE[0], color: TITLE[1], life: q.tier === "excellent" ? 2.6 : 2, big: q.tier === "excellent" });
+  fx("floater", { x: L.x, y: H, text: `+${xp} XP${manual ? "" : " (auto)"}`, color: "#8fd8ff", delay: 0.55, life: 2.2 });
+  if (rep > 0) fx("floater", { x: L.x, y: H, text: `+${rep} REP`, color: "#ffaa77", delay: 1.1, life: 2.2 });
+  if (parts > 0) fx("floater", { x: L.x, y: H, text: `+${parts} PART${parts > 1 ? "S" : ""}`, color: "#e6b8ff", delay: 1.65, life: 2.2 });
+  if (q.rations > 0) fx("floater", { x: L.x, y: H, text: `+${q.rations} ${PROG.currency.short}`, color: "#9ff0c8", delay: parts > 0 ? 2.2 : 1.65, life: 2.2 });
+  const tierWord = { excellent: "Excellent repair", good: "Good repair", standard: "Repairs complete", marginal: "Marginal repair" }[q.tier];
+  log(`${tierWord} — ${sys.name} ${q.tier === "marginal" ? "patched" : "back to full function"}${manual ? "" : " (on his own initiative)"}. ${q.line}`, q.tier === "marginal" ? "comm" : "good");
+  log(`+${xp} XP · reputation +${rep}${q.rations ? ` · +${q.rations} ${PROG.currency.unit}` : ""}${parts ? ` · ${parts} spare part${parts > 1 ? "s" : ""} salvaged from the old components` : ""}.`, "good");
   // the SHIP line shouldn't keep announcing a fault he just fixed
-  if (G.news && G.news.html && G.news.html.includes(sys.fault)) shipNews(`<b>${sys.name} repaired</b> by the Lieutenant — reputation +${rep}${parts ? `, +${parts} spare part${parts > 1 ? "s" : ""}` : ""}.`);
-  if (pri === 1) log("T'Ren: 'Noted, Lieutenant. The bridge has its ship back.'", "comm");
-  else if (pri === 2) log("Okafor: 'Good work, Lieutenant. That's how my deck runs.'", "comm");
+  if (G.news && G.news.html && G.news.html.includes(sys.fault)) shipNews(`<b>${sys.name} repaired</b> by the Lieutenant (${q.tier}) — +${xp} XP, reputation +${rep}${parts ? `, +${parts} spare part${parts > 1 ? "s" : ""}` : ""}.`);
+  milestone("firstRepair", "First repair");
+  if (q.reopen) {   // marginal (auto repairs only, never in week 1): the fault comes back as LOW
+    G.ship.faults[id] = { t: 0, sev: "low", cost: 1, escT: 0, reopened: true };
+    log(`The ${sys.name} slips back to amber — the marginal patch didn't hold. LOW fault reopened.`, "fault");
+  }
+  if (pri === 1) log(`T'Ren: 'Noted, ${addr()}. The bridge has its ship back.'`, "comm");
+  else if (pri === 2) log(`Okafor: 'Good work, ${addr()}. That's how my deck runs.'`, "comm");
   const n = sys.node ? NODEMAP[sys.node] : null;
   if (n && n.deck === L.deck && dDist(L.x, L.y, n.x, n.y) <= ZONE) {
     L.mode = "use"; L.node = sys.node; faceToward(n.mx, n.my);
@@ -295,8 +324,9 @@ function tickRecharge(dt) {
   }
   if (rc.phase !== "charging") { log(def.start); rc.phase = "charging"; }
   rc.acc += dt;
-  while (rc.acc >= 1.6) {
-    rc.acc -= 1.6;
+  const per = 1.6 / taskMult();
+  while (rc.acc >= per) {
+    rc.acc -= per;
     S[def.stat] = Math.min(cap, S[def.stat] + 1);
     if (S[def.stat] >= cap) { log(def.full, "good"); rc.phase = "full"; rc.acc = 0; break; }
   }
@@ -310,7 +340,7 @@ function tickReplication(dt) {
   if (S.faults.loader) { L.resumeTorp = true; beginRepair("loader"); return; }
   if (S.faults.phasers) return;
   if (S.torps >= S.torpCap) { if (!rp.fullNoted) { log("Torpedo complement already full."); rp.fullNoted = true; } return; }
-  S.charge = clamp(S.charge + dt * (100 / TORP_BUILD_T), 0, 100);
+  S.charge = clamp(S.charge + dt * (100 / TORP_BUILD_T) * taskMult(), 0, 100);
   if (S.charge >= 100) {
     S.charge = 0; S.torps++; S.tubeFlash = S.elapsed; G.stats.torpsBuilt++;
     log(`Torpedo replicated and loaded. (${S.torps} of ${S.torpCap})`, "good");

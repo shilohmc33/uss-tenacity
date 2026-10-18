@@ -6,11 +6,15 @@
 html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none;background:var(--bg);color:var(--ink);font-family:var(--font);touch-action:none;user-select:none;-webkit-user-select:none}
 button{font-family:var(--font);cursor:pointer;border:0;color:#111;letter-spacing:.06em}
 #app{position:fixed;inset:0;display:flex;flex-direction:column;max-width:1400px;margin:0 auto;padding:var(--safe-t) var(--safe-r) 0 var(--safe-l)}
-#stats{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:4px 4px 2px;flex:none}
+#stats{display:grid;grid-template-columns:repeat(9,1fr);gap:3px;padding:4px 4px 2px;flex:none}
 .stat{background:var(--panel);border-radius:6px 6px 2px 2px;padding:3px 5px 4px;border-top:3px solid var(--c);min-width:0}
 .stat .k{font-size:9px;color:var(--muted);letter-spacing:.08em;white-space:nowrap;overflow:hidden}
 .stat .v{font-size:15px;font-weight:700;line-height:1.1}
 .stat .m{height:3px;background:#1d2840;border-radius:2px;margin-top:2px;overflow:hidden}.stat .m i{display:block;height:100%;background:var(--c)}
+.stat .ls{display:none}
+@media (max-width:520px) and (orientation:portrait){.stat .lf{display:none}.stat .ls{display:inline}}
+.stat.lvlup{animation:lvlup 1.6s ease-out}
+@keyframes lvlup{0%{background:#ffd75e;color:#141a2a}100%{background:var(--panel)}}
 .stat.tap{cursor:pointer}.stat.tap:active{filter:brightness(1.4)}
 .pips{font-size:9px;letter-spacing:1px;color:var(--c);white-space:nowrap;overflow:hidden}
 #topbar{display:flex;gap:6px;align-items:center;padding:3px 6px;flex:none}
@@ -83,7 +87,7 @@ body>.modal{position:fixed;z-index:50}
 /* ---- slim full-screen play mode ---- */
 body.mode-play #stage{flex:1;height:auto;margin:0;border-radius:0;border:0}
 body.mode-play #playbar{display:block;position:relative;z-index:45;flex:none;padding:4px 6px calc(4px + var(--safe-b));background:#070b15}
-#lines{cursor:pointer;padding:2px 2px 4px}
+#lines{cursor:pointer;padding:2px 2px 4px;min-height:44px}
 .sbar{display:flex;gap:6px;align-items:baseline;white-space:nowrap;overflow:hidden;font-family:system-ui,sans-serif;line-height:1.35}
 .sbar span{overflow:hidden;text-overflow:ellipsis;min-width:0}
 #ltBar{font-size:13px;color:#dfe8ff}#ltBar b:not(.tag){color:#ffcc66}
@@ -102,7 +106,11 @@ body.mode-play #playbar .chip.lift{position:sticky;left:0;z-index:1;box-shadow:6
 body.mode-play #panels{position:fixed;left:0;right:0;bottom:var(--pb,90px);padding-left:calc(6px + var(--safe-l));padding-right:calc(6px + var(--safe-r));max-height:62vh;background:#070b15ee;border-top:3px solid var(--lc1);border-radius:16px 16px 0 0;z-index:40;transform:translateY(105%);transition:transform .25s;max-width:1400px;margin:0 auto}
 body.mode-play.sheet-open #panels{transform:none}
 body.mode-play #panels .panel{display:none}
-body.mode-play #panels .sheetHead{display:flex;justify-content:space-between;align-items:center;color:var(--lc1);letter-spacing:.15em;padding:4px 4px 0;position:sticky;top:0;background:#070b15}
+/* sheet title bar: opaque and sticky above the scrolling list. The panel has no top padding in play mode (so nothing
+   scrolls through a gap above the bar) and the bar sits in its own stacking layer (department headers use opacity,
+   which would otherwise paint over a z-index:auto sticky element). */
+body.mode-play #panels{padding-top:0}
+body.mode-play #panels .sheetHead{display:flex;justify-content:space-between;align-items:center;color:var(--lc1);letter-spacing:.15em;padding:6px 4px 4px;position:sticky;top:0;z-index:20;background:#070b15;margin:0 -2px 6px;border-bottom:1px solid #1d2840;box-shadow:0 6px 8px -4px rgba(0,0,0,.65)}
 body.mode-play #panels .sheetHead button{background:#1a2235;color:var(--ink);font-size:18px;width:var(--tap);height:var(--tap);border-radius:50%;margin:2px 0}
 body.mode-play.sheet-orders #p-orders,body.mode-play.sheet-orders #p-status,body.mode-play.sheet-duty #p-duty,body.mode-play.sheet-crew #p-crew,body.mode-play.sheet-log #p-log{display:block}
 body.mode-info #p-chips .chips{gap:6px}
@@ -152,9 +160,10 @@ body.mode-info #p-chips .chips{gap:6px}
   body.mode-play .sheetBtns button{font-size:11px;letter-spacing:.02em;min-width:44px}
   /* sheets: right-hand drawer over the side column, full height; the deck and stats stay visible */
   body.mode-play #panels{top:0;bottom:0;left:auto;right:0;width:min(360px,46vw);max-height:none;max-width:none;margin:0;
-    padding:calc(4px + var(--safe-t)) calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) 10px;border-top:0;border-left:3px solid var(--lc1);
+    padding:0 calc(8px + var(--safe-r)) calc(8px + var(--safe-b)) 10px;border-top:0;border-left:3px solid var(--lc1);
     border-radius:16px 0 0 16px;transform:translateX(105%);box-shadow:-10px 0 24px rgba(0,0,0,.5)}
   body.mode-play.sheet-open #panels{transform:none}
+  body.mode-play #panels .sheetHead{padding-top:calc(6px + var(--safe-t))}
   #toasts{left:6px;right:6px}.toast{font-size:12px;padding:5px 9px}
   #battleHud{padding:4px 8px;font-size:11px}
   /* WINDOW (info) mode: deck on the left, scrolling panel column on the right */
@@ -163,3 +172,99 @@ body.mode-info #p-chips .chips{gap:6px}
   body.mode-info #stage{height:auto;grid-column:1;grid-row:3;margin-bottom:calc(6px + var(--safe-b))}
   body.mode-info #panels{grid-column:2;grid-row:3;min-height:0}
 }
+
+/* ---- progression phase 2: service record, crew relations, requisitions ---- */
+#career .rankRow{font-size:13px;margin:2px 0 4px}#career .rankRow b{color:#ffd75e}
+.ready{background:#0a101d;border:1px solid #1d2840;border-radius:8px;padding:5px 7px}.ready.elig{border-color:#ffd75e}
+.ready .rk{font-size:11px;letter-spacing:.08em;color:var(--muted)}.ready .rk b{color:#ffd75e;font-size:14px;float:right}
+.rmeter{height:7px;background:#1d2840;border-radius:4px;overflow:hidden;margin:4px 0}.rmeter i{display:block;height:100%;background:linear-gradient(90deg,#c9a24a,#ffd75e)}
+.rparts{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px;color:#b8c4dd;font-family:system-ui,sans-serif}
+.cnote{font-size:11px;color:var(--muted);font-family:system-ui,sans-serif;margin:4px 0 0}
+#relations{margin-top:6px}#relations h4 small{color:var(--muted);font-size:10px;letter-spacing:.05em}
+.rel{display:grid;grid-template-columns:30px minmax(0,1.3fr) 24px minmax(44px,1fr) 34px 58px;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #141c2e}
+.rel img,.rel .badge{width:30px;height:30px;border-radius:50%;object-fit:cover;object-position:top}
+.rel .badge{display:flex;align-items:center;justify-content:center;color:#071020;font-weight:700}
+.rel .nm{font-size:13px;color:#ffcc66;line-height:1.1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.rel .nm small{display:block;font-size:10px;color:var(--muted)}
+.opbar{position:relative;height:6px;background:#1d2840;border-radius:3px}.opbar:after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#4a5a7a}
+.opbar i{position:absolute;top:0;bottom:0;border-radius:3px}.opbar i.pos{left:50%;background:#9fe8b1}.opbar i.neg{right:50%;background:#ff8a7a}
+.rel b{font-size:13px;text-align:right}.rel b.pos{color:#9fe8b1}.rel b.neg{color:#ff8a7a}.rel .lab{font-size:10px;color:var(--muted)}
+#reqBox{margin-top:8px}.req{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#0a101d;border:1px solid #1d2840;border-radius:8px;padding:6px 8px;font-size:13px}
+.req small{display:block;font-size:10px;color:var(--muted);font-family:system-ui,sans-serif}
+.req button{background:#ffaa77;color:#141a2a;border-radius:14px;padding:6px 12px;font-weight:700;min-height:44px;min-width:56px;flex:none}.req button:disabled{background:#3a4258;color:#8892a8}
+/* ---- phase 3: roster groups, fleet reputation, favours ---- */
+.dgrp{margin-top:4px}.dgrp .dh{font-size:10px;letter-spacing:.14em;color:var(--dc);border-bottom:1px solid var(--dc);opacity:.9;padding:3px 0 1px;margin-top:4px}
+.rel .newb{font-style:normal;font-size:9px;background:#9fd8ff;color:#071020;border-radius:6px;padding:0 4px;margin-left:3px;vertical-align:1px}
+.rel.vac .nm{color:var(--muted)}
+#fleet,#favours{margin-top:8px}#fleet h4 .frv{color:#9fd8ff;font-size:14px;float:right}
+.perks{margin:4px 0;padding-left:16px;font-size:11px;color:#9fe8b1;font-family:system-ui,sans-serif}
+.alum{display:grid;grid-template-columns:26px 1fr 34px;gap:6px;align-items:center;padding:2px 0;font-size:12px;color:#ffcc66;border-bottom:1px solid #141c2e}
+.alum .badge{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#071020;font-weight:700;font-size:10px}
+.alum small{color:var(--muted);font-size:10px;margin-left:4px}.alum b{text-align:right}.alum b.pos{color:#9fe8b1}.alum b.neg{color:#ff8a7a}
+.req+.req{margin-top:4px}.req.fav.off{opacity:.7}.req.fav button{background:#9fd8ff}
+
+/* phase 4: quarters box (CREW sheet) + decor chooser */
+#quarters{margin-top:8px}#quarters h4 small{color:var(--muted);font-size:10px;letter-spacing:.05em}
+#quarters .slots{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.slotb{flex:1 1 30%;min-width:96px;min-height:44px;padding:4px 6px;border-radius:8px;background:#141c2e;border:1px dashed #3b4a6b;color:#9fb0d0;font-size:11px;text-align:left;display:flex;align-items:center;gap:5px;line-height:1.1}
+.slotb.full{border-style:solid;border-color:#7a6a4a;color:#f2dfbf;background:#1d1a18}.slotb i{font-style:normal;font-size:15px}
+.goq{margin-top:6px;width:100%;min-height:var(--tap);border-radius:10px;background:var(--lc3);font-size:14px}
+#decorPanel .card{width:min(92vw,460px)}
+.req.dec{align-items:center}.req.dec .ico{font-style:normal;font-size:22px;width:30px;text-align:center;flex:none}.req.dec>div{flex:1}
+.req.dec.off{opacity:.55}
+@media (max-width:520px) and (orientation:portrait){.stat{padding:3px 3px 4px}.stat .v{font-size:14px}
+  /* pt04 M1: 9 tiles in one row were 40 px wide; two rows (5 + 4) give ~75 px x 44 px tiles */
+  #stats{grid-template-columns:repeat(5,1fr);gap:3px}.stat{min-height:44px;padding:2px 5px 3px}.stat .v{font-size:15px}}
+/* phase 5: promotion board + specialisation picker */
+#boardPanel .card,#specPanel .card{width:min(94vw,520px)}
+.bhead{display:flex;gap:10px;align-items:center;margin-bottom:6px}.bhead img{width:52px;height:52px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid var(--lc1);flex:none;background:#0b1020}
+.bhead h3{margin:0}.bhead small{color:#9fb0d0;font-size:12px}.bhead small b{color:#ffd9a0}
+.bq{color:#9ff0e0}
+.bready{margin:4px 0 6px;font-size:12px;color:#9fb0d0}.bready b{color:var(--lc1)}
+.bsum{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 0}
+.brow{background:#141c2e;border-radius:8px;padding:5px 7px;display:grid;grid-template-columns:auto 1fr;column-gap:6px;font-size:12px}
+.brow b{color:#cfe3ff;font-weight:600}.brow span{text-align:right;color:var(--lc1);font-weight:700}.brow small{grid-column:1/3;color:var(--muted);font-size:10.5px;line-height:1.25}
+.blines{margin:6px 0;border-left:3px solid var(--lc2);padding-left:8px}.blines p{margin:4px 0;font-family:system-ui,sans-serif;font-size:13px;line-height:1.35;color:#dbe6ff;font-style:italic}
+.bres{margin:8px 0 4px;text-align:center;font-size:22px;letter-spacing:.18em;font-weight:700;padding:8px;border-radius:10px;background:#141c2e}
+.bres.good{color:var(--good);border:1px solid var(--good)}.bres.warn{color:var(--warn);border:1px solid var(--warn)}.bres.bad{color:var(--bad);border:1px solid var(--bad)}
+.bface{background:var(--lc1);color:#000;font-weight:700;letter-spacing:.1em}
+.specRow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:4px 0;font-size:12px}.specRow .k{font-size:10px;letter-spacing:.12em;color:var(--lc2);font-weight:700;margin-right:2px}
+.schip{background:#1d2840;border:1px solid #3b4a6b;border-radius:10px;padding:2px 8px;color:#cfe3ff}
+.spb{min-height:44px;min-width:44px;padding:4px 10px;border-radius:9px;background:var(--lc1);color:#000;font-size:12px;font-weight:700}
+.bstat{font-size:12px;color:#9fb0d0;margin:4px 0}.bstat.wait{color:var(--lc1)}
+.req.spec em.tier{font-style:normal;font-size:10px;color:#ffd9a0;margin-left:4px}
+.stat[data-stat=level]{position:relative}.stat.flag::after{content:"★";position:absolute;top:1px;right:3px;font-size:10px;color:var(--lc1);line-height:1}
+#v-level{white-space:nowrap;overflow:hidden;text-overflow:clip}#v-level[data-spec]:not([data-spec=""])::before{content:attr(data-spec);font-size:.7em;margin-right:2px;vertical-align:1px}
+@media (orientation:landscape) and (max-height:500px){.bsum{grid-template-columns:1fr 1fr 1fr 1fr}.bhead img{width:40px;height:40px}.blines p{font-size:12px;margin:2px 0}#boardPanel .card,#specPanel .card{width:min(96vw,760px);max-height:92vh;padding:8px 10px}.bres{font-size:18px;padding:5px}}
+@media (max-width:520px) and (orientation:portrait){#v-level[data-spec]::before{display:none}}   /* narrow tile: the focus shows in the tooltip + CREW service record */
+
+/* phase 6: sickbay status, protected-favourite pins, In Memoriam, crew safety, life-critical duty rows */
+.rel.vac{grid-template-columns:30px 1fr}
+.rel .pin{width:24px;height:24px;min-height:0;padding:0;border-radius:50%;background:transparent;border:1px solid #2c3956;color:#7d8bab;font-size:13px;line-height:1}
+.rel .pin.fav{color:#ffd75e;border-color:#5b5130}.rel .pin.on{color:#071020;background:#ffd75e;border-color:#ffd75e}
+.rel .injb{font-style:normal;font-size:9px;background:#3aa6a0;color:#04201e;border-radius:6px;padding:0 4px;margin-left:3px;vertical-align:1px}
+.rel .injb.crit{background:#e0473c;color:#fff;animation:injp 1.2s ease-in-out infinite}
+.rel.inj .nm{white-space:normal}.rel.inj .nm small{color:#9fe0d8;white-space:normal}
+@keyframes injp{50%{opacity:.6}}
+#memoriam:empty{display:none}
+.mem{display:grid;grid-template-columns:22px 1fr;gap:6px;align-items:center;padding:4px 0;border-bottom:1px solid #141c2e;font-size:13px;color:#dfe6f5}
+.mem .mcross{color:#b9c4dc;text-align:center;font-size:14px}.mem small{display:block;font-size:10px;color:var(--muted)}
+.duty.life{background:linear-gradient(90deg,rgba(210,59,47,.18),transparent)}
+.duty .lifeTag{display:block;font-style:normal;font-size:11px;color:#ff9b90}
+
+/* pt04 M1 (BUG-05 regression): every tappable control >= 44 px. Safety net for sheet and modal buttons; tools/tap44-check.js enforces it. */
+#panels button,.modal button,#topbar button,.sheetBtns button,#chips button{min-height:44px;min-width:44px}
+.stat{min-height:44px}
+@media (orientation:landscape) and (max-height:500px){
+  /* landscape phones: 9 stacked tiles were 40 px tall; two columns of 5 rows give ~58 x 70 px tiles */
+  body.mode-play #app{grid-template-columns:128px minmax(0,1fr) 200px}
+  body.mode-play #stats{grid-template-columns:1fr 1fr}
+  body.mode-play .stat{padding:2px 4px 3px}
+  body.mode-play .stat .k{font-size:9.5px;letter-spacing:.02em}
+  body.mode-play .stat .v{font-size:14px}
+}
+/* pt04: odd jobs (between-repair activities) */
+.pri.p4{background:#2b6f66;color:#e8fff9}
+.alert-pill.job{background:#1d4d47;color:#d9fff6;border:1px solid #3fa596}
+.duty.job .what b{color:#9ff0de}
+.rparts .weak{color:#ffd27a;font-weight:700;text-decoration:underline dotted}
+.rhint{margin:4px 0 2px;font-size:12px;color:#ffe3a8;background:rgba(255,190,90,.08);border-left:3px solid #ffb347;padding:4px 6px;border-radius:4px}
