@@ -13,6 +13,7 @@ import { tickDay, offlineXP, tickProg, rankShort } from "./progression.js";
 import { tickCrew, endOffline } from "./crewlife.js";
 import { tickCabin } from "./cabin.js";
 import { tickMed } from "./injuries.js";
+import { romLogHidden } from "./romance.js";
 
 export function stepSim(dt) {
   const S = G.ship, SP = G.sp, L = G.lt;
@@ -84,9 +85,15 @@ export function catchUp(seconds) {
   setQuiet(true); capture.list = entries; PACE_RT.offline = true;
   applyNightFloors();   // clamp straight after load: a save taken at 7% power comes back at the floor
   const step = 0.25; let minPower = S.power, minHull = S.hull, powerZeroS = 0, battleWasOn = !!G.sp.battle;
+  // pass 13: every battlecruiser fought during catch-up (outcome + hull after), for the return report's headline
+  const bcFights = []; let bcCur = null; const isBc = () => { const B = G.sp.battle; return !!(B && B.enemies && B.enemies[0] && B.enemies[0].ship === "jh_battlecruiser" && B.ctx !== "debug"); };
+  const bcEnd = () => { const st = G.stats; bcFights.push({ out: st.wins > bcCur.w ? "won" : st.tows > bcCur.t ? "towed" : "disengaged", hull: Math.round(S.hull), lost: Math.max(0, Math.round(bcCur.hull - S.hull)) }); bcCur = null; };
   try {
     for (let t = 0; t < sim; t += step) {
+      if (!bcCur && isBc()) bcCur = { w: G.stats.wins, t: G.stats.tows, hull: S.hull };
       stepSim(step);
+      if (!bcCur && isBc()) bcCur = { w: G.stats.wins, t: G.stats.tows, hull: S.hull };   // started this step (the hull before her first volley)
+      else if (bcCur && !isBc()) bcEnd();
       if (S.power < minPower) minPower = S.power;
       if (S.hull < minHull) minHull = S.hull;
       if (S.power < 1) powerZeroS += step;
@@ -95,13 +102,14 @@ export function catchUp(seconds) {
     endOffline(sim);   // phase 3: a Starbase 375 loaner team covers one offline stretch
     offlineXP(sim);    // progression: watch-officer XP for the night crew's work (1/min first 2 h, then 0.25/min)
   } finally { setQuiet(false); capture.list = null; PACE_RT.offline = false; PACE_RT.idleT = 0; }
+  if (bcCur) bcFights.push({ out: "ongoing", hull: Math.round(S.hull), lost: Math.max(0, Math.round(bcCur.hull - S.hull)) });
   const st = G.stats;
   // highlights: keep the latest copy of each repeated line, listed in chronological order
   const seen = new Map();
   // non-actionable noise stays out of the report (NEW-06): routine resupply pallets, task countdowns, handover chores
   const ROUTINE = /^(Torpedo replicated|Spare part fabricated|Deep Space Nine ordnance crews begin|Quartermaster's pallet|Spacedock quartermaster|Deck task|Shift handover|Night watch: the damage-control team clears|Reputation \+|\+\d+ XP)/;
   entries.forEach((e, i) => {
-    if ((e.cls === "good" || e.cls === "fault") && !ROUTINE.test(e.msg)) seen.set(e.msg.replace(/[\d.%]+/g, "#").slice(0, 40), i);
+    if ((e.cls === "good" || e.cls === "fault") && !ROUTINE.test(e.msg) && !romLogHidden(e)) seen.set(e.msg.replace(/[\d.%]+/g, "#").slice(0, 40), i);
   });
   const highlights = [...seen.values()].sort((a, b) => a - b).slice(-8).map(i => entries[i]);
   return {
@@ -112,6 +120,6 @@ export function catchUp(seconds) {
     d: { hull: S.hull - before.hull, parts: S.parts - before.parts, torps: S.torps - before.torps, rep: G.sp.rep - before.rep, energy: S.energy - before.energy },
     prog: { xp: G.prog.totalXp - before.xp, auto: G.prog.xpAuto - before.xpA, manual: G.prog.xpManual - before.xpM, from: before.lvl, to: G.prog.level, days: G.prog.day - before.day, promoted: G.prog.rank > before.rank ? rankShort() : null, crew: (G.prog.crew.evN || 0) > before.crewN ? G.prog.crew.log.slice(-((G.prog.crew.evN || 0) - before.crewN)) : [] },
     maint: (G.prog.sinks.n.maintain || 0) - before.maint, trades: (G.prog.sinks.n.autoTrade || 0) - before.trades, rations: Math.round(G.prog.rationsLife - before.rr),
-    faults: Object.keys(S.faults).length, minPower, minHull, powerZeroS, highlights,
+    faults: Object.keys(S.faults).length, minPower, minHull, powerZeroS, highlights, bcFights,
   };
 }

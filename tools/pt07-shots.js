@@ -141,6 +141,9 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
       { i = mkInj(); i.ack = true; G.ship.faults[i.sys].sev = 'crit'; i.left = 11; __T.catchUp(600); PA.playerInput(); SIM.stepSim(0.1); const first = { left: Math.round(i.left), ack: i.ack, floored: i.floored, state: i.state };
         for (let t = 0; t < 30; t++) { PA.playerInput(); SIM.stepSim(0.1); } i.left = 8; __T.catchUp(600); PA.playerInput(); SIM.stepSim(0.1); const second = { left: Math.round(i.left), ack: i.ack, state: i.state };
         aw.returnFloor = { first, second };
+        // pass 10 (1): nobody comes back to more time than they left with: leave (off watch, catch-up) with 5 s / 100 s -> back to 5 s / 100 s
+        const lv = sec => { const j = mkInj(); j.ack = true; G.ship.faults[j.sys].sev = 'crit'; j.left = sec; __T.catchUp(600); PA.playerInput(); SIM.stepSim(0.1); return { left: +j.left.toFixed(1), ack: j.ack, state: j.state }; };
+        aw.leave5 = lv(5); aw.leave100 = lv(100); aw.leave29 = lv(29);
         const h = mkInj(); h.ack = true; h.left = 12; PA.PACE_RT.hidden = true; for (let t = 0; t < 200; t++) SIM.stepSim(0.1); PA.PACE_RT.hidden = false; PA.playerInput(); SIM.stepSim(0.1);
         aw.shortHide = { left: Math.round(h.left), ack: h.ack, state: h.state };
         const h2 = mkInj(); h2.ack = true; h2.left = 100; PA.PACE_RT.hidden = true; for (let t = 0; t < 200; t++) SIM.stepSim(0.1); PA.PACE_RT.hidden = false; PA.playerInput(); SIM.stepSim(0.1);
@@ -213,7 +216,17 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
         const req = OJ.JOBS.request.find(r => r.quip); m.hushJobLabel = req ? `${req.thing}${BUS.cheer(req.quip, '')}` : null;
         m.hushLight = { lines: lines.length, leak, milestoneFx: mil, jobLabelSober: !!m.hushJobLabel && !/broth/.test(m.hushJobLabel), sample: lines.slice(0, 6).map(t => t.slice(0, 90)) };
         ev.active = keepAct; G.ship.parts = keepTorps; }
+      { // pass 10 (2): level-up, promotion and reputation praise in the quiet period: sober toasts, no gold burst / floater / flash
+        const BUS = await import('/js/bus.js'), toasts = [], fxs = []; BUS.on('toast', t => { if (BUS.hushed()) toasts.push(t); }); BUS.on('fx', k => { if (BUS.hushed()) fxs.push(k); });
+        const keep = { rank: p.rank, hist: p.history.length, rs: { ...p.rankSince }, service: p.service, peak: p.readyPeak, bonus: p.readyBonus, pending: p.promo.pending };
+        PR.awardXP(PR.xpToNext ? PR.xpToNext(p.level) + 1 : 99999, 'manual'); PR.repEvent('good', 'praise'); PR.repEvent('good', 'commendation'); PR.promote('readiness');
+        p.rank = keep.rank; p.history.length = keep.hist; p.rankSince = keep.rs; p.service = keep.service; p.readyPeak = keep.peak; p.readyBonus = keep.bonus; p.promo.pending = keep.pending; __T.CB && __T.CB.applyTier && __T.CB.applyTier();
+        m.hushGold = { toasts, fxs, cheerful: toasts.filter(t => /LEVEL UP|PROMOTED|Praised|Commendation|Clever improvisation/.test(t)), goldFx: fxs.filter(k => ['levelUp', 'promotion', 'floater'].includes(k)) }; }
       G.prog.med.hushUntil = 0;
+      { // pass 10 (6): the Fleet Rep log shows the real change near / at the 100000 cap
+        const fr0 = p.fleetRep; p.fleetRep = 99990; const n0 = G.log.length; CL.addFleetRep(50, 'a test commendation'); const l1 = G.log.slice(n0).map(e => e.msg).join(' | '), v1 = p.fleetRep;
+        const n1 = G.log.length; CL.addFleetRep(50, 'a test commendation'); const l2 = G.log.slice(n1).map(e => e.msg).join(' | '), v2 = p.fleetRep; p.fleetRep = fr0;
+        m.fleetLog = { l1, v1, l2, v2 }; }
       // m7 care packages: 8 alumni at +45 where +10 came from care: count at 50% and capped
       const keepA = G.prog.alumni.slice(), keepC = { ...G.prog.gifts.care };
       G.prog.alumni = Array.from({ length: 8 }, (_, k) => ({ id: 'cp' + k, name: 'Ens Cp' + k, short: 'Cp' + k, species: 'human', rank: 1, ladder: 'officer', slot: 'engineer-2', dept: 'eng', role: 'Engineer', opinion: 45, posting: 'sb375', leftDay: 1, leftPD: 1, fr: 3 }));
@@ -254,7 +267,7 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
     presentCapStepper: pd.stepper20 <= 1 + Math.floor(pd.stepperPresent / 600) && pd.stepper20 < 10,   // pass 08 (1)
     presentCapCasualFree: pd.casual10 === 10,
     futureDateUnfreezes: pd.futureSameDay === 0 && pd.futureNextDay === 1,
-    migrationFirstDay: R.migration.after.version === 13 && R.migration.after.pd === R.migration.pd + 1,
+    migrationFirstDay: R.migration.after.version === 14 && R.migration.after.pd === R.migration.pd + 1,   // v14 since battle groundwork (the v12 save still walks the v13 step)
     presentHoursGate: T.presentGate === 'too early',
     // (2)
     awayNoFreeSave: A.hiddenCrewFix.state === 'surgery' && A.hiddenCrewFix.held && A.hiddenCrewFix.alive && A.hiddenResumed.state === 'surgery' && !A.hiddenResumed.held,
@@ -262,7 +275,8 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
     autoFixSeen: A.autoFixUnacked.ack0 === false && A.autoFixUnacked.state === 'surgery' && A.autoFixUnacked.ack === true && !A.autoFixUnacked.fast && A.autoFixUnacked.why !== 'unseen',   // pass 08 (2)
     surgeryPausesAway: A.lockDuringSurgery.state === 'surgery' && A.lockDuringSurgery.surgLeftSame && A.catchUpDuringSurgery.state === 'surgery',
     awayNeverBetter: A.hiddenCrewFix.sx >= A.watchedFast.sx && A.idle70Fix.sx >= A.watchedFast.sx && A.mc.hiddenCrewFix >= A.mc.watchedFast - 0.02 && A.mc.idle70Fix >= A.mc.watchedFast - 0.02,
-    returnFloorOnce: A.returnFloor.first.state === 'warning' && A.returnFloor.first.left === 30 && A.returnFloor.first.ack === false && A.returnFloor.second.left <= 8 && A.returnFloor.second.ack === false,   // pass 08 (3)
+    returnFloorOnce: A.returnFloor.first.state === 'warning' && A.returnFloor.first.left === 11 && A.returnFloor.first.ack === false && A.returnFloor.second.left <= 8 && A.returnFloor.second.ack === false,   // pass 08 (3), pass 10 (1): 11 s left -> 11 s back (was raised to 30)
+    returnNeverMore: A.leave5.state === 'warning' && A.leave5.left === 5 && A.leave100.left === 100 && A.leave29.left === 29 && !A.leave5.ack && !A.leave100.ack,   // pass 10 (1)
     shortHideRetap: A.shortHide.state === 'warning' && A.shortHide.left === 12 && A.shortHide.ack === false && A.shortHideLong.ack === true,
     windowNeverGrows: A.windowAfterAway.state === 'warning' && A.windowAfterAway.after <= A.windowAfterAway.before && A.windowAfterAway.ack === false,
     // (4)
@@ -282,6 +296,8 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
     lovedReachable: M.loved.skipped || (M.loved.second === 'delighted' && !M.loved.repeatLine && M.loved.count === 1),
     hushNoCheer: M.hushCheer === 0 && M.hushCrewMoment === false,
     hushLight: !!M.hushLight && M.hushLight.lines >= 3 && M.hushLight.leak.length === 0 && M.hushLight.milestoneFx === 0 && M.hushLight.jobLabelSober,   // pass 09 (4)
+    hushGold: !!M.hushGold && M.hushGold.toasts.length >= 3 && M.hushGold.cheerful.length === 0 && M.hushGold.goldFx.length === 0,   // pass 10 (2)
+    fleetLogReal: !!M.fleetLog && /Fleet Reputation \+10 /.test(M.fleetLog.l1) && M.fleetLog.v1 === 100000 && !/\+\d/.test(M.fleetLog.l2) && /maximum/.test(M.fleetLog.l2) && M.fleetLog.v2 === 100000,   // pass 10 (6)
     retapNoReset: !!A.retap && A.retap.B.unackedOnReturn && A.retap.C.unackedOnReturn && A.retap.B.sx >= A.retap.A.sx && A.retap.C.sx >= A.retap.A.sx
       && A.retap.B.ackT >= 39.5 && A.retap.C.ackT >= 39.5 && sz.every(s => s.retap && s.retap.unacked && s.retap.ackT >= 6 && s.retap.atFix >= 6 && new RegExp(`in ${Math.max(1, Math.round(s.retap.atFix))} seconds?\\.`).test(s.loss.orvin || '')),   // pass 09 (2)
     dutyMedic: M.docPatient.injured && M.docPatient.selfSurgeon === 0 && M.docPatient.duty >= 2,   // pass 08 leftover

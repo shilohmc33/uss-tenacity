@@ -4,13 +4,23 @@ import { SYSTEMS, SEV_LABEL, SEV_RANK, OKAFOR_SHORT, GATE_SYSTEMS, NODEMAP } fro
 import { pick } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
 import { sendRepair, cancelRepairIf } from "./crew.js";
-import { PACE, PACE_RT, rr, nightActive } from "./pacing.js";
+import { PACE, PACE_RT, rr, nightActive, isPresent } from "./pacing.js";
 import { activeJob } from "./oddjobs.js";
 import { nightFixMult } from "./crewlife.js";
 // phase 6: systems a seriously injured crewmate depends on (G.prog.med; read directly to avoid an import cycle with injuries.js)
+// pass 13 HOLD 2: every system an injured crewmate's clock or surgery depends on (warning or surgery, seen or not, present or not):
+// Miracle Worker never fixes these - the Lt does (memo "the Lt fixes it"); away and stay are treated alike.
+export const medDepends = () => { const m = G.prog && G.prog.med; return m && m.inj ? m.inj.filter(x => (x.state === "warning" || x.state === "surgery") && x.sys).map(x => x.sys) : []; };
 const medLinked = () => { const m = G.prog && G.prog.med; return m && m.inj ? m.inj.filter(x => x.state === "warning" && x.sys).map(x => x.sys) : []; };
 // pass 06 (c): offline the night crew ALWAYS takes the linked system too (crewStabilise 'always'); nothing is held back for the Lt
 const medHeldOffline = () => (PROG.deaths.crewStabilise >= 1 ? [] : medLinked());
+// pass 11 HOLD 3: away must never beat staying. A patient the player has seen live (seenT > 0) has their clock frozen
+// while the player is away / idle / hidden; the repair of their system is frozen with it (no night-crew fix, no
+// progress), so it resumes on return with exactly the odds the player left with.
+// pass 12 HOLD 2: ... and it stays frozen after the player returns until the clock really runs again: a patient back from away
+// waits for a re-ack (inj.reack, ~1 s of input) with the clock held, so the Lt's walk / repair and every crew fix wait too.
+export const medFrozen = () => { const m = G.prog && G.prog.med, pres = isPresent(); if (!m || !m.inj) return [];
+  return m.inj.filter(x => x.state === "warning" && x.sys && x.seenT > 0 && (!pres || x.away || x.paused || (x.reack && !x.ack))).map(x => x.sys); };   // away / paused: the first tick back, before tickMed clears them
 
 export function rollSeverity(src) {
   const r = Math.random();
@@ -98,7 +108,7 @@ export function syncFaultEffects() {
 export function nightHandover() {
   const S = G.ship, L = G.lt, rank = { low: 0, med: 1, crit: 2 };
   let fixes = 0;
-  const held = medHeldOffline();
+  const held = [...medHeldOffline(), ...medFrozen()];
   const open = () => Object.entries(S.faults).filter(([k]) => !(L.mode === "repair" && L.repairSys === k) && !held.includes(k));
   for (let guard = 0; guard < 12 && Object.keys(S.faults).length > PACE.nightFaultCap; guard++) {
     const list = open().sort((a, b) => rank[a[1].sev] - rank[b[1].sev] || b[1].t - a[1].t);
@@ -119,13 +129,14 @@ export function tickNightCrew(dt) {
   const S = G.ship, N = G.night, L = G.lt;
   if (!nightActive()) { N.sys = null; N.t = 0; return; }
   if (N.sys && !S.faults[N.sys]) { N.sys = null; N.t = 0; }
+  if (N.sys && medFrozen().includes(N.sys)) { N.sys = null; N.t = 0; }   // pass 11 HOLD 3: hand it back, no progress kept
   if (!N.sys) {
     // triage: anything bleeding hull/power first (impairing coolant / warp core / EPS), then quick LOW fixes,
     // then stabilising CRITICALs, then the remaining MEDIUMs; oldest first within a tier
     const tier = ([k, f]) => (f.sev !== "low" && (k === "coolant" || k === "warpcore" || k === "eps")) ? 0 : f.sev === "low" ? 1 : f.sev === "crit" ? 2 : 3;
     // phase 6: while the player is live but idle, a fault that a seriously injured crewmate's life hangs on is left for
     // the Lt (memo: 'if the Lt fixes the relevant system in time, they live'). Offline the night crew still takes it.
-    const held = PACE_RT.offline ? medHeldOffline() : medLinked();
+    const held = [...(PACE_RT.offline ? medHeldOffline() : medLinked()), ...medFrozen()];
     const order = Object.entries(S.faults).filter(([k]) => !(L.mode === "repair" && L.repairSys === k) && !held.includes(k))
       .sort((a, b) => tier(a) - tier(b) || b[1].t - a[1].t);
     if (!order.length) return;

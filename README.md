@@ -23,10 +23,14 @@ Static ES-module build. There's no build step.
 - js/faults.js: severity, priority chain, duty list, capability gates.
 - js/voyage.js: T'Ren's autonomous voyage, arrivals, docks, and the single voyage view-model.
 - js/events.js: the 9 random events, timed deck tasks (10 s warning and expiry).
-- js/battle.js: the battle, officer AI, abilities, tow to DS9, and space FX state.
+- js/battle.js: the battle, officer AI, abilities, tow to DS9, and space FX state. It fights combatants from js/ships.js.
+- js/ships.js: the SHIP DEFINITIONS table (SHIPS), factions, story-context enemies (CTX_ENEMY), combatant helpers, save v14 migration /
+  hardening for battles, and the stubbed multi-ship hooks (target selection, per-combatant HUD rows, formation slots).
+- js/encounters.js: the encounter table (which enemy a battle brings): weights + battlecruiser gates from PACE.encounter, G.sp.enc.
 - js/sim.js: the fixed-order step and offline catch-up.
 - js/render/deck.js: the camera (follow, zoom, pan), plates, sprites, rings, and the turbolift overlay.
 - js/render/space.js: backdrop crossfade, ships, beams, torpedoes, shields, and explosions.
+- js/render/ships.js: drawShip (the SHIP_ART sheet when loaded, else a vector placeholder per class in faction colours) and name labels.
 - js/ui/hud.js: the DOM HUD. Landscape phones (orientation landscape, height <= 500px) get their own layout in css/style.css:
   stats column | deck | side column (alert, modes, stations, sheet buttons), one merged LT/SHIP line, sheets as a right drawer.
 - js/main.js: loop, input, modes, visibility, and boot.
@@ -110,19 +114,36 @@ Static ES-module build. There's no build step.
   gift-data.js; gifts.tastesFor). No effect on readiness or promotion. Save: G.prog.insight { xp, lvl, today, n, seen, beat, apol,
   l2, notes } (migrateProg11 pins pool 0 where a second like was already learned; hardenInsight re-derives lvl from xp).
   Proof: tools/plog3-shots.js, save-fuzz v10->v11 cases + invariants, prog-sim `insight` mode (shots/plog3-sim.txt).
-- js/romance.js (Personal Log phase 4 = memo phase D, romance; save v12, the memo's "v10"; chain v11 -> v12 romance -> v13
-  pass 07). Off by default, asked once as the memo says: prog.romance.opt null = off, and the "Allow romantic storylines?" card
-  sits at the top of the Personal Log until answered (no boot-time popup); toggle any time. Any gender; everyone except T'Ren and Okafor (PROG.romance.excluded). The crewmate
-  signals first: at opinion +50 after 3 shared moments (chat / dinner / pleased gift, one a day), 30% a day, 5-day gap; decline costs
-  nothing (never asked again by that crewmate unless the player reopens). Per-crew FRIENDS ONLY toggle. Dates (dinner 40 rations,
-  holosuite 30, Promenade free at DS9; every 2 days) end in a PG fade to black; Courting after 2 dates, Together after 5 dates and
-  5 days. Disclosure (memo): senior partner -> to the captain at Together; Lt Cmdr over a non-senior partner -> outrank disclosure.
-  Partner below +20 ends it; END IT GENTLY costs -3. Transfer -> letter thread (alumni page, reply warm/light/end, +1 alumni opinion,
-  no Fleet Rep). Partners are not auto-protected (excluded from the auto top-2 favourites; normal safeguards only); their death gives a
-  heavier memorial + personal log entry. Anti-farm: romanceCap() caps the partner's OPINION at +50 (0 for readiness under authority)
-  before the gift discount (progression.js socialCredit) and in transfer Fleet Rep, so a partner never counts more than a friend
-  at +50. Tuning in PROG.romance. Proof: tools/plog4-shots.js, save-fuzz v11->v12 cases +
-  invariants, prog-sim `romance` mode (shots/plog4-sim.txt, anti-farm and safeguard assertions).
+- js/romance.js (Personal Log phase 4 = memo phase D, romance; FINISHED after pass 09). Shiloh's rules: opt-in, the crewmate asks
+  first, "I'd rather stay friends" costs nothing, any gender, everyone except T'Ren and Okafor (PROG.romance.excluded), per-crew
+  Friends only, PG with a fade to black, partners NOT protected from deaths. Tuning: PROG.romance.
+  - Opt-in: G.prog.romance.opt null = OFF. The one-time "Allow romantic storylines?" card sits at the top of the Personal Log until
+    answered (no boot-time popup); after that a row toggles it any time. Turning it off ends an active romance gently.
+  - Signal: at opinion +50 after 3 shared moments (chat / dinner / pleased gift, one a day), 30% per qualifying chat, 5 ship's days
+    between signals, never while the crewmate is injured, never in the quiet period after a death (bus.js cheer gate), never for 14
+    days after losing a partner or (for that crewmate) after an ending. Decline: no opinion change, never asked again by that crewmate
+    unless the player reopens it from their page.
+  - Stages: Interested -> Courting after 2 evenings -> Together after 5 evenings and 5 ship's days of courting. Evenings every 2 ship's
+    days: dinner in quarters 40 rations, holosuite 30, Promenade free (both docked at DS9); +2 opinion each; each ends in a PG fade.
+    A new partner can't be randomly transferred for 14 ship's days. The partner ends it below +20; END IT GENTLY costs -3.
+  - Disclosure (memo "chain of command"): a senior-officer partner -> a note to the captain at Together; as Lt Cmdr over a non-senior
+    partner -> the outrank disclosure (Okafor writes their evaluations, their opinion counts 0 for readiness).
+  - Anti-farm: progression.js romanceCap() caps the partner's OPINION at +50 before the gift discount (socialCredit) and in the Fleet
+    Rep banked on a transfer, and 0 under station authority, so a partner never counts more than a friend at +50.
+  - Transfer or medical evacuation -> a letter thread (alumni page: write back warmly / keep it light / let it end; 2 unanswered letters
+    end it warmly; +1 alumni opinion up to +50, never Fleet Rep).
+  - Partner deaths go through the normal injury rules only: not an auto-favourite (the player may pin them, which turns a grave case into
+    an evacuation -> letters), the pass 06 present-only rule, the pass 07-09 surgery roll and first-ack fast fix, gap / caps / gentle.
+    A death gives a heavier memorial ("your partner" in In Memoriam, a supplemental log entry, one journal line instead of two) and 14
+    days of grief with no romance prompts.
+  - With pass 07-09: the signal, the yes (and its journal line) and an evening in the quiet period go through the bus.js cheer gate
+    (sober variants; tools/cheer-scan.js knows the romance lines); dates, letters, journal lines and the UI use the crewmate's pronouns.
+  - Save: v12 = G.prog.romance (memo "v10"; migrateProg12 adds a fresh, OFF state), v13 = pass 07 present time (migrateProg13);
+    chain v11 -> v12 -> v13, no renumbering. hardenRomance sanitizes every load (exactly one aboard partner at an active stage, known
+    ids only, excluded crew dropped, letters capped at 24, no signal unless opted in). save-fuzz covers the v11 -> v12 -> v13 cases.
+  - Proof: tools/plog4-shots.js (shots/plog4-*.png at 390x844, 844x390, 1280x800 + plog4-report.json: opt-in, signal, choice,
+    friends only, a date with the fade, disclosure, letters, the partner memorial from a real present-only surgery death, the quiet
+    gate and pronoun checks); prog-sim `romance` mode (shots/plog4-sim.txt: stages, anti-farm audit, death safeguards).
 - js/anim.js + js/art-hooks.js (animation pass): walk frames advance by distance with a step length per character and
   direction (anim.js STEP: side 44 / Lt 45, up-down 30, T'Ren up 26), so speed bonuses raise cadence; seeded per-crew action
   timelines (ACTION_TIMING) instead of lockstep; facing from a look-ahead with hysteresis; give-way and step-aside (AVOID);
@@ -155,3 +176,120 @@ Static ES-module build. There's no build step.
   (PROG.autoOffline), a loosened performance score, and a readiness hint naming the weakest component. Proof: tools/pt04-shots.js -> shots/pt04-*.png.
 - 120-day sim (tools/prog-sim.js, 4 runs, after 6060ad1): shots/pt04-sim.txt. Regular player: active 14-16 XP/min, auto ~5.4, offline 1.0; L15 day 7, L27 day 30;
   Lt day 4 [3-7] by readiness, Lt Cmdr day 21 [16-23] (earlier runs 16), Cmdr day 43; ~1.24 crew events/week after week 1; Fleet Rep 30 at day 30.
+
+## Tester pass 09 fixes (2026-10-18, HOLD batch; proof tools/pt09-metrics.js -> shots/pt09-{before,after}-*.png + metrics json, shots/pt09-seeds-summary.txt)
+- (1) A lying figure never overhangs its bed: deck.js lieFit(bedLen) scales the figure, shadow and LIE_ART sprite to the bed (bunk 96,
+  shared-room rack 120; biobed and larger racks keep 138); breathing widens only. Overhangs 2/6 -> 0/6.
+- (2) Fast-fix exploit: the fast-fix timer starts on the FIRST ack only (inj.acked); a re-tap never restarts it and it keeps counting
+  while away (only the patient's clock pauses). Fix 40 s after the first ack: stay 0.1714 / leave + re-tap 0.120 -> all 0.1717.
+  Sanitize adds acked (no version bump).
+- (3) Crew step aside only for a walker about to reach them (path within 24 px in the next 60 px), at most once per 5 s unless closer
+  than 12 px; face once and hold 1.2 s; spot picks skip where someone stands or is headed (kills the hop-swivel loop). 5-seed means
+  bridge/engineering/lounge: facing flips/s 0.49/0.83/0.39 -> 0.29/0.40/0.13, rapid flips -> 0, asides/min 10.1/16.6/9.1 -> 8.0/12.1/3.1.
+- (4) T'Ren never walks through the Lt (re-paths >= 20 px clear or waits); nobody shares a standing spot; ONE quiet-period gate in
+  bus.js (cheerful / cheer / cheerLog / cheerToast, fx drops floaters + milestones) with tools/cheer-scan.js; 7 leaks -> 0.
+- (5) Head height: per-sheet / action / direction draw scale (data.js DIR_SCALE) keeps the Lt's crown at front-walk height; head jump on
+  a turn 10.6 -> 2.1 px; STEP.lt.side 45 -> 48.
+- Also: Fleet Rep increments clamp to 100000 (save-fuzz "everything maxed"). Death sim v6: shots/prog6-sim-v6.txt (unchanged within noise).
+
+## Tester pass 10 fixes (2026-10-18; proof tools/pt10-metrics.js -> shots/pt10-{before,after}-*, pt07 asserts, death sim shots/prog6-sim-v7.txt)
+- (1) Return floor: back from away with the system still down, the clock is at least min(clock at leave, 30 s) (injuries.js
+  leftAtLeave), never a flat 30 s, so nobody comes back to more time than they left with. pt07 returnNeverMore: 5 s -> 5 s (was 30),
+  29 -> 29, 100 -> 100; re-tap still needed.
+- (2) Quiet period: level-up / promotion toasts and reputation praise toasts are sober through cheerToast; levelUp + promotion fx
+  (gold burst, big floater, tile flash) are in bus.js CHEER_FX. cheer-scan checks them; pt07 hushGold: 4 cheerful toasts -> 0.
+- (3) A crewmate who stepped aside moves off within AVOID.asideOverlapS (0.4 s) when someone stops on it, and doesn't yield to the
+  person it is walking out of (escapeT). Longest Lt-on-aside overlap 5.3-6.0 s -> 0.42 s.
+- (4) T'Ren blocked by the Lt fidgets (a word to him, a look along her route) and after 4.5 s with no way round goes somewhere else.
+  Lt on her chair spot: frozen 17.9 s -> longest still pose 1.3 s.
+- (5) Quarters bed.lieLen = the drawn rack length (154 / 192 / 192 / 173): the Lt sleeps at 138 on every rack (ltjg was 120).
+- (6) Fleet Rep logs show the real change (or none at the 100000 cap), never '+50' that didn't land.
+
+## Battle groundwork (2026-10-18; proof tools/battle-sim.js -> shots/battle-sim-{before,after}-{full,worn,hard}.json + shots/battle-sim-v1.txt, tools/battle-shots2.js -> shots/battle-*.png, tools/ship-hook-check.js)
+- Structure. js/ships.js `SHIPS[id] = { name, short, a, cls, faction, side, hull, shields, speed, sprite, aspect, size, weapons: [...],
+  parting, salvage, rep, evade, death, hp: { fire, torp, hit, miss, boom } }`. Ally guns: `{ id, name, kind, dmg, cd,
+  cdImpaired, power, ammo, col }`; enemy guns: `{ id, name, kind, dmg, every, first, col, hits }`. `FACTIONS[k]` = hull / shade / trim /
+  glow / label colours. A battle (`G.sp.battle`, saved) is `{ ctx, enterT, dying, cd, startedAt, inflight, injN, allies: [], enemies: [], target }`;
+  a combatant is `{ id, ship, side, slot, hull, max, volleyT, lastVolleyAt, volleyGap }` (the Tenacity is `{ id: "tenacity", ref: "ship" }`:
+  her hull / shields / power stay on G.ship). Still ONE-ON-ONE: the officers fight `foe(B)` = `enemies[target]`.
+  Every ship defines `shields`: allies a max %, enemies 0 (no separate shield bar; hits land on the hull % exactly as the old enemy's did).
+- Ships. Allies: USS Tenacity (Miranda class), SS Kerala (convoy freighter), IKS Ch'Tang (Klingon Bird-of-Prey) — the freighter and the
+  Bird-of-Prey are defined and drawable but never join a fight yet. Enemies: Jem'Hadar fighter, Cardassian Galor, Jem'Hadar battlecruiser.
+- Balance. The Galor carries the old enemy's numbers exactly (hull 100, 10-18 every 3.0-3.8 s, first volley 2.0 s, parting 8-14, salvage 3,
+  speed 1): same dice, same results (battle-sim: identical to the pre-groundwork build in all three start states). The fighter is fast and
+  fragile (hull 60, 7-12 every 2.1-2.7 s, first 1.3 s, 15% of the Tenacity's shots miss, jinks x1.24, salvage 2). The battlecruiser is tough
+  and rare (hull 170, 12-20 every 3.4-4.2 s, first 2.4 s, jinks x0.88, salvage 5 + reputation 1; pass 13: her polarons PIERCE 0.5 -
+  half of every hit the shields absorb bleeds through to the hull, hull only, no fault / injury roll; weapons without `pierce` are untouched); which enemy comes up is the encounter
+  table's job (below; it replaced the groundwork's per-ship `mix: { w, gate }` of fighter 40 / Galor 50 / battlecruiser 10 from Lt + ship's day 21). The story fixes two contexts: the defector trap is a Galor, the shadow a fighter; debug drills fight
+  the Galor unless asked (`startBattle("debug", { enemy })`, debug menu "Battle fighter / Galor / cruiser").
+- Placeholders. render/ships.js draws each class as a clean vector silhouette in its faction colours (Starfleet grey-blue, civilian tan,
+  Klingon green-grey with red trim, Dominion violet, Cardassian khaki), facing right; enemies are mirrored. Each placeholder gets a soft
+  rim glow in its faction colour (one offscreen draw + shadow) so it reads against the DS9 / planet backdrops on a phone. Name + class labels under each ship (above it
+  when the battle HUD is in the way). Allies left / bottom, enemies right / top. The old plates (assets/ship-tenacity.webp, ship-jemhadar.webp)
+  are no longer loaded; the files stay on disk.
+- Stubs, unused: `selectTarget(B, id)` / `targetOf(B)`, `combatantRows(B, ship)` (rendered into the hidden `#combatantRows` list in the
+  battle HUD), `FORMATION` (3 slots a side, portrait and landscape tables) and `previewFormation(B, allies, enemies)` (tests only:
+  shots/battle-roster-*.png).
+- Save v14: a v13 battle's single enemy (hull / max / volleyT on the battle) migrates to a Galor combatant at the same hull; every loaded
+  battle is hardened (`hardenBattle`: unknown ship -> Galor, hull / max / volley clock / cooldowns clamped, no enemies -> no battle). save-fuzz:
+  11 battle cases.
+
+## Encounter weighting (2026-10-18; proof tools/enc-shots.js -> shots/enc-*.png + shots/enc-report.json, prog-sim deaths -> shots/prog6-sim-v9.txt)
+- js/encounters.js `chooseEncounter(ctx, { prog, ship, enc, forced })`: a forced type (tests, debug) > a story context (CTX_ENEMY: defector
+  = Galor, shadow = fighter, debug drill = Galor) > the weighted table. Tunables in pacing.js `PACE.encounter`.
+- The table (relative odds among the open rows): Jem'Hadar fighter 50 · Cardassian Galor 40 · Jem'Hadar battlecruiser 10. With the
+  battlecruiser's gate closed the roll is fighter 56% / Galor 44%; open, 50 / 40 / 10%.
+- The battlecruiser's gate (all must hold, `bcBlock` says which fails): rank >= Lieutenant (rank 1) AND ship's day >= 21 (the battle
+  groundwork's gate, kept on the pass 12 manager's call; Lt is guaranteed by play day 7); never twice running and spaced (pass 13): at
+  least 2 other battles AND at least 2 play days since the last one (`gapBattles`, `gapPlayDays`); and (pass 13 manager call: she is an
+  EVENT) blocked only for a CRIPPLED ship: hull < 60% or an open CRIT fault (`minHull`, `blockSev`) -> the roll falls back to fighter /
+  Galor and counts as `held`. Low power, an empty magazine or a med fault no longer hold her back.
+- `G.sp.enc = { last, since, lastBcPD, n: { type: count }, held }` (saved; additive to the v14 shape; `hardenEnc` clamps junk at load).
+  Pass 13: the memory survives migration - a valid `enc` rides through every migration step untouched, and a save without one (pre-encounter
+  builds, or a junk value) is rebuilt by `seedEnc` from its saved battle and the ship log's red-alert openers (a battlecruiser found there
+  counts as fought on the load's play day, so the spacing holds). save-fuzz: 12 cases. Debug drills are not counted.
+- Pass 13 (manager call: the battlecruiser is an EVENT). Tuned from a gated start (battle-sim `START=gated`: a mix of starts that pass the
+  gate - 60% well kept: hull 85-100, shields / power 60-100, 2-8 torpedoes, a low / med fault 25% / 10%; 40% mid-voyage: hull 60-85,
+  shields / power 30-80, 0-6 torpedoes, cooldowns x1.5, low / med 50% / 35%): she wins about 1 fight in 8 (Tenacity win 85.0% passive Lt /
+  87.3% active Lt; T'Ren disengages 12-13%, tows 0.5-1.8%) and a WON fight still costs ~22% hull (p90 36%); injuries 1.6-2.4% a fight
+  (shields hold longer, and the bleed rolls none). Before (hull 150, no pierce): 90.1 / 93.0% wins and won fights cost ~0% hull.
+  Sensor warning first: Hale's "capital-class contact" log line + a "⚠ SENSORS - capital-class contact" toast, the red-alert card
+  ~1.2 s later (`redAlertCard({ delay })`). Card copy: "She outguns us, and her polarons bleed through shields: expect hull damage, maybe
+  casualties. / No outrunning her. Keep shields and weapons up, tubes loaded, the deck patched." No disengage option (T'Ren's automatic
+  break-off below 25% hull is unchanged). A battlecruiser fought during offline catch-up (`catchUp().bcFights`: outcome, hull after, hull
+  lost) is the return report's HEADLINE, first thing in `#reportBody` (`.bcHead`). Proof: tools/pt13-shots.js -> shots/pt13-*.png.
+- The warning: a battlecruiser opens with a red-alert CARD (bus.js `redAlertCard` -> hud.js `#bcCard`: "RED ALERT · CAPITAL SHIP",
+  the name, two lines of what it means; below the RED ALERT banner, tap to dismiss, gone after 7 s) instead of the plain toast, plus a
+  Diallo log line. Not behind the quiet-period gate (bus.js cheerful() holds back light / cheerful lines; a battle warning is a danger
+  alert and must never be hushed); offline catch-up (bus quiet) skips it like every toast, the log keeps it. Fighters and Galors keep the
+  "RED ALERT — <name>" toast and their fights are untouched.
+
+## Ship sprites (art hook; the artist's copy is notes/ship-sprite-spec.md)
+- Hook: `SHIP_ART[sprite] = { img, len?, pivot?, rows?, engine? }` in js/data.js, keyed by `SHIPS[id].sprite` (tenacity, freighter,
+  klingon_bop, jh_fighter, galor, jh_battlecruiser). `img` is an asset key: assets/<img>.webp, preloaded with every plate. `img: null` or a
+  missing file = the vector placeholder. Proof: tools/ship-hook-check.js (stand-in sheets, no files added).
+- Sheet (`SHIP_SHEET`): cells 512 x 256 px; one row per state, frames left to right; the ship FACES RIGHT in every cell (the game mirrors
+  enemies). Pivot (256, 128) = the ship's visual centre; the ship's nose-to-tail length is `len` px (default 448), which the game scales to the
+  class's on-screen length (Miranda = 1; Galor 0.68, fighter 0.44, battlecruiser 0.9, freighter 0.9, Bird-of-Prey 0.6). Keep the hull inside
+  len x len/aspect around the pivot (aspects: Miranda 3.5, freighter 3.2, BoP 2.0, fighter 2.1, Galor 2.6, battlecruiser 2.3) so labels and
+  beams line up; glow and debris may spill into the rest of the cell.
+- Rows, top to bottom: 0 idle (4 frames, 6 fps, loop) · 1 firing (4, 12 fps, once) · 2 damaged (4, 6 fps, loop; replaces idle below 35% hull)
+  · 3 shieldsHit (4, 14 fps, once) · 4 explode (8, 10 fps, once; holds the last frame while the game fades the ship over 1.3 s) · 5 engine
+  (4, 8 fps, loop; OPTIONAL glow-only overlay drawn additively on top of every state). A sheet may stop after any row: missing rows fall back to
+  idle, and a sheet without row 5 just has no overlay. Per-ship overrides: `rows: { firing: { frames: 6 } }`, `engine: false`.
+- Beams, torpedoes, shield bubbles, floaters and explosions stay game-drawn; their anchor points are `SHIPS[id].hp` (fractions of the ship's
+  box, facing right), so paint muzzles near hp.fire / hp.torp.
+
+
+## Pass 12 HOLD fixes (2026-10-18; proof tools/romance-scan.js, tools/pt12-awaystay.js -> shots/pt12-awaystay-{before,after}[-near].json)
+- HOLD 1: romance lines in the SHIP log carry `tag: "rom"` (bus.js `log(msg, cls, tag)`, `cheerLog(..., tag)`); while romance is off
+  (`opt !== true`) hud.js skips them (romance.js `romLogHidden`; lines from older saves are recognised by their wording) and the shift
+  report's highlights drop them; toggling the setting re-renders the log, so turning romance back on shows the history again. The
+  opt-out confirmation and the single neutral "lost touch" line stay. The partner memorial lines in injuries.js are not tagged (they
+  are a death, not a romance scene). romance-scan scans the rendered ship log (whole history) and an off-after-a-full-history case.
+- HOLD 2: faults.js `medFrozen()` keeps a seen patient's system frozen (the Lt's walk / repair, night crew, handover, Miracle Worker) not
+  only while away but on the first tick back (`away` / `paused`) and through the re-ack hold (`inj.reack` until `firstAck`), and the
+  re-ack tick runs the clock, so the Lt never moves in a tick the clock didn't.
+- Minors: endIt's swallowed line restored (stale disclosure cleared, `n.ended++`); the "no longer auto-protected" notice only for a
+  former favourite; four sober quiet-period ship-log lines, never the same twice running; a journal `{X}` that opens a sentence is
+  capitalised; the battlecruiser's class line is "Dominion capital ship".

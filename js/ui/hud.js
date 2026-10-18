@@ -18,6 +18,8 @@ import * as RM from "../romance.js";
 import { GIFT, GIFT_ITEMS } from "../gift-data.js";
 import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering, ltStatus } from "../crew.js";
 import { BR } from "../battle.js";
+import { foe, shipOf, hullPct, combatantRows, FACTIONS } from "../ships.js";
+let hudRowsKey = "";
 import { ltScreenFrac } from "../render/deck.js";
 
 const $ = s => document.querySelector(s);
@@ -59,6 +61,10 @@ export function buildHud() {
   $("#crewBar").innerHTML = OFFICERS.map(o => `<div class="crew" id="crew-${o.id}"><img src="assets/${o.img}.webp" alt="${o.who}"><div><div class="n">${o.who}</div><div class="r">${o.role}</div><div class="a">${o.ability} — <span class="r">${o.desc}</span></div><div class="s" id="cs-${o.id}"></div></div></div>`).join("");
   on("log", addLogLine);
   on("toast", showToast);
+  // encounter weighting: the battlecruiser's red-alert card (non-modal; tap or wait ~7 s)
+  $("#toasts").insertAdjacentHTML("afterend", `<div id="bcCard" hidden role="alert"><div class="k"></div><div class="t"></div><div class="c"></div><div class="l"></div><div class="tap">TAP TO DISMISS</div></div>`);
+  $("#bcCard").addEventListener("click", hideAlertCard);
+  on("alert", showAlertCard);
   on("news", renderNews);
   renderLog(); renderNews();
   const row = $("#chipsPlay"); row.addEventListener("scroll", chipHint, { passive: true }); window.addEventListener("resize", chipHint);
@@ -78,13 +84,28 @@ function chipHint() {
   const r = $("#chipsPlay");   // horizontal row (portrait) or vertical column (landscape phone)
   r.parentElement.classList.toggle("has-more", r.scrollWidth - r.clientWidth - r.scrollLeft > 6 || r.scrollHeight - r.clientHeight - r.scrollTop > 6);
 }
+// pass 12 HOLD 1: romance lines (RM.romLogHidden: tagged, or legacy wording) never show in the ship log while romance is off
 export function renderLog() { const ol = $("#log"); ol.innerHTML = ""; for (const e of G.log.slice(-120)) addLogLine(e); }
 function addLogLine(e) {
+  if (RM.romLogHidden(e)) return;
   const ol = $("#log"), li = document.createElement("li");
   li.className = e.cls || ""; li.innerHTML = `<span class="sd">${e.sd}</span>`; li.appendChild(document.createTextNode(e.msg));
   ol.prepend(li);
   while (ol.children.length > 150) ol.lastChild.remove();
 }
+let alertTimer = 0;
+export function showAlertCard(c) {
+  const el = $("#bcCard"); if (!el) return;
+  // pass 13: c.delay (ms) lets the "capital-class contact" sensor toast read first; the card follows (a newer card replaces a pending one)
+  clearTimeout(alertTimer); if (c.delay > 0) { alertTimer = setTimeout(() => showAlertCard({ ...c, delay: 0 }), c.delay); return; }
+  el.querySelector(".k").textContent = "⚠ " + (c.kicker || "RED ALERT");
+  el.querySelector(".t").textContent = c.title || "";
+  el.querySelector(".c").textContent = c.cls || "";
+  el.querySelector(".l").innerHTML = (c.lines || []).map(x => `<p>${x.replace(/[<>&]/g, "")}</p>`).join("");
+  el.hidden = false; el.classList.remove("in"); void el.offsetWidth; el.classList.add("in");
+  clearTimeout(alertTimer); alertTimer = setTimeout(hideAlertCard, 7000);
+}
+function hideAlertCard() { const el = $("#bcCard"); if (el) el.hidden = true; clearTimeout(alertTimer); }
 export function showToast(msg, kind = "") {
   const box = $("#toasts"), d = document.createElement("div");
   d.className = "toast " + kind; d.textContent = msg; box.appendChild(d);
@@ -178,7 +199,10 @@ export function updateHud() {
   const B = SP.battle;
   $("#redBanner").hidden = !B || document.body.classList.contains("view-space");
   $("#battleHud").hidden = !B || !document.body.classList.contains("view-space");
-  if (B) { const p = Math.max(0, Math.round(B.hull)); $("#enemyPct").textContent = p + "%"; $("#enemyBar").style.width = p + "%"; $("#bridgeOrders").textContent = `T'Ren: ${BR.tren} · Hale: phasers ${B.cd.phaser > 0 ? "cycling" : "ready"}, torpedoes ${G.gates.loader ? "OFFLINE" : S.torps}`; }
+  if (B) { const E = foe(B), d = shipOf(E), p = hullPct(E); $("#enemyName").textContent = d.name.toUpperCase(); $("#enemyPct").textContent = p + "%"; $("#enemyBar").style.width = p + "%"; $("#enemyBar").style.background = (FACTIONS[d.faction] || {}).trim || "";
+    // battle groundwork: the per-combatant HUD rows (stub): rendered into the hidden #combatantRows list, unused by the one-on-one HUD
+    const rows = combatantRows(B, S), rk = rows.map(r => r.id + r.pct + (r.targeted ? "*" : "")).join("|");
+    if (rk !== hudRowsKey) { hudRowsKey = rk; $("#combatantRows").innerHTML = rows.map(r => `<li data-cid="${r.id}" data-side="${r.side}"${r.targeted ? ' class="target"' : ""}>${r.name} · ${r.pct}%</li>`).join(""); } $("#bridgeOrders").textContent = `T'Ren: ${BR.tren} · Hale: phasers ${B.cd.phaser > 0 ? "cycling" : "ready"}, torpedoes ${G.gates.loader ? "OFFLINE" : S.torps}`; }
   // crew cards
   const ab = G.ab;
   $("#crewState").textContent = B ? (B.dying ? "Target destroyed" : "Officers acting — red alert") : "Stand by — officers act on their own judgment";
@@ -235,8 +259,12 @@ export function showReport(r) {
   const d = (v, u = "") => (v >= 0 ? "+" : "") + Math.round(v) + u;
   const vv = voyageView(), SP = G.sp;
   const where = SP.battle ? "at red alert — the bridge has the fight" : SP.travel ? `at warp for ${DESTS[SP.travel.dest].name}` : SP.location ? `at ${DESTS[SP.location].name}` : "holding position in deep space";
-  const fights = r.battles === 0 ? "No contact with the Jem'Hadar." : `${r.battles} engagement${r.battles === 1 ? "" : "s"} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}.`;
-  $("#reportBody").innerHTML = `<p><b>Okafor's night-watch log.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
+  const nB = r.battles + (r.battleWasOn ? 1 : 0);   // pass 13: a fight already on when you left counts (the headline names it too)
+  const fights = nB === 0 ? "No contact with the Jem'Hadar." : `${nB} engagement${nB === 1 ? "" : "s"} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}.`;
+  // pass 13: a battlecruiser fought while away is the night's headline - first thing in the report
+  const BCO = { won: h => `beaten off — hull ${h}%`, towed: () => "she crippled us; the Tenacity was towed to Deep Space Nine", disengaged: h => `T'Ren broke off and ran — hull ${h}%`, ongoing: h => `still fighting her now — hull ${h}%` };
+  const bcHead = (r.bcFights || []).length ? `<div class="bcHead" role="alert"><b>⚠ While you were off watch: ${r.bcFights.length === 1 ? "a Jem'Hadar battlecruiser" : `${r.bcFights.length} Jem'Hadar battlecruisers`}</b> — ${r.bcFights.map(f => `${(BCO[f.out] || BCO.won)(f.hull)}${f.lost && f.out !== "towed" ? ` (−${f.lost}% in the fight)` : ""}`).join(" · ")}.</div>` : "";
+  $("#reportBody").innerHTML = `${bcHead}<p><b>Okafor's night-watch log.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
   <ul><li>Voyage: ${r.legs} leg${r.legs === 1 ? "" : "s"} completed · ${r.events} event${r.events === 1 ? "" : "s"}</li>
   <li>${fights}${r.avoided ? ` T'Ren steered around ${r.avoided} patrol${r.avoided === 1 ? "" : "s"}.` : ""}</li>
   <li>Night watch cleared <b>${r.crewFixes || 0}</b> fault${r.crewFixes === 1 ? "" : "s"}${r.repairs ? ` · your repairs: ${r.repairs}` : ""}${r.torpsBuilt ? ` · torpedoes replicated: ${r.torpsBuilt}` : ""}</li>
@@ -583,7 +611,7 @@ function bondSection(id, w, aboard) {
   if (!v.opt && !v.partner) return "";
   let h = `<div class="plsec">BOND</div>`;
   const st = v.partner ? RM.STAGE_LABEL[v.stage] : v.fo ? "Friends only" : v.stage === "ended" ? RM.STAGE_LABEL.ended : v.declined ? "Friends (you said you'd rather stay friends)" : "Friends";
-  h += `<div class="req"><div>${esc(st)}${v.partner && v.b ? `<small>${v.b.dates} evening${v.b.dates === 1 ? "" : "s"} together${v.b.disclosed ? ` · disclosure filed (${v.b.disclosed === "outrank" ? "Okafor writes the evaluations" : "the captain knows"})` : ""}</small>` : `<small>${v.fo ? "they'll never be asked about romance" : "friendship counts exactly as it always has"}</small>`}</div>
+  h += `<div class="req"><div>${esc(st)}${v.partner && v.b ? `<small>${v.b.dates} evening${v.b.dates === 1 ? "" : "s"} together${v.b.disclosed ? ` · disclosure filed (${v.b.disclosed === "outrank" ? "Okafor writes the evaluations" : "the captain knows"})` : ""}</small>` : `<small>${v.fo ? `${esc(w.short)} will never be asked about romance` : "friendship counts exactly as it always has"}</small>`}</div>
     <button class="fo${v.fo ? " on" : ""}" data-rm="fo" data-rm-id="${id}" data-rm-k="${v.fo ? 0 : 1}">${v.fo ? "☑" : "☐"} FRIENDS ONLY</button></div>`;
   if (v.signal) h += `<div class="req"><div>${esc(w.short)} would like a word<small>something personal</small></div><button data-rm="signal">💌 LISTEN</button></div>`;
   if (v.declined && !v.fo) h += `<div class="req"><div>Changed your mind?<small>${esc(w.short)} won't ask again unless you reopen it</small></div><button data-rm="reopen" data-rm-id="${id}">REOPEN</button></div>`;
@@ -594,6 +622,7 @@ function bondSection(id, w, aboard) {
   return h;
 }
 function lettersSection(id, w) {
+  if (!RM.enabled()) return "";   // pass 11 HOLD 1: no letters on show while romantic storylines are off
   const L = RM.lettersOf(id), ls = RM.letterState(); if (!L.length && !(ls && ls.id === id)) return "";
   const rows = L.slice().reverse().map(l => `<p class="pll ${l.from}"><small>Day ${l.d} · ${l.from === "them" ? esc(w.short) : "you"}</small>${esc(l.t)}</p>`).join("");
   const act = ls && ls.id === id && ls.waiting ? `<div class="mbtns lbtns"><button data-rm="letter" data-rm-k="warm">WRITE BACK, WARMLY</button><button data-rm="letter" data-rm-k="light">KEEP IT LIGHT</button><button class="alt2" data-rm="letter" data-rm-k="end">LET IT END WARMLY</button></div>` : ls && ls.id === id ? `<p class="plnote">Next letter in about ${Math.max(1, ls.next - G.prog.playDays)} day${ls.next - G.prog.playDays > 1 ? "s" : ""} of play.</p>` : "";
@@ -601,7 +630,7 @@ function lettersSection(id, w) {
 }
 function romAct(k, id, x) {
   const card = $("#plogPanel .card");
-  if (k === "opt") { RM.setOpt(x === "1"); renderPlog(); renderCareer(true); return; }
+  if (k === "opt") { RM.setOpt(x === "1"); renderPlog(); renderCareer(true); renderLog(); return; }
   if (k === "signal") { openRom({ mode: "signal" }); return; }
   if (k === "fo") { RM.setFriendsOnly(id, x === "1"); renderPlog(); return; }
   if (k === "reopen") { RM.reopen(id); renderPlog(); return; }
@@ -616,21 +645,21 @@ function renderRom() {
   const el = $("#romBody"), v = romView, P = $("#romPanel"); if (!v) { P.hidden = true; return; }
   if (v.mode === "signal") {
     const s = RM.pendingSignal(); if (!s && !v.res) { P.hidden = true; return; }
-    if (v.res) { el.innerHTML = `<div class="bres ${v.res.yes ? "good rom" : ""}">${v.res.yes ? "SOMETHING NEW" : "FRIENDS"}</div><p class="mline">${esc(v.res.line)}</p><button class="close" data-rom="close">BACK TO DUTY</button>`; P.hidden = false; return; }
+    if (v.res) { el.innerHTML = `<div class="bres ${v.res.yes ? "good rom" : ""}">${v.res.yes ? "SOMETHING NEW" : "FRIENDS"}</div><p class="mline">${esc(v.res.line)}</p>${v.res.note ? `<p class="cnote">${esc(v.res.note)}</p>` : ""}<button class="close" data-rom="close">BACK TO DUTY</button>`; P.hidden = false; return; }
     const o = G.prog.crew.occ[s.id];
     el.innerHTML = `<div class="bhd">${romFace(o)}<div><h3>${esc(o.short.toUpperCase())}</h3><small>off duty, a quiet corner</small></div></div><p class="mline">${esc(s.line)}</p>
       <div class="breps"><button class="brep yes" data-rom="yes">Yes. I'd like that.</button><button class="brep" data-rom="no">I'd rather stay friends.<small>Nothing changes between you, and ${esc(o.short)} won't ask again.</small></button></div><button class="close" data-rom="close">LATER</button>`;
   } else if (v.mode === "date") {
     const o = G.prog.crew.occ[v.id], r = v.r;
     el.innerHTML = `<div class="bhd">${romFace(o)}<div><h3>${esc(o.short.toUpperCase())}</h3><small>${{ dinner: "dinner in your quarters", promenade: "the Promenade, DS9", holosuite: "holosuite 3" }[r.k]}</small></div></div>
-      ${r.lines.map(t => `<p class="mline">${esc(t)}</p>`).join("")}<div class="fade"><p>${esc(r.fade)}</p></div>${r.up ? `<p class="cnote rup">${{ courting: "You're courting now.", together: "You're together now." }[r.up] || ""}</p>` : ""}<button class="close" data-rom="close">GOOD NIGHT</button>`;
+      ${r.lines.map(t => `<p class="mline">${esc(t)}</p>`).join("")}${r.fade ? `<div class="fade"><p>${esc(r.fade)}</p></div>` : ""}${r.up ? `<p class="cnote rup">${{ courting: "You're courting now.", together: "You're together now." }[r.up] || ""}</p>` : ""}<button class="close" data-rom="close">GOOD NIGHT</button>`;
   } else if (v.mode === "disc") {
     const d = RM.pendingDisc(); if (!d && !v.done) { P.hidden = true; return; }
     if (v.done) { el.innerHTML = `<div class="bres good">DISCLOSURE FILED</div><p class="mline">${esc(v.done)}</p><button class="close" data-rom="close">BACK TO DUTY</button>`; P.hidden = false; return; }
     const o = G.prog.crew.occ[d.id];
     el.innerHTML = `<div class="mhead"><b class="mx sh">⚖</b><div><h3>DISCLOSURE</h3><small>${d.kind === "outrank" ? "chain of command" : "to the captain"}</small></div></div>
       <p class="mline">${d.kind === "outrank" ? `As a Lieutenant Commander you now assign stations, and that includes ${esc(o.short)}'s. Starfleet asks for one thing: say so.` : `${esc(o.short)} is a senior officer outside your board chain. A short note to Captain T'Ren keeps everything above board.`}</p>
-      <p class="cnote">${d.kind === "outrank" ? `${esc(o.short)}'s evaluations go to Commander Okafor, and ${pr(o, "pos")} opinion of you stops counting toward your board readiness.` : `Nothing else changes: ${pr(o, "pos")} opinion still counts at most +${PROG.romance.friendCap}, like any friend's.`}</p>
+      <p class="cnote">${d.kind === "outrank" ? `${esc(o.short)}'s evaluations go to Commander Okafor, and ${pr(o, "pos")} opinion of you stops counting toward your board readiness. This is the normal path, not a penalty.</p><p class="cnote">Okafor: 'Most officers who make Lieutenant Commander file one of these sooner or later. It's paperwork, not a mark against you.'` : `Nothing else changes: ${pr(o, "pos")} opinion still counts at most +${PROG.romance.friendCap}, like any friend's.`}</p>
       <button class="close" data-rom="file">FILE THE DISCLOSURE</button>`;
   }
   P.hidden = false;
@@ -639,7 +668,7 @@ function romClick(e) {
   const b = e.target.closest("[data-rom]"); if (!b) return; const k = b.dataset.rom;
   if (k === "close") { $("#romPanel").hidden = true; romView = null; lastChips = ""; if (!$("#plogPanel").hidden) renderPlog(); return; }
   if (k === "yes" || k === "no") { const s = RM.pendingSignal(), o = s && G.prog.crew.occ[s.id], r = RM.answerSignal(k === "yes"); if (!r) return;
-    romView = { mode: "signal", res: { yes: r.yes, line: r.yes ? `${o.short} lets out a breath. 'Good. Then — soon?' (Personal Log ▸ ${o.short})` : `${o.short} nods. 'Then that's what we are. Nothing changes.' Nothing does.` } }; renderRom(); lastChips = ""; renderCareer(true); return; }
+    romView = { mode: "signal", res: { yes: r.yes, line: r.line, note: r.note } };   /* the line comes from romance.js, through the quiet-period gate */ renderRom(); lastChips = ""; renderCareer(true); return; }
   if (k === "file") { const d = RM.pendingDisc(), o = d && G.prog.crew.occ[d.id], r = RM.fileDisclosure(); if (!r) return; romView = { mode: "disc", done: r.kind === "outrank" ? `Okafor countersigns it without comment, then adds: 'Good. That's how it's done.' ${o.short}'s evaluations are hers now.` : `T'Ren reads it once. 'Noted, ${addr()}. Keep it off my bridge.'` }; renderRom(); renderCareer(true); }
 }
 const bar = (v, frozen) => `<div class="opbar${frozen ? " frozen" : ""}"><i class="${v >= 0 ? "pos" : "neg"}" style="width:${Math.abs(v) / 2}%"></i></div>`;
@@ -651,7 +680,7 @@ function renderPlog() {
     const rows = DEPT_ORDER.flatMap(d => list.filter(c => c.dept === d)).map(c => { const s = PL.standing(c.id);
       return `<button class="plrow" data-pl="${c.id}">${plogFace(c, c.color)}<span class="nm">${c.rankShort} ${esc(c.short)}<small>${c.role.split(" ·")[0]}</small></span><span class="pls">${s.label}<i class="tr t${s.trend.dir}">${s.trend.arrow}</i></span></button>`; }).join("");
     const alRows = alU.map(a => `<button class="plrow alum" data-pl="${a.id}">${plogFace(a, (SPECIES[a.species] || SPECIES.human).color)}<span class="nm">${alumRankShort(a)} ${esc(a.short)}<small>${POSTINGS[a.posting].name}</small></span><span class="pls">${opinionLabel(a.opinion)}${a.opinion >= PROG.fleet.contactMin ? ' <i class="ok">✓</i>' : ""}</span></button>`).join("");
-    const memRows = mem.map(m => `<button class="plrow lost" data-pl="${m.id}"><span class="badge" style="background:#3a4560">${m.partner ? "♥" : "✦"}</span><span class="nm">${esc(m.name)}<small>${m.role} · lost ship's day ${m.day}${m.partner ? " · your partner" : ""}</small></span><span class="pls"></span></button>`).join("");
+    const memRows = mem.map(m => `<button class="plrow lost" data-pl="${m.id}"><span class="badge" style="background:#3a4560">${m.partner && RM.enabled() ? "♥" : "✦"}</span><span class="nm">${esc(m.name)}<small>${m.role} · lost ship's day ${m.day}${m.partner ? (RM.enabled() ? " · your partner" : " · a close friend") : ""}</small></span><span class="pls"></span></button>`).join("");
     body.innerHTML = `<h3>PERSONAL LOG</h3><p class="cnote">Stardate ${G.ship.stardate.toFixed(1)}. My own notes on the people I serve with. Tap a name.</p>
       <button class="plrow lockerb" data-pl="locker"><span class="badge" style="background:#3a4f7a">🎁</span><span class="nm">GIFT LOCKER<small>${GF.lockerCount()}/${PROG.gifts.invMax} · ${GF.shopState().docked ? "the DS9 Promenade is open" : GF.shopState().homeworld ? "homeworld shops open" : "Promenade and homeworld gifts"}</small></span><span class="pls">›</span></button>
       ${romanceRows()}${insightRow()}
@@ -672,7 +701,7 @@ function renderPlog() {
     const ok = w.opinion >= PROG.fleet.contactMin;
     stand = `<div class="plsec">STANDING · FROZEN WHEN ${pr(w).toUpperCase()} LEFT</div><div class="plstand">${bar(w.opinion, true)}<span>${opinionLabel(w.opinion)}</span></div>
       <div class="plfacts"><div>Posting<b>${POSTINGS[w.posting].name}</b></div><div>Rank now<b>${alumRankShort(w)}</b></div><div>Favour contact<b class="${ok ? "ok" : ""}">${ok ? "✓ will help" : "not yet"}</b></div><div>Left<b>ship's day ${w.leftDay}</b></div></div>`;
-  } else if (w.where === "lost") stand = `<div class="plsec">IN MEMORIAM</div><p class="plnote">Lost on ship's day ${w.day} (SD ${w.sd})${w.plaque ? ". A plaque hangs by the lounge viewport." : "."}</p>${w.partner ? `<p class="plhw">Personal log, supplemental. ${esc(w.short)} and I were together. I don't have a regulation for this, and I don't want one. I'm keeping the letters, and the mug, and the habit of looking for ${pr(w, "obj")} in the mess.</p>` : ""}`;
+  } else if (w.where === "lost") stand = `<div class="plsec">IN MEMORIAM</div><p class="plnote">Lost on ship's day ${w.day} (SD ${w.sd})${w.plaque ? ". A plaque hangs by the lounge viewport." : "."}</p>${w.partner && RM.enabled() ? `<p class="plhw">Personal log, supplemental. ${esc(w.short)} and I were together. I don't have a regulation for this, and I don't want one. I'm keeping ${RM.lettersOf(id).length ? "the letters, and " : ""}the mug, and the habit of looking for ${pr(w, "obj")} in the mess.</p>` : ""}`;
   const hw = w.where === "alum" && PL.HANDWRITTEN[id] ? `<div class="plsec">PERSONAL LOG, SUPPLEMENTAL</div>${PL.HANDWRITTEN[id].map(t => `<p class="plhw">${esc(t)}</p>`).join("")}` : "";
   const mv = PL.moved(id);
   const moved = aboard || mv.length ? `<div class="plsec">WHAT MOVED IT</div>${mv.length ? `<ul class="plmv">${mv.map(m => `<li class="${m.dir > 0 ? "up" : m.dir < 0 ? "dn" : "eq"}"><i>${m.dir > 0 ? "▲" : m.dir < 0 ? "▼" : "•"}</i>${esc(m.text)}${m.n > 1 ? ` <small>×${m.n}</small>` : ""}</li>`).join("")}</ul>` : `<p class="plnote">Nothing yet. Fix ${pr(w, "pos")} systems, share a deck, stop to talk.</p>`}` : "";

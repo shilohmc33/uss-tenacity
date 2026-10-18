@@ -1,8 +1,9 @@
 // Core progression (phase 1 of 4): XP, levels, level effects, repair quality rolls, manual vs automated credit,
 // ship's day counter. ALL progression tuning lives in PROG below (one config). Phases 2-4 hang off the stubs at
 // the bottom (ranks / relationships / daily rolls / fleet rep / boards / specialisations).
+import { hardenBattle } from "./ships.js";
 import { G } from "./state.js";
-import { log, toast, fx, cheerful, cheer } from "./bus.js";
+import { log, toast, fx, cheerful, cheer, cheerToast } from "./bus.js";
 import { clamp } from "./util.js";
 import { PACE_RT, nightActive } from "./pacing.js";
 import { NODEMAP } from "./data.js";
@@ -216,10 +217,11 @@ export const PROG = {
   // everyone except T'Ren and Okafor, per-crew Friends only, the crewmate signals first, declining costs nothing. PG, fade to black.
   romance: {
     excluded: ["tren", "okafor"],            // the CO and the Lt's direct superior / board chair (Shiloh)
-    signalAt: 50, moments: 3,                // Trusted (+50) and 3 shared moments (chats max 1 a ship's day each, dinners, a well-received gift)
+    signalAt: 45, moments: 3,                // pass 11 PACING: 45 (was Trusted +50; casual players met it ~day 47) and 3 shared moments (chats max 1 a ship's day each, dinners, a well-received gift)
     signalChance: 0.3, signalGap: 5,         // per qualifying chat; at least 5 ship's days between signals (any crewmate)
     dateEvery: 2, dateOpinion: 2,            // one date per 2 ship's days; +2 raw (gainMult and the soft cap still apply)
     dateCost: { dinner: 40, holosuite: 30, promenade: 0 },   // rations (replicator dinner / holosuite time); the Promenade walk is free (docked at DS9)
+    journalEvery: 5,                         // pass 11 m1: evenings get a journal line on the 1st, on a stage change and every 5th
     courtAt: 2, togetherAt: 5, togetherDays: 5,   // Interested -> Courting after 2 dates; -> Together after 5 dates and 5 ship's days of courting
     // anti-farm: a partner's opinion counts at most at friendship level (+50) in readiness social credit and in the Fleet Rep banked
     // on a transfer; once the Lt outranks the partner as Lt Cmdr (station authority, memo "chain of command") it counts 0 for readiness
@@ -227,7 +229,7 @@ export const PROG = {
     endOpinion: -3, endBelow: 20,            // a gentle ending: -3 (normal nudge, daily cap); the partner ends it below +20
     protectDays: 14,                         // no random transfer for 14 ship's days after it starts (memo)
     letterEvery: 3, letterMiss: 2, letterGain: 1, letters: 24,   // long-distance thread after a transfer / evacuation: a letter every ~3 play days; 2 unanswered = it ends warmly
-    griefDays: 14, quietAfterEnd: 14,        // after a partner is lost: no romance prompts for 14 ship's days; after an ending, that crewmate waits 14 days
+    griefDays: 14, quietAfterEnd: 14,        // pass 11 m4: quietAfterEnd is global too (r.lastEnd): no new signal from anyone for 14 days after any ending        // after a partner is lost: no romance prompts for 14 ship's days; after an ending, that crewmate waits 14 days
   },
   deaths: {
     enabled: true,                           // retune v2 (Shiloh): ON by default; Gentle mode (CREW > Crew safety) is the opt-out. false = no injuries, no deaths, no safety UI
@@ -249,7 +251,7 @@ export const PROG = {
     serious: { battleCrit: 0.9, battle: 0.45, hazard: 0.85 },   // pass 07 tune (was 0.8 / 0.3 / 0.65);   // serious share (retune v2: 0.6 / 0.15 / 0.45 -> 0.8 / 0.3 / 0.65; phase 6 final was 0.45 / 0 / 0.30 -> 1.2 serious/month and no deaths in 120 days); only serious can end in a death, and battle deaths still need a CRITICAL fault open (memo)
     linkSystems: ["coolant", "eps"],         // a serious injury needs this system (or the fault the hit opened) stable
     window: 180,                             // pass 06: warning window = 180 s of PRESENT time (was 120 s of 'seen' time)
-    returnFloor: 30,                         // pass 08 (3): back from AWAY (locked / offline catch-up) with the system still down: at least 30 s on the clock (~2x the 12-16 s fix), once per injury; re-tap still needed
+    returnFloor: 30,                         // pass 08 (3) + pass 10 (1): back from AWAY with the system still down: the clock is at least min(clock at leave, 30 s), once per injury - never more than you left with; re-tap still needed
     presentIdle: 60,                         // pass 06: 'present' = app visible, not offline, and input within the last 60 s; the clock only runs then
     offlineMinSeen: 60,                      // (legacy, unused since pass 06: nothing about an injury ever runs while away)
     heal: { minor: [7200, 14400], serious: [21600, 36000], pulled: [36000, 57600] },
@@ -426,7 +428,7 @@ export function freshProg() {
 // Personal Log (js/plog.js): hist = { id: [{ w: why, d: total delta, day, n }] } ("what moved it"), journal = [{ id, n: name,
 // k: kind, d: ship's day, sd: stardate|null, v: variant, x: extra }], snap = [{ day, op: { id: opinion } }] (trend), chat = { id: last routine-entry day }, n = { kind: count }
 export function freshPlog() { return { hist: {}, journal: [], snap: [], chat: {}, n: {} }; }   // n: lifetime entries written, by kind (stats)
-const plogKinds = ["signal", "accepted", "declined", "date", "together", "disclosure", "parted", "letter", "lostpartner", "hint", "beat", "apology", "gift", "care", "arrival", "promotion", "demotion", "transfer", "death", "injured", "stable", "healed", "visit", "memorial", "chat", "dinner", "kit", "oddjob", "praise", "complaint", "note"];
+const plogKinds = ["signal", "accepted", "declined", "date", "together", "disclosure", "parted", "letter", "losttouch", "lostpartner", "hint", "beat", "apology", "gift", "care", "arrival", "promotion", "demotion", "transfer", "death", "injured", "stable", "healed", "visit", "memorial", "chat", "dinner", "kit", "oddjob", "praise", "complaint", "note"];
 export function hardenPlog(p) {
   const K = PROG.plog, f = freshPlog(), L = isObj(p.plog) ? p.plog : {};
   const str = (v, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
@@ -469,7 +471,7 @@ export function migrateProg11(prog) {
   if (isObj(p.know)) for (const [id, k] of Object.entries(p.know)) if (isObj(k) && num(k.like2, 0) > 0) p.insight.l2[id] = 0;
   return p;
 }
-export function freshRomance() { return { opt: null, partner: null, bond: {}, fo: {}, declined: {}, moments: {}, signal: null, disc: null, letters: [], thread: null, grief: null, lastSignal: -99, n: { signals: 0, accepted: 0, declined: 0, dates: 0, together: 0, ended: 0, letters: 0, replies: 0, lost: 0, disclosures: 0 } }; }
+export function freshRomance() { return { opt: null, partner: null, bond: {}, fo: {}, declined: {}, moments: {}, signal: null, disc: null, letters: [], thread: null, grief: null, lastSignal: -99, lastEnd: -99, n: { signals: 0, accepted: 0, declined: 0, dates: 0, together: 0, ended: 0, letters: 0, replies: 0, lost: 0, disclosures: 0 } }; }
 const STAGES = ["interested", "courting", "together", "ended", "letters", "lost"];
 export function hardenRomance(p) {
   const f = freshRomance(), R = isObj(p.romance) ? p.romance : {}, occ = (p.crew && p.crew.occ) || {}, out = f, K = PROG.romance;
@@ -491,8 +493,9 @@ export function hardenRomance(p) {
   if (Array.isArray(R.letters)) out.letters = R.letters.filter(l => isObj(l) && known(l.id) && typeof l.t === "string" && ["them", "you"].includes(l.from)).slice(-K.letters).map(l => ({ id: l.id, d: Math.floor(num(l.d, 0)), from: l.from, t: l.t.slice(0, 400) }));
   const th = R.thread; if (isObj(th) && typeof th.id === "string" && alum.some(a => a && a.id === th.id)) out.thread = { id: th.id, next: Math.floor(num(th.next, 0)), n: clamp(Math.floor(num(th.n, 0)), 0, 999), waiting: !!th.waiting, miss: clamp(Math.floor(num(th.miss, 0)), 0, K.letterMiss), ended: !!th.ended };
   const gr = R.grief; if (isObj(gr) && typeof gr.id === "string") out.grief = { id: gr.id, until: Math.floor(num(gr.until, 0)) };
-  out.lastSignal = Math.floor(num(R.lastSignal, -99));
-  if (out.opt !== true) { out.signal = null; }
+  out.lastSignal = Math.floor(num(R.lastSignal, -99)); out.lastEnd = Math.floor(num(R.lastEnd, -99));
+  // pass 11 m7: storylines not allowed (null / off / a corrupt value) = no partner, signal, disclosure or open letter thread
+  if (out.opt !== true) { out.signal = null; out.disc = null; if (out.partner) { out.bond[out.partner].stage = "ended"; out.partner = null; } if (out.thread) out.thread.ended = true; }
   p.romance = out;
 }
 // v12 -> v13 (pass 07): present-time play days. The first day after the update must count, so the present-time
@@ -604,8 +607,8 @@ function levelUp() {
   const p = P(), L = ++p.level;
   const r = Math.round((repairMult() - 1) * 100), w = Math.round((walkMult() - 1) * 100), ex = Math.round(qualityOdds(L, true).excellent * 100);
   log(`Level ${L} — ${LEVEL_LINES[(L - 2) % LEVEL_LINES.length]} (repairs +${r}%, walk +${w}%, excellent ${ex}% on your orders)`, "good");
-  toast(`LEVEL UP — Lieutenant reaches level ${L} · repairs +${r}% · excellent ${ex}%`, "good");
-  fx("levelUp", { level: L });
+  cheerToast(`LEVEL UP — Lieutenant reaches level ${L} · repairs +${r}% · excellent ${ex}%`, "good", `Level ${L} · repairs +${r}% · excellent ${ex}%`);   // pass 10 (2): sober in the quiet period
+  fx("levelUp", { level: L });   // gold burst + big floater + tile flash: dropped in the quiet period (bus.js CHEER_FX)
   hooks.levelUp.forEach(f => f(L));
 }
 
@@ -826,7 +829,7 @@ export function clampResources() {
   if (S.faults && S.faults.shields && S.shields > 50) S.shields = 50;   // a shield fault halves capacity
   S.elapsed = Math.max(0, num(S.elapsed, 0)); S.lockerT = Math.max(0, num(S.lockerT, 0));
   if (isObj(G.sp)) G.sp.rep = int(G.sp.rep, 0, SANE_MAX);
-  if (G.sp && G.sp.battle && isObj(G.sp.battle)) G.sp.battle.hull = num(G.sp.battle.hull, 0, 0, 100);
+  if (G.sp && G.sp.battle) hardenBattle(G.sp);   // battle groundwork: combatant arrays (js/ships.js)
   p.level = int(p.level, 1, 999, 1); p.xp = int(p.xp, 0, Math.max(0, xpToNext(p.level) - 1));
   p.rations = int(p.rations, 0, SANE_MAX); p.rationsLife = int(p.rationsLife, p.rations, 10 * SANE_MAX, p.rations);
   p.repLifetime = Math.max(0, Math.min(10 * SANE_MAX, num(p.repLifetime, 0))); p.repLost = Math.max(0, Math.min(p.repLifetime, num(p.repLost, 0)));
@@ -902,7 +905,7 @@ function hardenMed10(p) {
     const oc = p.crew && p.crew.occ && p.crew.occ[x.id];   // pt07 fuzz: names the scenes print always come from the crewmate
     if (typeof x.short !== "string") x.short = oc && typeof oc.short === "string" ? oc.short : "the patient";
     if (typeof x.name !== "string") x.name = oc ? fullName(oc) : x.short;
-    x.left = clamp(num(x.left, K.window), 0, K.window); x.ack = !!x.ack; x.pendT = Math.max(0, num(x.pendT, 0)); x.ackT = Math.max(0, num(x.ackT, 0)); x.acked = !!x.acked || x.ack || x.ackT > 0;   /* pass 09 (2): first-ack flag; older saves: acked if ever acked */ x.away = !!x.away; x.paused = !!x.paused; x.floored = !!x.floored;   // pass 08 (3): optional flags, default false (no version bump)
+    x.left = clamp(num(x.left, K.window), 0, K.window); x.ack = !!x.ack; x.pendT = Math.max(0, num(x.pendT, 0)); x.ackT = Math.max(0, num(x.ackT, 0)); x.acked = !!x.acked || x.ack || x.ackT > 0;   /* pass 09 (2): first-ack flag; older saves: acked if ever acked */ x.away = !!x.away; x.paused = !!x.paused; x.floored = !!x.floored; x.leftAtLeave = Number.isFinite(x.leftAtLeave) ? clamp(x.leftAtLeave, 0, K.window) : null;   /* pass 10 (1): clock at leave, optional */   // pass 08 (3): optional flags, default false (no version bump)
     if (x.state === "surgery") { x.surg = clamp(num(x.surg, K.surgery.scene), 0, K.surgery.scene); x.sx = clamp(num(x.sx, K.surgery.chance), 0, K.surgery.max); x.assist = x.assist === true; x.held = x.held === true; x.fast = x.fast === true; }
     if (x.state !== "warning" && x.state !== "surgery" && x.healAt == null) x.healAt = 0;
   }
@@ -1088,7 +1091,7 @@ export function promote(reason = "readiness") {
   p.rankSince = { rep: p.repLifetime, lost: p.repLost, day: p.day, playDays: p.playDays }; p.service = 0; p.readyPeak = 0; p.readyBonus = 0;
   const why = reason === "callup" ? "The board called early." : reason === "guaranteed" ? "Time in grade served." : "Your fitness report is complete.";
   log(`T'Ren, at the chair, without preamble: 'By order of Starfleet Command, you are promoted to ${n.name}. ${why} Carry on, ${n.addr}.'${cheer(" The crew applauds — Hale loudest.", "")}`, "good");
-  toast(`PROMOTED — ${n.name}`, "good");
+  cheerToast(`PROMOTED — ${n.name}`, "good", `Promoted to ${n.name}`);   // pass 10 (2): sober in the quiet period (the promotion itself still happens)
   fx("promotion", { name: n.name, short: n.short });
   hooks.promoted.forEach(f => f(n, reason));
   computeReadiness();
@@ -1199,7 +1202,8 @@ export function repEvent(forceKind = null, forceId = null) {
   const evLines = kind === "good" && !cheerful() ? HUSH_PRAISE : ev.lines;   // pt07 m4
   const line = evLines[Math.floor(Math.random() * evLines.length)].replace("{crew}", who ? who.short : "Someone").replace("{pos}", who ? pr(who, "pos") : "their").replace(/Lieutenant/g, addr());
   log(`${line} Reputation ${ev.rep > 0 ? "+" : ""}${ev.rep}.`, kind === "good" ? "good" : "fault");
-  toast(`${ev.toast} — reputation ${ev.rep > 0 ? "+" : ""}${ev.rep}`, kind === "good" ? "good" : "warn");
+  if (kind === "good") cheerToast(`${ev.toast} — reputation +${ev.rep}`, "good", `Reputation +${ev.rep}`);   // pass 10 (2): praise toasts sober in the quiet period
+  else toast(`${ev.toast} — reputation ${ev.rep}`, "warn");
   fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `${ev.rep > 0 ? "+" : ""}${ev.rep} REP`, color: ev.rep > 0 ? "#ffaa77" : "#ff8a7a", life: 2.4, big: true });
   hooks.repEvent.forEach(f => f(ev, d));
   return ev;

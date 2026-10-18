@@ -2,6 +2,7 @@
 import { G, saveGame, wipeSave } from "./state.js";
 import { spawnFault } from "./faults.js";
 import { startBattle, towToDS9 } from "./battle.js";
+import { foe } from "./ships.js";
 import { fireEvent, EV_POOL } from "./events.js";
 import { arriveAtDest, captainOrder } from "./voyage.js";
 import { catchUp } from "./sim.js";
@@ -15,7 +16,8 @@ export function setupDebug(app, ui) {
   const acts = {
     "Battle": () => startBattle("debug"),
     "Fault LOW": () => spawnFault("ambient", null, "low"), "Fault MED": () => spawnFault("ambient", null, "med"), "Fault CRIT": () => spawnFault("battle", null, "crit"),
-    "Kill enemy": () => { if (G.sp.battle) G.sp.battle.hull = 1; },
+    "Kill enemy": () => { const E = foe(G.sp.battle); if (E) E.hull = 1; },
+    "Battle fighter": () => startBattle("debug", { enemy: "jh_fighter" }), "Battle Galor": () => startBattle("debug", { enemy: "galor" }), "Battle cruiser": () => startBattle("debug", { enemy: "jh_battlecruiser" }),
     "Tow": () => towToDS9(), "Arrive": () => { if (G.sp.travel) arriveAtDest(); },
     "Depart": () => captainOrder(G.sp.location === "convoy" ? "nebula" : "convoy", "Debug order."),
     "x1": () => app.timeScale = 1, "x5": () => app.timeScale = 5, "x20": () => app.timeScale = 20,

@@ -156,7 +156,7 @@ export function alertFx() {
 // pass 09 (2): the fast-fix clock starts on the FIRST acknowledgement only. A re-tap after leaving (or after a short
 // hide under the return floor) re-arms the patient's clock but never restarts ackT, and ackT keeps running while the Lt
 // is away/idle (only the patient's clock pauses), so leaving and re-tapping can never buy back the fast-fix bonus.
-function firstAck(x) { if (!x.acked) { x.acked = true; x.ackT = 0; } x.ack = true; }
+function firstAck(x) { if (!x.acked) { x.acked = true; x.ackT = 0; } x.ack = true; x.reack = false; }   // pass 12 HOLD 2: reack = back from away, clock held until this re-ack (faults.js medFrozen)
 // the alert has been seen: tapping the pill / opening DUTY or CREW (UI calls this), or any input after it appeared
 export function ackInjury(id = null) {
   let n = 0;
@@ -308,7 +308,7 @@ function memorialScene() {
   let tot = 0; for (const c of friends) tot += nudge(c.id, K().memorialOpinion, "memorial", true) || 0;
   // pass 06 m3: state the real change (after the soft cap), not the nominal +4
   const avg = friends.length ? tot / friends.length : 0;
-  log(`You were there. ${friends.length} of ${e.short}'s friends noticed${avg >= 0.05 ? ` (opinion +${avg.toFixed(1)} each on average)` : ""}.`, "comm");
+  log(`You were there. ${friends.length} of ${e.short}'s friends noticed${avg >= 0.05 && !e.partner ? ` (opinion +${avg.toFixed(1)} each on average)` : ""}.`, "comm");
 }
 // ---- per-step tick (stepSim; runs offline too) ----
 export function tickMed(dt) {
@@ -330,21 +330,23 @@ export function tickMed(dt) {
       // lands while they're away / idle goes to surgery like any other; the surgery simply waits for them (no free save).
       // Only a patient the player never saw live is stabilised with no roll (the pass-06 safety promise).
       if (!G.ship.faults[inj.sys]) { if ((pres && inj.ack) || inj.seenT > 0) toSurgery(inj, inj.fixBy || (pres && inj.ack ? "lt" : "crew")); else awaySave(inj); continue; }
-      if (!pres) { if (away) inj.away = true; inj.paused = true; continue; }   // (b) paused; (c) away = held by the doctor
+      if (!pres) { if (!inj.paused && !inj.away) inj.leftAtLeave = inj.left; if (away) inj.away = true; inj.paused = true; continue; }   // (b) paused; (c) away = held by the doctor; pass 10 (1): remember the clock at leave
       if (inj.away) {   // (c) back from away with the system still down: the clock resumes where it paused (pass 07: never a
-        inj.away = false; inj.paused = false; inj.ack = false; inj.pendT = 0;   // fresh, full window — that would make leaving pay); it needs seeing again
-        // pass 08 (3): ...but never below k.returnFloor (a clock shorter than the fastest fix is unwinnable), once per injury
-        if (!inj.floored && inj.left < k.returnFloor) { inj.left = k.returnFloor; inj.floored = true; }
+        inj.away = false; inj.paused = false; inj.ack = false; inj.pendT = 0; inj.reack = true;   // fresh, full window — that would make leaving pay); it needs seeing again
+        // pass 08 (3) floor, pass 10 (1): at most min(clock at leave, k.returnFloor) - it only undoes clock lost while away, so nobody
+        // comes back to more time than they left with (the old flat 30 s floor let a 5 s clock come back as 30 s: leaving beat staying)
+        { const cap = Math.min(Number.isFinite(inj.leftAtLeave) ? inj.leftAtLeave : inj.left, k.returnFloor); if (!inj.floored && inj.left < cap) { inj.left = cap; inj.floored = true; } }
+        inj.leftAtLeave = null;
         log(`${docName(inj.id)}: '${inj.short} held while you were off watch, ${addr()}, but sickbay still needs the ${SYSTEMS[inj.sys].name}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault");
         alertFx();
       } else if (inj.paused) {   // pass 08 (3): a short lock / hide / idle (no catch-up): the clock resumes, but under the floor it waits for a re-tap
-        inj.paused = false;
-        if (inj.ack && inj.left < k.returnFloor) { inj.ack = false; inj.pendT = 0; log(`${docName(inj.id)}: '${inj.short} is still waiting on the ${SYSTEMS[inj.sys].name}, ${addr()}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault"); alertFx(); }
+        inj.paused = false; inj.leftAtLeave = null;
+        if (inj.ack && inj.left < k.returnFloor) { inj.ack = false; inj.pendT = 0; inj.reack = true; log(`${docName(inj.id)}: '${inj.short} is still waiting on the ${SYSTEMS[inj.sys].name}, ${addr()}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault"); alertFx(); }
       }
       if (!inj.ack) {   // (a) seen = input after the alert appeared (idleT resets on input)
         inj.pendT += dt;
-        if (inj.pendT > 1 && PACE_RT.idleT < inj.pendT - 0.5) { firstAck(inj); crewTouch(); }
-        continue;
+        if (inj.pendT > 1 && PACE_RT.idleT < inj.pendT - 0.5) { const re = inj.reack; firstAck(inj); crewTouch(); if (!re) continue; }   // pass 12 HOLD 2: a re-ack restarts the
+        else continue;                                                                                                                   // clock in the same tick the Lt is released
       }
       inj.left -= dt; if (inj.left <= 0) resolve(inj);
     } else if (inj.state === "surgery") {
@@ -368,12 +370,12 @@ export function surgeryLeft() { const s = M().scene, x = s && M().inj.find(i => 
 // ---- event hooks: battle hull hits and hazards ----
 hooks.shipHit = hooks.shipHit || [];
 hooks.hazard = hooks.hazard || [];
-hooks.shipHit.push(({ sys }) => {
+hooks.shipHit.push(({ sys, hit }) => {
   const B = G.sp.battle, I = K().injury; if (!B) return;
   if ((B.injN || 0) >= I.perBattle || Math.random() >= I.battleHit * (nightActive() ? I.nightMult : 1)) return;
   const crit = Object.values(G.ship.faults).some(f => f.sev === "crit");
   const where = sys ? SYSTEMS[sys].deck : pick(["engineering", "bridge", "berthing", "medical", "lounge"]);
-  if (injure("battle", { deck: where, sys, crit, what: `a polaron hit that came through the shields on the ${where === "engineering" ? "engineering deck" : where}` })) B.injN = (B.injN || 0) + 1;
+  if (injure("battle", { deck: where, sys, crit, what: `${hit || "a hit"} that came through the shields on the ${where === "engineering" ? "engineering deck" : where}` })) B.injN = (B.injN || 0) + 1;
 });
 hooks.hazard.push(({ kind, sys, bonus }) => {
   const I = K().injury; if (Math.random() >= I.hazard * (bonus ? I.hazardBonusMult : 1) * (nightActive() ? I.nightMult : 1)) return;

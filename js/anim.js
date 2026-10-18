@@ -140,7 +140,7 @@ export const keepPace = c => WALK.keepPace !== false && !!(c.moving || rt(c).was
 // under asideR within the next asideLook px (was the whole 150 px lookPath, so paths far ahead set off shuffles), at
 // most once per asideCool s per crewmate unless the walker would walk straight into them (< asideHard px); once aside
 // they face the walker once and hold that facing (faceHold s) instead of re-facing every frame.
-export const AVOID = { yieldR: 26, yieldMaxS: 1.5, asideR: 24, asideStep: 32, lookPath: 150, asideLook: 60, asideCool: 5, asideHard: 12, faceHold: 1.2, standR: 20 };
+export const AVOID = { yieldR: 26, yieldMaxS: 1.5, asideR: 24, asideStep: 32, lookPath: 150, asideLook: 60, asideCool: 5, asideHard: 12, faceHold: 1.2, standR: 20, asideOverlapS: 0.4 };   // pass 10 (3): asideOverlapS = longest a crewmate who stepped aside shares the spot with someone standing on it
 // closest approach of the walker w's remaining path (next `ahead` px) to the point (x, y): { d, px, py } in design px
 export function pathNear(w, x, y, ahead = AVOID.lookPath) {
   let best = { d: dDist(w.x, w.y, x, y), px: w.x, py: w.y };

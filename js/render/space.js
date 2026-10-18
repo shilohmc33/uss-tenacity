@@ -1,9 +1,11 @@
-// Space view: location backdrop (crossfade), Miranda + Jem'Hadar, beams, torpedoes, shields, booms, floaters.
+// Space view: location backdrop (crossfade), the combatants (render/ships.js), beams, torpedoes, shields, booms, floaters.
 import { G } from "../state.js";
 import { IMG } from "../assets.js";
 import { SFX } from "../battle.js";
 import { voyageView } from "../voyage.js";
 import { clamp } from "../util.js";
+import { SHIPS, FORMATION, foe, shipOf } from "../ships.js";
+import { drawShip, drawShipLabel } from "./ships.js";
 
 const bg = { cur: null, prev: null, f: 1 };
 const stars = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), z: Math.random() }));
@@ -29,9 +31,13 @@ export function drawSpace(ctx, t, dt) {
     ctx.strokeStyle = `rgba(200,220,255,${0.25 + s.z * 0.5})`; ctx.lineWidth = warp ? 1.2 : 1.6;
     ctx.beginPath(); ctx.moveTo(s.x * w, s.y * h); ctx.lineTo(s.x * w + len, s.y * h); ctx.stroke();
   }
-  // layout
-  const portrait = w / h < 1;
-  let tw = portrait ? w * 0.82 : Math.min(w * 0.52, h * 1.35), th = tw / 3.5;
+  // layout. Battle groundwork: allies on the left, enemies on the right, each ship class drawn by render/ships.js (the
+  // artist's sheet via SHIP_ART, else a vector placeholder) at its SHIPS size relative to the Miranda, with a name label.
+  // Slot 0 on each side is the one-on-one position (unchanged from the pre-groundwork layout); slots 1-2 are the stubbed
+  // formation (ships.js FORMATION), only filled by previewFormation in tests.
+  const portrait = w / h < 1, L = portrait ? w * 0.82 : Math.min(w * 0.52, h * 1.35);
+  const TEN = SHIPS.tenacity;
+  let tw = L, th = tw / TEN.aspect;
   let tx, ty;
   if (B) { tx = w * (portrait ? 0.03 : 0.04); ty = h * (portrait ? 0.6 : 0.5); }
   else { tx = (w - tw) / 2; ty = h * 0.5 - th / 2; }
@@ -40,12 +46,29 @@ export function drawSpace(ctx, t, dt) {
   ty += bob + dip;
   if (SFX.shakeT > 0) { tx += (Math.random() - 0.5) * 8; ty += (Math.random() - 0.5) * 6; }
   SFX.tenRect = { x: tx / w, y: ty / h, w: tw / w, h: th / h };
-  const jw = portrait ? w * 0.52 : Math.min(w * 0.32, h * 0.8), jh = jw / 1.96;
+  const E = foe(B), ed = E ? shipOf(E) : null;
   const enter = B ? 1 - Math.pow(1 - B.enterT, 3) : 0;
-  const jx = w * (portrait ? 0.46 : 0.62) + (1 - enter) * w * 0.6, jy = h * (portrait ? 0.2 : 0.16);
+  // the enemy box keeps the old enemy's centre line; bigger classes grow around it and never run off the right edge
+  const jw = ed ? L * ed.size * (portrait ? 1 : 0.9) : 0, jh = ed ? jw / ed.aspect : 0;
+  const jcy = portrait ? h * 0.2 + w * 0.133 : h * 0.16 + Math.min(w * 0.32, h * 0.8) / 3.92;
+  const jx = Math.min(w * (portrait ? 0.46 : 0.62), w * 0.985 - jw) + (1 - enter) * w * 0.6, jy = jcy - jh / 2;
   SFX.jemRect = { x: jx / w, y: jy / h, w: jw / w, h: jh / h };
   // ships
-  if (IMG["ship-tenacity"]) ctx.drawImage(IMG["ship-tenacity"], tx, ty, tw, th);
+  const fx = SFX.anim || {}, rects = SFX.rects = {};
+  const boxOf = (c, side) => {
+    if (c.slot === 0 || !c.slot) return side === "ally" ? [tx, ty, tw, th] : [jx + SFX.jink.x * w, jy + SFX.jink.y * h, jw, jh];
+    const f = FORMATION[portrait ? "portrait" : "landscape"][side][c.slot], d = shipOf(c); if (!f) return [-1e4, 0, 1, 1];
+    const bw = L * d.size * f.s, bh = bw / d.aspect;
+    return [Math.min(w * 0.985 - bw, Math.max(w * 0.015, f.cx * w - bw / 2)), f.cy * h - bh / 2, bw, bh];
+  };
+  const allies = B && Array.isArray(B.allies) ? B.allies : [{ id: "tenacity", ship: "tenacity", slot: 0, ref: "ship" }];
+  const drawSide = (list, side) => { for (const c of [...list].sort((a, b) => (b.slot | 0) - (a.slot | 0))) {
+    const [x, y, bw, bh] = boxOf(c, side), self = c.ref === "ship", pct = self ? G.ship.hull : Math.round(c.hull / (c.max || 1) * 100);
+    const dying = side === "enemy" && c === E && B && B.dying > 0, alpha = dying ? clamp(B.dying / 1.3, 0, 1) : 1;
+    drawShip(ctx, c.ship, x, y, bw, bh, { mirror: side === "enemy", t, pct, anim: fx[c.id], dying, alpha });
+    rects[c.id] = { x: x / w, y: y / h, w: bw / w, h: bh / h, side };
+  } };
+  drawSide(allies, "ally");
   if (warp) { ctx.fillStyle = "rgba(140,190,255,0.25)"; ctx.fillRect(tx - 60, ty + th * 0.75, 60, 3); }
   if (SFX.shieldFlare) {
     const p = SFX.shieldFlare.t / SFX.shieldFlare.dur, a = (1 - p) * 0.65;
@@ -53,11 +76,7 @@ export function drawSpace(ctx, t, dt) {
     const g = ctx.createRadialGradient(0, 0, tw * 0.4, 0, 0, tw * 0.6); g.addColorStop(0, "rgba(90,170,255,0)"); g.addColorStop(0.8, `rgba(120,200,255,${a})`); g.addColorStop(1, "rgba(120,200,255,0)");
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, tw * 0.6, 0, 6.29); ctx.fill(); ctx.restore();
   }
-  if (B && IMG["ship-jemhadar"]) {
-    ctx.save(); const jxx = jx + SFX.jink.x * w, jyy = jy + SFX.jink.y * h;
-    if (B.dying) ctx.globalAlpha = clamp(B.dying / 1.3, 0, 1);
-    ctx.drawImage(IMG["ship-jemhadar"], jxx, jyy, jw, jh); ctx.restore();
-  }
+  if (B && Array.isArray(B.enemies)) drawSide(B.enemies, "enemy");
   // smoke/flame
   for (const s of SFX.smoke) {
     const p = s.t / s.life, x = s.x * w, y = s.y * h, r = s.r * w * (s.kind === "smoke" ? 1 + p * 2 : 1);
@@ -88,5 +107,16 @@ export function drawSpace(ctx, t, dt) {
   ctx.font = "bold 16px Antonio, sans-serif"; ctx.textAlign = "center";
   for (const f of SFX.floaters) { ctx.globalAlpha = 1 - f.t / 1.2; ctx.fillStyle = f.color; ctx.fillText(f.text, f.x * w, f.y * h - f.t * 30); }
   ctx.globalAlpha = 1; ctx.textAlign = "left";
+  // name labels (battle only): under each ship; a label that would hit the battle HUD strip goes above its ship instead
+  if (B) {
+    const big = portrait ? 12 : w >= 1000 ? 14 : 12, hudTop = h - (portrait ? 78 : 60);
+    for (const [id, r] of Object.entries(rects)) {
+      const c = [...(B.allies || []), ...(B.enemies || [])].find(x => x.id === id); if (!c) continue;
+      const cx = (r.x + r.w / 2) * w, below = (r.y + r.h) * h + 4, lh = big * 1.8 + 9;
+      const dying = c === E && B.dying > 0;
+      const sz = c.slot ? Math.round(big * 0.85) : big;   // wingmen (formation preview) get a smaller label
+      drawShipLabel(ctx, c.ship, cx, below + lh > hudTop ? r.y * h - 4 : below, { big: sz, above: below + lh > hudTop, alpha: dying ? clamp(B.dying / 1.3, 0, 1) : 1 });
+    }
+  }
   if (B) { ctx.fillStyle = `rgba(255,0,0,${0.08 + 0.05 * Math.sin(t * 6)})`; ctx.fillRect(0, 0, w, h); }
 }

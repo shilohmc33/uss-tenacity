@@ -5,7 +5,7 @@ import { walkStep, walkSettle, keepPace } from "./anim.js";
 import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
 import { log, toast, fx, shipNews, cheerful, cheerLog } from "./bus.js";
-import { faultPriority, shieldCap } from "./faults.js";
+import { faultPriority, shieldCap, medFrozen } from "./faults.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
 import { ltChatPartner } from "./npc-ambient.js";
 import { drainMult } from "./cabin.js";
@@ -209,8 +209,14 @@ export function beginRepair(sysId, manual = false) {
 export const LT_SPEED = 110 / 960, LT_SPEED_TIRED = 55 / 960;
 export const engSpeed = () => (G.ship.energy < 15 ? LT_SPEED_TIRED : LT_SPEED) * walkMult();
 
+// pass 11 HOLD 3: the system the Lt is repairing or heading (or riding the lift) to repair
+const ltBoundFor = L => L.mode === "repair" ? L.repairSys : L.lift ? (L.lift.then && L.lift.then.kind === "repair" ? L.lift.then.sys : null)
+  : L.mode === "walk" && L.intent ? (L.intent.kind === "repair" ? L.intent.sys : L.intent.then && L.intent.then.kind === "repair" ? L.intent.then.sys : null) : null;
 export function stepLt(dt) {
   const L = lt(), S = G.ship, D = PACE.ltDrain, eTempo = (G.sp.battle ? PACE.ltDrainBattle : 1) * drainMult();   // phase 4: Refreshed (slept in his own quarters)
+  // pass 11 HOLD 3: away must never beat staying. While a seen patient's clock is frozen (player away / idle / hidden), the
+  // Lt's walk to and repair of the system their life hangs on freezes with it, so it resumes on return exactly where it stood.
+  { const b = ltBoundFor(L); if (b && medFrozen().includes(b)) { L.moving = false; return; } }
   tickLift(dt);
   if (L.mode === "walk" && L.path) {
     const zt = intentTarget(L.intent);

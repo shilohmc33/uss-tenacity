@@ -22,7 +22,8 @@ export function whoOf(id) {
   const m = ((p.med || {}).memorial || []).find(x => x.id === id); if (m) return { ...m, where: "lost" };
   const s = START_CREW.find(x => x.id === id); return s ? { ...s, where: "none" } : { id, name: id, short: id, pronoun: "they", where: "none" };
 }
-const fill = (t, o, x = "") => t.replace(/\{S\}/g, o.short || o.name || "?").replace(/\{N\}/g, o.n || o.name || o.short || "?").replace(/\{X\}/g, x)
+// pass 12 m6: {X} that opens a sentence is capitalised ("Said goodbye to Doru. The USS Bellerophon's bridge ...")
+const fill = (t, o, x = "") => t.replace(/\{S\}/g, o.short || o.name || "?").replace(/\{N\}/g, o.n || o.name || o.short || "?").replace(/(^|[.!?] )\{X\}/g, (_, a) => a + String(x).charAt(0).toUpperCase() + String(x).slice(1)).replace(/\{X\}/g, x)
   .replace(/\{(sub|obj|pos|ref|Sub|Obj|Pos|Ref)\}/g, (_, f) => f[0] === f[0].toUpperCase() ? Pr(o, f.toLowerCase()) : pr(o, f))
   .replace(/\{has\}/g, pr(o, "has")).replace(/\{is\}/g, pr(o, "is")).replace(/\{s\}/g, pr(o, "s"));
 
@@ -45,7 +46,9 @@ function reason(w, o) {
   const t = R[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "Something you did");
   return fill(t, o);
 }
-export function moved(id) { return (L().hist[id] || []).slice().reverse().map(e => ({ text: reason(e.w, whoOf(id)), up: e.d > 0, dir: e.d > 0 ? 1 : e.d < 0 ? -1 : 0, n: e.n, day: e.day })); }
+const romOn = () => !!(P().romance && P().romance.opt === true);
+const ROM_WHY = ["date", "parted"];   // pass 11 HOLD 1: hidden while romance is off
+export function moved(id) { const on = romOn(); return (L().hist[id] || []).filter(e => on || !ROM_WHY.includes(String(e.w).split("|")[0])).slice().reverse().map(e => ({ text: reason(e.w, whoOf(id)), up: e.d > 0, dir: e.d > 0 ? 1 : e.d < 0 ? -1 : 0, n: e.n, day: e.day })); }
 
 // ---- journal: entry -> a line in the Lt's voice ----
 const J = {
@@ -71,14 +74,25 @@ const J = {
   gift: ["Gave {S} {X}. {Sub} lit up: 'You remembered.'", "Gave {S} {X}. {Sub} smiled and said thank you twice.", "Gave {S} {X}. {Sub} thanked me politely. Noted.", "Gave {S} {X}. Wrong call; {sub} tried not to show it."],
   // phase 4: romance (PG; the log stays discreet)
   signal: ["{S} said something today I keep turning over. Not as shipmates, {sub} said."],
-  accepted: ["I said yes to {S}. I've been smiling at consoles all afternoon, apparently. Hale noticed."],
+  accepted: ["I said yes to {S}. I've been smiling at consoles all afternoon, apparently. Hale noticed.", "I said yes to {S}. Not the week for it, maybe, but {sub} understood that before I did."],   // cheer-gated: romance.js answerSignal picks [1] when !cheerful()
   declined: ["{S} asked; I said I'd rather we stayed friends. {Sub} smiled and meant it. Nothing's changed between us, and I'm glad."],
-  date: ["An evening with {S}. I'm not writing the rest down.", "An evening with {S}. I think this is what they mean by 'together'."],
+  date: ["An evening with {S}. I'm not writing the rest down.", "An evening with {S}. I think this is what they mean by 'together'."],   // legacy entries (no date type)
+  // romance evenings by type (romance.js picks a variant that isn't the last one used for this crewmate; journalOf also collapses
+  // exact repeats); date_quiet = an evening in the quiet period after a death (bus.js cheer gate)
+  date_dinner: ["Dinner with {S} in my quarters. The replicator got {pos} favourite almost right; {sub} said it was perfect anyway.", "{S} came to dinner and stayed for the conversation. I'm not writing the rest down.",
+    "Dinner for two. {S} told me a story about home I'd never heard. I want to hear the rest.", "Another dinner with {S}. We forgot the food was getting cold.", "{S} brought dessert to dinner again. I'm starting to think it's a tradition."],
+  date_holosuite: ["A holosuite evening with {S}: a lakeside at dusk. {Sub} won the stone-skipping, and won't let me forget it.", "{S} picked the holosuite program tonight. I'd never have chosen it, and it was wonderful.",
+    "Holosuite with {S}. We let the program's sun go down and didn't call for the exit.", "A holosuite program with {S}. Somewhere in the middle I stopped thinking about the ship."],
+  date_promenade: ["Walked the Promenade with {S}. {Sub} made me try a hasperat; my eyes are still watering.", "The Promenade with {S}. We watched the wormhole open from the upper level.",
+    "{S} and I walked the Promenade end to end, twice, without noticing.", "An evening on the Promenade with {S}. Quark tried to sell us something. {S} haggled him down for fun."],
+  date_quiet: ["A quiet evening with {S}. We didn't talk much about the loss. {Sub} just stayed, and that helped.", "{S} sat with me tonight. No plans, no program. Just company.",
+    "An evening with {S}, mostly in silence. It was the right kind of silence."],
   together: ["{S} and I aren't pretending it's casual any more."],
   disclosure: ["Filed the disclosure about {S} with the captain. Short, honest, done.", "Filed the disclosure: I hold station authority over {S} now. Okafor will write {pos} evaluations. It's right."],
-  parted: ["{S} and I talked, and we're friends again. Only friends. It's all right; it really is.", "{S} ended it, gently. {Sub} was right, and kind about it."],
+  parted: ["{S} and I talked, and we're friends again. Only friends. It's all right; it really is.", "{S} ended it, gently. It was the right call, and {S} was kind about it."],
   letter: ["A letter from {S}. I read it on the observation deck.", "{S}'s last letter. I'll keep it.", "{S} is gone to a new posting. We promised to write."],
-  lostpartner: ["We lost {S}. I don't have words for the log. I'm keeping {pos} letters. All of them."],
+  losttouch: ["{S} and I have lost touch. It happens with postings."],   // pass 11 HOLD 1: neutral (shown with romance off)
+  lostpartner: ["We lost {S}. I don't have words for the log.", "We lost {S}. I don't have words for the log. I'm keeping {pos} letters. All of them."],   // pass 11 m2: [no letters, letters]
   // phase 3: Insight
   hint: ["Noticed today: {X}.", "Something small, worth keeping: {X}."],
   beat: ["{S} brought up something that matters to {obj}. I think I got it right.", "Put my foot in it with {S} ({X}). I owe {obj} an apology."],
@@ -93,11 +107,24 @@ function xText(e) {
   if (e.k === "gift") return (GIFT[e.x.split("|")[0]] || { a: "a gift" }).a;
   return e.x || "kit";
 }
+export const dateTable = x => J["date_" + x] || null;   // romance evenings by type (dinner / holosuite / promenade / quiet)
 export function lineOf(e) {
-  const o = { ...whoOf(e.id), n: e.n }, t = J[e.k] || J.note, v = e.k === "injured" ? (e.v ? 1 : 0) : (e.v || 0) % t.length;
+  const o = { ...whoOf(e.id), n: e.n }, t = (e.k === "date" && dateTable(e.x)) || J[e.k] || J.note, v = e.k === "injured" ? (e.v ? 1 : 0) : (e.v || 0) % t.length;
   return fill(t[v], o, xText(e));
 }
-export function journalOf(id, n = K().perCrew) { return L().journal.filter(e => e.id === id).slice(-n).reverse().map(e => ({ day: e.d, sd: e.sd, text: lineOf(e) })); }
+// newest first; an entry with exactly the text of the one just after it (e.g. older saves' repeated evenings) is collapsed
+// pass 11 HOLD 1: romance journal lines are hidden while romantic storylines are off (or never allowed)
+export const ROM_KINDS = ["signal", "accepted", "declined", "date", "together", "disclosure", "parted", "letter", "lostpartner"];
+// pass 13 minor: with romance OFF a lost partner's journal still records the death - their "lostpartner" entry (a romance kind) reads
+// as the normal crewmate death entry instead of vanishing (crewEvent skips the plain one for a partner). Render-time, so old saves too.
+const asOff = e => e.k === "lostpartner" ? { ...e, k: "death", v: 0 } : e;
+export function journalOf(id, n = K().perCrew) { const out = [], on = romOn(); for (const e of L().journal.filter(e => e.id === id).map(e => on ? e : asOff(e)).filter(e => on || !ROM_KINDS.includes(e.k)).slice(-n).reverse()) { const text = lineOf(e); if (out.length && out[out.length - 1].text === text) continue; out.push({ day: e.d, sd: e.sd, text }); } return out; }
+// the next variant for a romance evening of type x with crewmate id: none of the last two used (so any 3 evenings in a row differ)
+export function nextDateVariant(id, x) {
+  const t = dateTable(x); if (!t) return 0;
+  const recent = L().journal.filter(e => e.id === id && e.k === "date" && e.x === x).slice(-Math.min(2, t.length - 1)).map(e => e.v % t.length);
+  const ok = t.map((_, i) => i).filter(i => !recent.includes(i)); return ok[Math.floor(Math.random() * ok.length)] ?? 0;
+}
 export const journalCount = () => L().journal.length;
 export function addEntry(id, k, x = "", v = null) {
   const lg = L(), k2 = K(), o = whoOf(id), n = o.where === "aboard" ? `${rankOf(o)} ${o.name}` : o.name || o.short || id;
@@ -152,6 +179,7 @@ hooks.crewEvent = hooks.crewEvent || [];
 hooks.crewEvent.push((kind, id) => {
   const cl = P().crew.log, e = cl[cl.length - 1];
   if (!J[kind] || !e || e.id !== id) return;
+  if ((kind === "death" || kind === "transfer") && P().romance && P().romance.partner === id) return;   // romance.js writes the partner's own entry (lostpartner / letters), not a second one; with romance off journalOf shows lostpartner as a plain death (pass 13)
   addEntry(id, kind, e.posting || e.cause || "");
 });
 hooks.crewInjured = hooks.crewInjured || [];

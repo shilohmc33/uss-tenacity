@@ -162,7 +162,7 @@ export const BAR_LINES = [
 // Characters are drawn at 2x (Shiloh, 2026-10-17): standing Lt ~134 design px tall (was 67). STEP_LEN is the
 // distance per walk half-cycle (scaled with the figure, slightly under 2x because walk speed went up 1.35x).
 // node.lieLen: the painted bed's length. The lying figure is LIE_FIG = 138 (render/deck.js, the standing height) and is
-// scaled down to lieLen on any shorter bed (berthing bunk 96, shared-room rack 120) so it never overhangs (pass 09).
+// scaled down to lieLen on any shorter bed (only the berthing bunk, 96) so it never overhangs (pass 09); every quarters rack is >= 138 (pass 10).
 // LIE_LEN is legacy (unused).
 export const FIG_H = 134, LIE_LEN = 178, STEP_LEN = 70;   // STEP_LEN: legacy, unused since pass 08 (per-character, per-direction steps live in js/anim.js STEP)
 export const CHAR_SCALE = 2;
@@ -381,10 +381,34 @@ export const AMBIENT_NPCS = [
   },
 ];
 
+// ---- SHIP ART HOOK (battle groundwork; spec: notes/ship-sprite-spec.md and README "Ship sprites") ----
+// SHIP_ART[sprite key] (the key is SHIPS[id].sprite in js/ships.js) = { img, len, ... }. img: an asset key, preloaded like
+// every plate (assets/<img>.webp); null = no art yet -> the vector placeholder (render/ships.js). A missing file falls back
+// to the placeholder too. Optional per ship: len (the ship's nose-to-tail length in cell px; default SHIP_SHEET.len),
+// pivot ([x, y] in cell px; default SHIP_SHEET.pivot), rows (override frame counts / fps per state), engine (false = no
+// engine-glow row on this sheet).
+// SHIP_SHEET: one horizontal strip per state, all cells the same size; the ship FACES RIGHT (+x) in every cell; enemies are
+// mirrored at draw time. The pivot is the ship's visual centre; the drawn box (the ship's length x its class aspect) is
+// centred on it. Frames advance at fps; loop rows repeat, one-shot rows hold their last frame.
+export const SHIP_SHEET = {
+  cell: [512, 256], pivot: [256, 128], len: 448, facing: "right",
+  rows: [   // row order on the sheet, top to bottom
+    { state: "idle", frames: 4, fps: 6, loop: true },        // drifting, running lights
+    { state: "firing", frames: 4, fps: 12, loop: false },    // muzzle flash / torpedo launch (beams and torpedoes are drawn by the game)
+    { state: "damaged", frames: 4, fps: 6, loop: true },     // replaces idle below 35% hull: scorching, venting plasma
+    { state: "shieldsHit", frames: 4, fps: 14, loop: false }, // the shield bubble lighting up (allies' shields; optional for enemies)
+    { state: "explode", frames: 8, fps: 10, loop: false },   // the kill: breaking apart; the game fades the ship out over 1.3 s
+    { state: "engine", frames: 4, fps: 8, loop: true, blend: "lighter" },   // OPTIONAL overlay: engine / nacelle glow only, drawn additively over every state
+  ],
+};
+export const SHIP_ART = {
+  tenacity: { img: null }, freighter: { img: null }, klingon_bop: { img: null },
+  jh_fighter: { img: null }, galor: { img: null }, jh_battlecruiser: { img: null },
+};
 export const IMAGES = [...new Set(["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
-  "ship-tenacity", "ship-jemhadar", ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
+  ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
   ...[LIE_ART, SEAT_ART].flatMap(o => Object.values(o).map(a => a.img)), ...Object.values(TINT_BASES).map(b => b.mask).filter(Boolean),
   ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)
 // walk masks (PNG, white = floor), loaded alongside the plates

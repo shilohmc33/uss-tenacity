@@ -95,10 +95,11 @@ export function transferOff(id, posting = null, why = "roll") {
   const p = P(), cr = C(), o = cr.occ[id]; if (!o) return null;
   const sl = SLOTMAP[o.slot], post = posting || postingFor(sl.dept), op = Math.round(opinionOf(id));
   const frOp = romanceCap(id, op, "fleet");   // phase 4 anti-farm: a partner's opinion counts at most +50 (friendship) here
-  const fr = Math.max(0, Math.floor((frOp - (1 - PROG.gifts.fleetShare) * Math.min(giftShare(id), frOp)) / PROG.fleet.perOpinion));   // gifts phase: gift opinion counts 50%
+  const fr0 = Math.max(0, Math.floor((frOp - (1 - PROG.gifts.fleetShare) * Math.min(giftShare(id), frOp)) / PROG.fleet.perOpinion));   // gifts phase: gift opinion counts 50%
   const alum = { id, name: o.name, short: o.short, species: o.species, pronoun: o.pronoun || "they", tags: [...(o.tags || [])], rank: o.rank, ladder: sl.ladder, slot: o.slot, dept: sl.dept, role: sl.role,
-    opinion: op, posting: post, leftDay: p.day, leftPD: p.playDays, fr };
-  p.alumni.push(alum); p.fleetRep = Math.min(FLEET_REP_MAX, p.fleetRep + fr);
+    opinion: op, posting: post, leftDay: p.day, leftPD: p.playDays, fr: 0 };
+  const fr = gainFleetRep(fr0); alum.fr = fr;   // pass 10 (6): the REAL change (0 at the cap), so the log / toast never say +N that didn't land
+  p.alumni.push(alum);
   cr.slots[o.slot] = null; delete cr.occ[id]; crewTouch();
   cr.pending.push({ slot: o.slot, at: G.ship.elapsed + rnd(PROG.crewEvents.replaceAfter) });
   const bye = op >= PROG.fleet.contactMin ? `${o.short}, kit bag over one shoulder, stops by the ${addr()}: 'I'll tell them about you. Call if you ever need anything.'`
@@ -196,7 +197,9 @@ export function friendliestAlum(posting = null) {
 }
 // the sanitizer's cap (progression.js int(fleetRep, 0, 100000)); increments clamp to it too (save-fuzz 'everything maxed')
 const FLEET_REP_MAX = 100000;
-export function addFleetRep(n, why) { if (n > 0) { P().fleetRep = Math.min(FLEET_REP_MAX, P().fleetRep + n); log(`Fleet Reputation +${n} — ${why}.`, "good"); } }
+// pass 10 (6): add up to the cap and return what actually landed; the log shows that number, or none at the cap
+function gainFleetRep(n) { const p = P(), b = p.fleetRep; if (n > 0) p.fleetRep = Math.min(FLEET_REP_MAX, b + n); return Math.max(0, p.fleetRep - b); }
+export function addFleetRep(n, why) { if (!(n > 0)) return 0; const d = gainFleetRep(n); log(d > 0 ? `Fleet Reputation +${d} — ${why}.` : `${why[0].toUpperCase()}${why.slice(1)} (Fleet Reputation is already at its maximum).`, "good"); return d; }
 export function onDiplomatic(dest) {   // +2 Fleet Reputation per diplomatic visit, credited at most once per PROG.fleet.diplomaticEvery days of play
   const cr = C(), pd = P().playDays;
   if (cr.dipPD != null && pd - cr.dipPD < PROG.fleet.diplomaticEvery) return;

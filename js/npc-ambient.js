@@ -229,7 +229,8 @@ function tickOne(n, dt) {
     else if (n.next === "intro" && n.target && dDist(n.target.x, n.target.y, L.x, L.y) > 90 && (n.reaimT = (n.reaimT || 0) + dt) > 1) { n.reaimT = 0; goTo(n, besideLt(n), "intro"); }
   }
   if (n.mode === "walk") {
-    const yi = yieldTo(n);
+    if (n.escapeT > 0) n.escapeT -= dt;   // pass 10 (3): walking off a spot someone stands on: don't give way to whoever is standing on you
+    const yi = n.escapeT > 0 ? yieldTo(n).filter(o => dDist(o.x, o.y, n.x, n.y) >= AVOID.standR + 4) : yieldTo(n);
     if (blockedAhead(n, yi) && (n.yieldT = (n.yieldT || 0) + dt) < AVOID.yieldMaxS) { /* give way */ }
     else { if (!blockedAhead(n, yi)) n.yieldT = 0; walkStep(n, n.who, n.cfg.speed * 960, dt); }
     if (n.pathI >= n.path.length) {
@@ -255,7 +256,14 @@ function tickOne(n, dt) {
     n.t -= dt;
     const busy = fr && walkersNear(n).some(v => pathNear(v, fr.x, fr.y).d < AVOID.asideR + 8 || dDist(v.x, v.y, fr.x, fr.y) < AVOID.asideR + 8);
     const ltNear = fr && G.lt.deck === n.deck && dDist(G.lt.x, G.lt.y, fr.x, fr.y) < AVOID.asideR + 8;
+    // pass 10 (3): someone (the Lt) stops on the spot n stepped aside to: after AVOID.asideOverlapS n moves off - back to its
+    // own spot if that's free, else another free spot - instead of sharing it until the aside timer runs out (up to 3.2 s)
+    const cr = fr && !G.sp.battle && crowded(n); if (!cr) n.crowdT = 0;
     if (!fr) { n.mode = "dwell"; n.t = 1; }
+    else if (cr && (n.crowdT = (n.crowdT || 0) + dt) > AVOID.asideOverlapS) {
+      n.crowdT = 0; n.asideFrom = null; n.asideAt = G.ship.elapsed; n.escapeT = 1.2;
+      if (claimed(n, fr.x, fr.y)) { const s = pickSpot(n.cfg, fr.spot && fr.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); } else goTo(n, { x: fr.x, y: fr.y }, "dwell", fr.spot);
+    }
     else if (n.t <= 0 && !busy && !ltNear) {   // go back - unless someone has taken the spot meanwhile: then another free spot
       n.asideFrom = null; n.asideAt = G.ship.elapsed;
       if (claimed(n, fr.x, fr.y)) { const s = pickSpot(n.cfg, fr.spot && fr.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); } else goTo(n, { x: fr.x, y: fr.y }, "dwell", fr.spot);
@@ -264,7 +272,7 @@ function tickOne(n, dt) {
     const post = n.cfg.spots[0];
     const cr = !G.sp.battle && crowded(n); if (!cr) n.crowdT = 0;
     if (stepAside(n)) { /* making room */ }
-    else if (cr && (n.crowdT = (n.crowdT || 0) + dt) > 0.4) { n.crowdT = 0; const s = pickSpot(n.cfg, n.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); }
+    else if (cr && (n.crowdT = (n.crowdT || 0) + dt) > 0.4) { n.crowdT = 0; n.escapeT = 1.2; const s = pickSpot(n.cfg, n.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); }
     else if (G.sp.battle && post && n.spot !== post) { goTo(n, resolve(n.deck, post), "dwell", post); }
     else {
       n.action = workAction(n); if (n.spot.face) n.dir = n.spot.face;

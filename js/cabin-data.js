@@ -8,13 +8,16 @@ const R = (x0, y0, x1, y1) => [x0, y0, x1, y1];
 
 // Slot types: wall, shelf, desk, corner, floor, window, large, replicator.
 // Slot anchors: x,y = the item's foot/centre point on the plate; w,h = its placeholder box (design fractions).
+// bed.lieLen = the drawn rack's length in design px (pass 10 (5): measured from the placeholder rack, beds[0] width x 960:
+// ltjg 154, lt 192, ltcmdr 192, cmdr 173 - was 120 / 140 / 150 / 160, which shrank the Lt to 120 on the 154 px ltjg rack).
+// Every rack is >= LIE_FIG 138, so the Lt sleeps at his full 138 on all of them. Re-measure when the artist plates land.
 export const CABIN_TIERS = {
   ltjg: {
     rank: 0, name: "Shared bunk room", blurb: "Two racks, two lockers, one bunkmate who snores in Bolian.",
     plate: null, mask: null,
     floor: [R(0.22, 0.42, 0.78, 0.93)], blocks: [R(0.22, 0.42, 0.40, 0.66), R(0.60, 0.42, 0.78, 0.66)],
     lift: { x: 0.50, y: 0.86, mx: 0.50, my: 0.93 },
-    bed: { x: 0.31, y: 0.70, mx: 0.31, my: 0.56, lie: [0.31, 0.545], lieRot: -Math.PI / 2, lieLen: 120 },
+    bed: { x: 0.31, y: 0.70, mx: 0.31, my: 0.56, lie: [0.31, 0.545], lieRot: -Math.PI / 2, lieLen: 154 },
     rest: 6.5,
     beds: [R(0.23, 0.44, 0.39, 0.64), R(0.61, 0.44, 0.77, 0.64)],     // placeholder drawing: the Lt's rack + the bunkmate's
     slots: [
@@ -29,7 +32,7 @@ export const CABIN_TIERS = {
     plate: null, mask: null,
     floor: [R(0.18, 0.40, 0.82, 0.93)], blocks: [R(0.18, 0.40, 0.40, 0.62), R(0.62, 0.40, 0.82, 0.50)],
     lift: { x: 0.50, y: 0.86, mx: 0.50, my: 0.93 },
-    bed: { x: 0.29, y: 0.67, mx: 0.29, my: 0.52, lie: [0.29, 0.51], lieRot: -Math.PI / 2, lieLen: 140 },
+    bed: { x: 0.29, y: 0.67, mx: 0.29, my: 0.52, lie: [0.29, 0.51], lieRot: -Math.PI / 2, lieLen: 192 },
     rest: 8,
     beds: [R(0.19, 0.42, 0.39, 0.60)],
     slots: [
@@ -47,7 +50,7 @@ export const CABIN_TIERS = {
     plate: null, mask: null,
     floor: [R(0.12, 0.38, 0.88, 0.93)], blocks: [R(0.12, 0.38, 0.34, 0.60), R(0.66, 0.38, 0.88, 0.48), R(0.74, 0.60, 0.88, 0.76)],
     lift: { x: 0.50, y: 0.86, mx: 0.50, my: 0.93 },
-    bed: { x: 0.23, y: 0.65, mx: 0.23, my: 0.50, lie: [0.23, 0.49], lieRot: -Math.PI / 2, lieLen: 150 },
+    bed: { x: 0.23, y: 0.65, mx: 0.23, my: 0.50, lie: [0.23, 0.49], lieRot: -Math.PI / 2, lieLen: 192 },
     rest: 9, window: R(0.40, 0.08, 0.64, 0.26),
     beds: [R(0.13, 0.40, 0.33, 0.58)],
     slots: [
@@ -68,7 +71,7 @@ export const CABIN_TIERS = {
     plate: null, mask: null,
     floor: [R(0.06, 0.36, 0.94, 0.94)], blocks: [R(0.06, 0.36, 0.26, 0.58), R(0.70, 0.36, 0.94, 0.46), R(0.80, 0.58, 0.94, 0.76), R(0.06, 0.70, 0.16, 0.86)],
     lift: { x: 0.50, y: 0.87, mx: 0.50, my: 0.94 },
-    bed: { x: 0.16, y: 0.63, mx: 0.16, my: 0.48, lie: [0.16, 0.47], lieRot: -Math.PI / 2, lieLen: 160 },
+    bed: { x: 0.16, y: 0.63, mx: 0.16, my: 0.48, lie: [0.16, 0.47], lieRot: -Math.PI / 2, lieLen: 173 },
     rest: 10, window: R(0.32, 0.07, 0.68, 0.25),
     beds: [R(0.07, 0.38, 0.25, 0.56)],
     slots: [

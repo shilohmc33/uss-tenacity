@@ -129,8 +129,37 @@ const JUNK = [null, '__del', -1, 7, 1e12, -1e12, 'admiral', '', {}, [], true, 'N
     ['v13 future lastPlayDate', s => set(s, 'prog.lastPlayDate', '2027-12-01')], ['v13 dayPresent 1e12', s => set(s, 'prog.dayPresent', 1e12)], ['v13 dayPresent junk', s => set(s, 'prog.dayPresent', 'x')],
     ['v13 presentTotal negative', s => set(s, 'prog.presentTotal', -50)], ['v13 lastDeathPT above presentTotal', s => { s.prog.presentTotal = 100; s.prog.med.lastDeathPD = 1; s.prog.med.lastDeathPT = 1e9; return s; }],
     ['v12 letters over cap + thread to a non-alum', s => set(s, 'prog.romance', { opt: true, letters: Array.from({ length: 200 }, (_, i) => ({ id: (s.prog.alumni[0] || { id: 'x' }).id, d: i, from: 'them', t: 'Dear Lt' })), thread: { id: 'nobody', next: 1 } })],
+    // battle groundwork (v14): a saved battle's single enemy -> battle.enemies[] / allies[] (the Galor = the old enemy's numbers); junk hardened
+    ['v13 -> v14: real v13 save mid-battle', s => { s.version = 13; s.sp.battle = oldBattle(s, 63); return s; }, null, { bt: 'migr', hull: 63 }],
+    ['v12 -> v14 (two steps) mid-battle', s => { s.version = 12; delete s.prog.dayPresent; delete s.prog.presentTotal; s.prog.playDays = 9; s.sp.battle = oldBattle(s, 80); return s; }, null, { bt: 'migr', hull: 80, v13: 'migr', pd: 9 }],
+    ['v13 battle negative hull (pass-03 N-3)', s => { s.version = 13; s.sp.battle = oldBattle(s, -12); return s; }, null, { bt: 'any' }],
+    ['v13 battle junk fields', s => { s.version = 13; s.sp.battle = { hull: 'x', max: null, volleyT: 'soon', cd: 7, ctx: 5 }; return s; }, null, { bt: 'any' }],
+    ['v14 battle enemies junk', s => set(s, 'sp.battle', { ...newBattle(s), enemies: [null, 5, { ship: 'borg', hull: 'x', max: -4 }] }), null, { bt: 'any' }],
+    ['v14 battle enemies empty', s => set(s, 'sp.battle', { ...newBattle(s), enemies: [] }), null, { bt: 'none' }],
+    ['v14 battle array', s => set(s, 'sp.battle', [1, 2]), null, { bt: 'none' }], ['v14 battle string', s => set(s, 'sp.battle', 'red alert'), null, { bt: 'none' }],
+    ['v14 battle allies null + target 99 + cd junk', s => set(s, 'sp.battle', { ...newBattle(s), allies: null, target: 99, cd: { phaser: 'x', torp: 1e9 } }), null, { bt: 'any' }],
+    ['v14 enemy hull 1e9 / ally ship bogus', s => set(s, 'sp.battle', { ...newBattle(s, 'galor', 1e9), allies: [{ ship: 'enterprise' }, { ship: 'galor' }] }), null, { bt: 'any' }],
+    ['v14 valid battlecruiser mid-fight kept', s => set(s, 'sp.battle', newBattle(s, 'jh_battlecruiser', 120)), null, { bt: 'keep', ship: 'jh_battlecruiser' }],
+    // encounter weighting: G.sp.enc (last encounter / battlecruiser spacing) is additive to the v14 shape and hardened at load
+    ['v14 pre-encounter save (no sp.enc)', s => set(s, 'sp.enc', '__del'), null, { enc: 'fresh' }],
+    ['v13 -> v14 gets a fresh sp.enc', s => { s.version = 13; delete s.sp.enc; return s; }, null, { enc: 'fresh' }],
+    ['v14 enc string', s => set(s, 'sp.enc', 'battlecruiser'), null, { enc: 'fresh' }], ['v14 enc array', s => set(s, 'sp.enc', [1, 2]), null, { enc: 'fresh' }],
+    ['v14 enc null', s => set(s, 'sp.enc', null), null, { enc: 'fresh' }],
+    ['v14 enc fields junk', s => set(s, 'sp.enc', { last: 'borg_cube', since: -5, lastBcPD: 'yesterday', n: { galor: -3, jh_fighter: '7', borg: 9 }, held: true }), null, { enc: 'junk' }],
+    ['v14 enc huge numbers', s => set(s, 'sp.enc', { last: 'galor', since: 1e12, lastBcPD: 1e12, n: { galor: 1e15, jh_fighter: 1e9 }, held: 1e9 }), null, { enc: 'any' }],
+    // pass 13: the memory survives migration - a valid enc rides through every migration step; a save without one is rebuilt from its battle + ship log
+    ['v13 save carrying a valid enc keeps it through migration', s => { s.version = 13; s.sp.enc = { last: 'jh_battlecruiser', since: 0, lastBcPD: 20, n: { jh_fighter: 30, galor: 18, jh_battlecruiser: 2 }, held: 4 }; return s; }, null, { enc: 'keep' }],
+    ['v8 save carrying a valid enc keeps it through migration', s => { s.version = 8; s.sp.enc = { last: 'jh_battlecruiser', since: 0, lastBcPD: 20, n: { jh_fighter: 30, galor: 18, jh_battlecruiser: 2 }, held: 4 }; return s; }, null, { enc: 'keep' }],
+    ['v13 no enc, battlecruiser opener last in the log -> last = battlecruiser', s => { s.version = 13; delete s.sp.enc; s.prog.playDays = 33; s.log = (s.log || []).concat([{ sd: '1', msg: "Long-range sensors scream — a Cardassian Galor on an attack vector, dropping us out of warp. Red alert!", cls: 'fault', t: 1 }, { sd: '1', msg: "Long-range sensors scream — a Jem'Hadar battlecruiser on an attack vector, dropping us out of warp. Red alert!", cls: 'fault', t: 2 }]); return s; }, null, { enc: 'seedBc', pd: 33 }],
+    ['v14 no enc, battlecruiser then a fighter in the log -> since 1', s => { delete s.sp.enc; s.prog.playDays = 40; s.log = (s.log || []).concat([{ sd: '1', msg: "Ambush — a Jem'Hadar battlecruiser decloaks out of the nebula cloud, weapons hot!", cls: 'fault', t: 1 }, { sd: '1', msg: "A Jem'Hadar fighter breaks from the convoy's shadow — weapons free! Red alert!", cls: 'fault', t: 2 }]); return s; }, null, { enc: 'seedBc1', pd: 40 }],
+    ['v14 enc valid (battlecruiser last) kept', s => set(s, 'sp.enc', { last: 'jh_battlecruiser', since: 0, lastBcPD: 20, n: { jh_fighter: 30, galor: 18, jh_battlecruiser: 2 }, held: 4 }), null, { enc: 'keep' }],
     ['everything maxed', s => { for (const [k, v] of [['ship.parts', 1e9], ['ship.partsCap', 1e9], ['ship.torps', 1e9], ['ship.hull', 1e9], ['sp.rep', 1e18], ['prog.rations', 1e18], ['prog.xp', 1e18], ['prog.level', 1e18], ['prog.fleetRep', 1e18]]) set(s, k, v); return s; }],
   ];
+  // battle groundwork: a pre-v14 battle (single enemy on the battle object) and a v14 one (combatant arrays); savedAt = now so
+  // the offline catch-up on boot doesn't fight the battle out before the checks run, and abilities cooling / tubes empty
+  // so a torpedo spread can't end it in the first second
+  function oldBattle(s, hull) { const e = (s.ship && s.ship.elapsed) || 0; s.savedAt = Date.now(); if (s.ab) for (const a of Object.values(s.ab)) if (a && typeof a === 'object') a.cd = 60; if (s.ship) s.ship.torps = 0; return { hull, max: 100, ctx: 'convoy', enterT: 1, volleyT: 1.2, dying: 0, cd: { phaser: 0, torp: 1, evasive: 0, divert: 0 }, startedAt: e - 10, lastVolleyAt: e - 2, volleyGap: 3.4, inflight: 0 }; }
+  function newBattle(s, ship = 'galor', hull = 70) { const e = (s.ship && s.ship.elapsed) || 0; s.savedAt = Date.now(); if (s.ab) for (const a of Object.values(s.ab)) if (a && typeof a === 'object') a.cd = 60; if (s.ship) s.ship.torps = 0; return { ctx: 'nebula', enterT: 1, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: e - 5, allies: [{ id: 'tenacity', ship: 'tenacity', side: 'ally', slot: 0, ref: 'ship' }], enemies: [{ id: ship + '-0', ship, side: 'enemy', slot: 0, hull, max: ship === 'jh_battlecruiser' ? 150 : 100, volleyT: 2 }], target: 0 }; }
   // a real v7 save from the v8 base: no plog, no pronouns anywhere, crew.log with n realistic entries
   function v7(s, n) {
     s.version = 7; delete s.prog.plog;
@@ -140,7 +169,7 @@ const JUNK = [null, '__del', -1, 7, 1e12, -1e12, 'admiral', '', {}, [], true, 'N
     return s;
   }
   const all = paths(base).filter(x => !/^log\./.test(x));
-  const cases = named.map(([n, f, keep, ex]) => [n, f, keep, ex]);
+  const cases = named.map(([n, f, keep, ex]) => [n, f, keep, ex]).filter(([n]) => !process.env.FUZZ_ONLY || new RegExp(process.env.FUZZ_ONLY).test(n));   // FUZZ_ONLY=regex: a dev subset
   for (let i = 0; i < NRAND; i++) { const muts = 1 + Math.floor(rnd() * 3), list = []; for (let j = 0; j < muts; j++) list.push([all[Math.floor(rnd() * all.length)], JUNK[Math.floor(rnd() * JUNK.length)]]);
     cases.push([`random#${i + 1}: ` + list.map(([a, v]) => `${a}=${JSON.stringify(v)}`).join(' '), s => { for (const [a, v] of list) set(s, a, v); return s; }]); }
   const results = [];
@@ -217,6 +246,36 @@ const JUNK = [null, '__del', -1, 7, 1e12, -1e12, 'admiral', '', {}, [], true, 'N
       if (ex && ex.pin) for (const id of ex.pin) if (r.ins.l2[id] !== 0) r.errors.push('v10 -> v11: learned second like not pinned for ' + id);
       if (ex && ex.lvl != null && r.ins.lvl !== ex.lvl) r.errors.push(`insight lvl ${r.ins.lvl} != ${ex.lvl}`);
       if (ex && ex.keepBeat && !(r.ins.pending && r.ins.apol === 1)) r.errors.push('valid beat / apology lost ' + JSON.stringify(r.ins));
+      // v14: battle well-formed (or gone); a migrated v13 battle is a Galor with the saved hull (it can only have dropped while ticking)
+      r.bt = await p.evaluate(async () => { const B = __T.G.sp.battle, SH = await import('/js/ships.js'), bad = []; if (!B) return { bad, none: true };
+        if (!Array.isArray(B.enemies) || !B.enemies.length || !Array.isArray(B.allies)) return { bad: ['battle shape'] };
+        for (const e of B.enemies) { if (!SH.SHIPS[e.ship] || SH.SHIPS[e.ship].side !== 'enemy') bad.push('enemy ship ' + e.ship); if (!(e.hull >= 0 && e.hull <= e.max && e.max > 0)) bad.push(`enemy hull ${e.hull}/${e.max}`); if (!(e.volleyT >= 0 && e.volleyT <= 60)) bad.push('volleyT ' + e.volleyT); }
+        if (!B.allies.some(a => a.ship === 'tenacity')) bad.push('no Tenacity'); if (B.allies.some(a => !SH.SHIPS[a.ship] || SH.SHIPS[a.ship].side !== 'ally')) bad.push('ally ship');
+        if (!(B.target >= 0 && B.target < B.enemies.length)) bad.push('target ' + B.target); for (const k of ['hull', 'max', 'volleyT']) if (k in B) bad.push('legacy field ' + k);
+        for (const [k, v] of Object.entries(B.cd || {})) if (!(v >= 0 && v <= 60)) bad.push('cd.' + k);
+        return { bad, ship: B.enemies[0].ship, hull: B.enemies[0].hull }; });
+      if (r.bt.bad.length) r.errors.push('battle v14: ' + r.bt.bad.join(', '));
+      if (ex && ex.bt === 'none' && !r.bt.none) r.errors.push('junk battle not dropped');
+      if (ex && ex.bt === 'migr' && !(r.bt.none || (r.bt.ship === 'galor' && r.bt.hull <= ex.hull && r.bt.hull >= ex.hull - 60))) r.errors.push('v13 -> v14 battle not migrated to a Galor at its hull ' + JSON.stringify(r.bt));
+      if (ex && ex.bt === 'migr' && r.bt.none) r.btEnded = true;   // (the fight can legitimately end in the 0.7 s tick)
+      if (ex && ex.bt === 'keep' && r.bt.ship !== ex.ship) r.errors.push('valid v14 battle lost ' + JSON.stringify(r.bt));
+      // encounter weighting: sp.enc well-formed; fresh for a save without it, junk hardened, a valid one kept
+      r.enc = await p.evaluate(async () => { const E = __T.G.sp.enc, SH = await import('/js/ships.js'), bad = [];
+        if (!E || typeof E !== 'object' || Array.isArray(E)) return { bad: ['enc shape'] };
+        if (!(E.last === null || SH.ENEMY_IDS.includes(E.last))) bad.push('last ' + E.last);
+        if (!(Number.isInteger(E.since) && E.since >= 0 && E.since <= 999)) bad.push('since ' + E.since);
+        if (!(Number.isInteger(E.lastBcPD) && E.lastBcPD >= -1)) bad.push('lastBcPD ' + E.lastBcPD);
+        if (!(Number.isInteger(E.held) && E.held >= 0)) bad.push('held ' + E.held);
+        if (!E.n || typeof E.n !== 'object') bad.push('n'); else { for (const k of SH.ENEMY_IDS) if (!(Number.isInteger(E.n[k]) && E.n[k] >= 0)) bad.push('n.' + k + ' ' + E.n[k]); for (const k of Object.keys(E.n)) if (!SH.ENEMY_IDS.includes(k)) bad.push('n stray ' + k); }
+        return { bad, e: JSON.parse(JSON.stringify(E)) }; });
+      if (r.enc.bad.length) r.errors.push('encounter state: ' + r.enc.bad.join(', '));
+      const en = r.enc.e, nsum = en ? Object.values(en.n).reduce((a, b) => a + b, 0) : 0;
+      if (ex && ex.enc === 'fresh' && en && !(en.last === null || nsum <= 1) ) r.errors.push('sp.enc not fresh ' + JSON.stringify(en));
+      if (ex && ex.enc === 'fresh' && en && nsum === 0 && !(en.since === 99 && en.lastBcPD === -1 && en.held === 0)) r.errors.push('sp.enc fresh defaults ' + JSON.stringify(en));
+      if (ex && ex.enc === 'junk' && en && !(en.n.jh_fighter >= 7 && en.n.galor >= 0 && !('borg' in en.n) && en.lastBcPD === -1 && en.held === 0)) r.errors.push('sp.enc junk not hardened ' + JSON.stringify(en));
+      if (ex && ex.enc === 'seedBc' && en && !(en.lastBcPD === ex.pd && en.n.jh_battlecruiser >= 1 && en.n.galor >= 1 && (en.last === 'jh_battlecruiser' ? en.since === 0 : en.since >= 1)))   /* a live battle may start in the 0.7 s tick after load */ r.errors.push('enc not rebuilt from the log (battlecruiser last) ' + JSON.stringify(en));
+      if (ex && ex.enc === 'seedBc1' && en && !(en.lastBcPD === ex.pd && en.n.jh_fighter >= 1 && en.n.jh_battlecruiser >= 1 && (en.last === 'jh_fighter' ? en.since === 1 : en.since >= 2))) r.errors.push('enc not rebuilt from the log (since 1) ' + JSON.stringify(en));
+      if (ex && ex.enc === 'keep' && en && !(en.lastBcPD === 20 && en.n.jh_battlecruiser >= 2 && en.held === 4 && (en.last === 'jh_battlecruiser' ? en.since === 0 : en.since >= 1))) r.errors.push('valid sp.enc lost ' + JSON.stringify(en));
       // v12: romance well-formed; at most one partner (aboard, active, never T'Ren / Okafor); excluded crew never bonded; letters capped
       r.rom = await p.evaluate(async () => { const P = __T.G.prog, PR = await import('/js/progression.js'), K = PR.PROG.romance, R = P.romance, bad = [];
         if (!R || typeof R !== 'object' || Array.isArray(R)) return { bad: ['romance shape'] };
@@ -252,7 +311,7 @@ const JUNK = [null, '__del', -1, 7, 1e12, -1e12, 'admiral', '', {}, [], true, 'N
       if (ex && ex.jMin != null && !(r.plog.journal >= ex.jMin && r.plog.journal <= ex.jMax)) r.errors.push(`journal ${r.plog.journal} not in ${ex.jMin}..${ex.jMax}`);
     } catch (e) { r.errors.push(String(e.message || e).slice(0, 200)); }
     await p.evaluate(k => localStorage.removeItem(k + '.corrupt'), KEY).catch(() => {});
-    r.errors.push(...errs); r.pass = r.booted && r.ticks && r.sheets && r.version === 13 && !r.errors.length;
+    r.errors.push(...errs); r.pass = r.booted && r.ticks && r.sheets && r.version === 14 && !r.errors.length;
     results.push(r); if (!r.pass) console.log('FAIL', JSON.stringify(r));
   }
   await b.close();

@@ -6,6 +6,7 @@ import { clamp, pick, rand } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
 import { spawnFault } from "./faults.js";
 import { startBattle } from "./battle.js";
+import { foe, shipOf } from "./ships.js";
 import { evResetLeg } from "./events.js";
 import { PACE, rr } from "./pacing.js";
 import { onDock, onUndock, onDiplomatic, ds9Mult } from "./crewlife.js";
@@ -220,7 +221,7 @@ export function tickVoyage(dt) {
 // ---- one voyage view-model for every display ----
 export function sceneText() {
   const SP = G.sp;
-  if (SP.battle) return "Red alert — Jem'Hadar fighter engaged";
+  if (SP.battle) return `Red alert — ${shipOf(foe(SP.battle)).name} engaged`;
   if (SP.travel) return `At warp — course for ${DESTS[SP.travel.dest].name}${SP.travelPaused ? " · holding for battle" : ""}`;
   const t = { ds9: "Deep Space Nine — holding station", convoy: "Convoy Route — on escort station", nebula: "Omarion Nebula — sensor sweeps",
     hulk: "Derelict Hulk — alongside the wreck", earth: "Earth — in spacedock", qonos: "Qo'noS — in orbit", romulus: "Romulus — in orbit", vulcan: "Vulcan — in orbit" };

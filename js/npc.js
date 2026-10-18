@@ -65,6 +65,23 @@ const STEP_ASIDE_R = 34;   // design px: his destination this close to her = she
 // the route never gets closer to him than she already is, nor than DETOUR_CLEAR px (she may squeeze past his shoulder in a
 // narrow passage, never through him: the overlap probe counts < 12 px)
 const DETOUR_CLEAR = 20;
+// pass 10 (4): while she waits on him she is never a statue: after 0.6 s a fidget cycle (a word to him, facing him, then a
+// look back the way she is going), and after TREN_REROUTE_S of waiting with no way round she goes somewhere else instead:
+// heading for a console -> back to the chair; heading for the chair (he's standing on it) -> a free console; else she keeps
+// fidgeting until he moves
+const TREN_REROUTE_S = 4.5;
+function waitFidget(L) {
+  if (tren.waitT < 0.6) return;
+  const ph = (tren.waitT - 0.6) % 2.4, wp = tren.path && tren.path[tren.pathI];
+  if (ph < 1.1) { tren.action = "talk"; faceToward(L.x, L.y); }   // a word to him (no talkTo: his seated talk rows stay his own)
+  else if (wp) faceToward(wp[0], wp[1]);
+}
+function reroute() {
+  tren.destWait = 0;
+  const alt = tren.next === "home" ? TREN.stations.filter(st => st !== tren.spot && !standersNear(st.x, st.y))[0] : TREN.home;
+  if (!alt || alt === tren.spot || standersNear(alt.x, alt.y)) return false;
+  tren.waitT = 0; goTo(alt, alt === TREN.home ? "home" : "station"); return true;
+}
 function routeClear(path, L) { const d0 = dDist(tren.x, tren.y, L.x, L.y); return pathNear({ x: tren.x, y: tren.y, path, pathI: 0, mode: "walk" }, L.x, L.y, 1e4).d >= Math.min(DETOUR_CLEAR, d0 - 1); }
 function detour(L) {
   const end = tren.path[tren.path.length - 1];
@@ -100,14 +117,15 @@ export function tickTren(dt) {
     const ltHere = L.deck === TREN.deck && !L.lift ? [L] : [];
     // on a detour route (checked clear of him) she only stops if he steps right into her way
     if (tren.detour ? blockedAhead(tren, ltHere, 16) : blockedAhead(tren, ltHere)) {
-      tren.yieldT = (tren.yieldT || 0) + dt;
+      tren.yieldT = (tren.yieldT || 0) + dt; tren.waitT = (tren.waitT || 0) + dt;
+      waitFidget(L);   // pass 10 (4): never a frozen wait
       if (tren.yieldT >= AVOID.yieldMaxS && !L.moving) {
         const p = detour(L); tren.yieldT = 0;
-        if (p) { tren.path = p; tren.pathI = 0; tren.destWait = 0; tren.detour = true; }
-        else if ((tren.destWait = (tren.destWait || 0) + AVOID.yieldMaxS) >= 4.5 && tren.next === "station") { tren.destWait = 0; goTo(TREN.home, "home"); }   // he's working her console: she goes back to the chair
+        if (p) { tren.path = p; tren.pathI = 0; tren.destWait = 0; tren.detour = true; tren.waitT = 0; }
+        else if ((tren.destWait = (tren.destWait || 0) + AVOID.yieldMaxS) >= TREN_REROUTE_S) reroute();   // no way round: somewhere else to be
       }
-      else if (tren.yieldT >= AVOID.yieldMaxS) tren.yieldT = 0;   // he's walking: he'll clear; hold
-    } else { tren.yieldT = 0; if (walkStep(tren, "tren", TREN.speed * 960, dt)) arrive(); }
+      else if (tren.yieldT >= AVOID.yieldMaxS) { tren.yieldT = 0; if ((tren.destWait = (tren.destWait || 0) + AVOID.yieldMaxS) >= TREN_REROUTE_S) reroute(); }   // he's walking about in her way: hold, then give up on it too
+    } else { tren.yieldT = 0; tren.waitT = 0; if (walkStep(tren, "tren", TREN.speed * 960, dt)) arrive(); }
   } else if (tren.mode === "aside") {
     // made room for the Lt: wait (facing him) until he has moved on from her old spot, then go back
     const back = tren.resume || TREN.home, who = chatPartner();

@@ -27,6 +27,19 @@ export const PACE = {
   enrouteChancePerLeg: 0.05,       // chance of an ambush somewhere along any warp leg
   idleBattlesPerHour: 2,           // offline / idle: hard cap on battles in any rolling hour
   idleBattleGap: 1800,             //   ... and at least 30 minutes between them
+  // --- encounter table (js/encounters.js): WHICH enemy a random battle brings. Weights are relative odds among the
+  //     types whose gates are open; story contexts (defector, shadow) and forced/debug fights skip the table.
+  encounter: {
+    weights: { jh_fighter: 50, galor: 40, jh_battlecruiser: 10 },   // fighters most common, then Galors; the battlecruiser rare (~10% once open, as the groundwork had)
+    bc: {                          // the battlecruiser (worn start: 83.8% wins / 14.9% injuries; hard start 9.7% wins) only when ALL hold:
+      minRank: 1,                  //   she is a full Lieutenant (rank 1; guaranteed by play day 7, ~day 5 for a regular player) ...
+      minShipDay: 21,              //   ... AND ship's day 21+ (the groundwork's gate, kept: pass 12 manager note) ...
+      gapBattles: 2,               //   never twice in a row: at least 2 other battles since the last battlecruiser ...
+      gapPlayDays: 2,              //   ... AND at least 2 play days since her (pass 13: spaced by battles AND by days)
+      minHull: 60,                 //   and never against a CRIPPLED ship (pass 13 manager call): hull below 60% ...
+      blockSev: "crit",            //   ... or an open CRIT fault -> the roll falls back to fighter / Galor. Power, torpedoes, med faults don't hold her.
+    },
+  },
   // --- faults ---
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)
   coolantHullDrain: 0.03,          // hull %/s lost to an impairing coolant leak out of battle (was 0.08; battle stays 0.45)

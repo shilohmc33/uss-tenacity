@@ -2,9 +2,9 @@
 //   LIE_ART.lt / LIE_ART.patient (384x160 cells, head left, hip anchor, A/B), SEAT_ART.lt + chair seat spot (walks to
 //   seat.stand and sits), TINT_BASES (a grey-uniform copy of tren-v1, department colour applied at draw time).
 // Also checks the fallbacks: with the entries removed the legacy render returns. Shots: shots/anim-hook-<vp>-*.png
-// Usage: BASE=http://127.0.0.1:8812/ node tools/anim-hook-check.js
+// Usage: [BASE=http://127.0.0.1:8765/] node tools/anim-hook-check.js   (the main tree's server; 8812 no longer serves the game)
 const L = require('/workspace/playtest-scripts/lib.js');
-const BASE = process.env.BASE || 'http://127.0.0.1:8812/';
+const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
 const OUT = '/workspace/tenacity/shots/';
 (async () => {
   const b = await L.launch(); let fail = 0; const res = {};
