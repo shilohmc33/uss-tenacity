@@ -21,7 +21,7 @@ export function freshState() {
       resumeTorp: false, note: null,
     },
     sp: {
-      location: "ds9", travel: null, travelPaused: false, encAcc: 0, battle: null, evasiveT: 0, rep: 0, lastBattleT: -1e9, torpT: 0,
+      location: "ds9", travel: null, travelPaused: false, encAcc: 0, battle: null, awayDefer: 0, evasiveT: 0, rep: 0, lastBattleT: -1e9, torpT: 0,
       escortT: 0, escortDone: true, escortChecked: false, resupT: 0, visit: null, preScanned: false, enc: freshEnc(),   // enc: encounter weighting (additive, v14 shape)
       cap: { dest: "convoy", reason: "Convoy escort — the ship's assigned duty, pending departure from Deep Space Nine.", decideT: 3, holdLogged: false, legCount: 0, lastDiplo: null, sinceDiplo: 0 },
       ev: { active: null, lastId: null, nextT: -1, legTarget: 0, legFired: 0 },
@@ -126,6 +126,7 @@ function sanitize(base) {
     if (SP.travel && !DESTS[SP.travel.dest]) { SP.travel = null; SP.travelPaused = false; }
     if (SP.cap && SP.cap.dest && !DESTS[SP.cap.dest]) SP.cap.dest = null;
     SP.enc = hardenEnc(SP.enc);   // encounter weighting: last encounter / spacing (missing in older v14 saves -> fresh)
+    { const d = +SP.awayDefer; SP.awayDefer = Number.isFinite(d) && d > 0 ? Math.min(d, 7 * 86400) : 0; }   // pass 16 B1: catch-up held behind a live fight
     hardenBattle(SP);   // battle groundwork: combatant arrays (v14), junk enemy types / hulls (pass-03 N-3: never a negative enemy hull)
     if (SP.ev && SP.ev.active && SP.ev.active.task && !NODEMAP[SP.ev.active.task.node]) SP.ev.active = null;
   }

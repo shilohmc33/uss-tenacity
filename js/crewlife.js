@@ -3,6 +3,7 @@
 // Data: js/roster.js (slots, species, tags, postings). Tuning: PROG.roster / crewEvents / fleet / favours / sinks.
 // Runs inside stepSim (so the offline catch-up rolls days and lands arrivals too); the npc-ambient layer only draws.
 import { G } from "./state.js";
+import { HEAD_Y } from "./data.js";
 import { log, toast, fx } from "./bus.js";
 import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, rankOf, fullName, perkFx, spend, canAfford, addr, costText, computeReadiness, giftShare, romanceCap } from "./progression.js";
 import { SLOTMAP, SPECIES, TAGS, TAG_KEYS, POSTINGS, LADDERS, DEPTS, pr, Pr, prFill } from "./roster.js";
@@ -159,7 +160,7 @@ export function introDone(id) {
   const o = C().occ[id]; if (!o || !o.intro) return false;
   log(introLine(id), "comm");
   o.intro = false; crewTouch();
-  fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `NEW CREWMATE · ${o.short.toUpperCase()}`, color: "#9fd8ff", life: 2.6 });
+  fx("floater", { x: G.lt.x, y: G.lt.y - HEAD_Y, text: `NEW CREWMATE · ${o.short.toUpperCase()}`, color: "#9fd8ff", life: 2.6 });
   return true;
 }
 export function tickCrew(dt) {

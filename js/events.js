@@ -1,7 +1,7 @@
 // Random voyage events between legs; about half hand the Lt a timed deck task.
 import { G } from "./state.js";
 import { awardXP, taskMult, PROG, milestone, taskDone, hooks } from "./progression.js";
-import { NODEMAP, DESTS, DECKS } from "./data.js";
+import { NODEMAP, DESTS, DECKS, HEAD_Y } from "./data.js";
 import { clamp, rand, dDist } from "./util.js";
 import { log, toast, shipNews, fx, cheerful, cheer } from "./bus.js";
 import { spawnFault } from "./faults.js";
@@ -126,7 +126,7 @@ export function tickEvents(dt) {
           milestone("firstTask", "First deck task");
           taskDone(tk.node, tk.deck);   // phase 2: opinion of the area's crew + readiness service
           toast(`Deck task complete — bonus earned · +${xp} XP`, "good");
-          fx("floater", { x: L.x, y: L.y - 0.235, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.8, life: 2.2 });
+          fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.8, life: 2.2 });
           resolveEvent(true); return;
         }
       }
@@ -151,7 +151,7 @@ export function resolveEvent(bonus) {   // exported for tools (pt07 hush checks)
   const rep0 = SP.rep;
   resolveEffects(act, bonus, SP, S);
   // visible reward: the bonus reputation floats up over the Lieutenant at the task console
-  if (bonus && SP.rep > rep0) fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `+${SP.rep - rep0} REP`, color: "#ffaa77", delay: 0.2, life: 2.2 });
+  if (bonus && SP.rep > rep0) fx("floater", { x: G.lt.x, y: G.lt.y - HEAD_Y, text: `+${SP.rep - rep0} REP`, color: "#ffaa77", delay: 0.2, life: 2.2 });
 }
 function resolveEffects(act, bonus, SP, S) {
   if (act.id === "distress") {

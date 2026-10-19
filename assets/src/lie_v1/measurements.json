@@ -1,0 +1,194 @@
+{
+ "cell": [
+  384,
+  160
+ ],
+ "anchor_hip": [
+  192,
+  80
+ ],
+ "sheet": "one row, 2 cells (A, B breathing) = 768x160",
+ "head": "left",
+ "target_length_sheet_px": 256.0,
+ "hip_rule": "hip x = head-left + 0.5 * body length; hip y = torso midline at 45-55% of length",
+ "hires": {
+  "cell": [
+   1728,
+   720
+  ],
+  "anchor_hip": [
+   864,
+   360
+  ],
+  "note": "source resolution, never upscaled; game frame = hires * scale (then cropped to the 384x160 cell about the same hip anchor)"
+ },
+ "keys": {
+  "lt": {
+   "source": "raw/lie_lt_A.jpg",
+   "source_body_length_px": 1160,
+   "source_hip": [
+    607.0,
+    169.6
+   ],
+   "scale_hires_to_game": 0.22069,
+   "frames": {
+    "A": {
+     "bbox_xywh": [
+      63,
+      48,
+      258,
+      64
+     ]
+    },
+    "B": {
+     "bbox_xywh": [
+      63,
+      48,
+      258,
+      65
+     ]
+    }
+   },
+   "clipped": false,
+   "sheet": "out/lie-lt.png"
+  },
+  "patient-uniform": {
+   "source": "raw/lie_patient_uniform_A.jpg",
+   "source_body_length_px": 1122,
+   "source_hip": [
+    588.0,
+    186.0
+   ],
+   "scale_hires_to_game": 0.22816,
+   "frames": {
+    "A": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      74
+     ]
+    },
+    "B": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      75
+     ]
+    }
+   },
+   "clipped": false,
+   "sheet": "out/lie-patient-grey.png",
+   "mask_sheet": "out/lie-patient-grey-mask.png",
+   "note": "neutral grey yoke base (mean 128) + mask; tint source for the department keys"
+  },
+  "patient": {
+   "source": "raw/lie_patient_gown_A.jpg",
+   "source_body_length_px": 1126,
+   "source_hip": [
+    589.0,
+    201.5
+   ],
+   "scale_hires_to_game": 0.22735,
+   "frames": {
+    "A": {
+     "bbox_xywh": [
+      63,
+      39,
+      258,
+      79
+     ]
+    },
+    "B": {
+     "bbox_xywh": [
+      63,
+      38,
+      258,
+      81
+     ]
+    }
+   },
+   "clipped": false,
+   "sheet": "out/lie-patient.png"
+  },
+  "patient-red": {
+   "source": "raw/lie_patient_uniform_A.jpg",
+   "tint": "#c8463c",
+   "tint_formula": "art-hooks.js tintedSheet (mask weight, k=lum/0.5)",
+   "scale_hires_to_game": 0.22816,
+   "frames": {
+    "A": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      74
+     ]
+    },
+    "B": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      75
+     ]
+    }
+   },
+   "clipped": false,
+   "sheet": "out/lie-patient-red.png"
+  },
+  "patient-gold": {
+   "source": "raw/lie_patient_uniform_A.jpg",
+   "tint": "#d4a72c",
+   "tint_formula": "art-hooks.js tintedSheet (mask weight, k=lum/0.5)",
+   "scale_hires_to_game": 0.22816,
+   "frames": {
+    "A": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      74
+     ]
+    },
+    "B": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      75
+     ]
+    }
+   },
+   "clipped": false,
+   "sheet": "out/lie-patient-gold.png"
+  },
+  "patient-blue": {
+   "source": "raw/lie_patient_uniform_A.jpg",
+   "tint": "#3d8fc4",
+   "tint_formula": "art-hooks.js tintedSheet (mask weight, k=lum/0.5)",
+   "scale_hires_to_game": 0.22816,
+   "frames": {
+    "A": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      74
+     ]
+    },
+    "B": {
+     "bbox_xywh": [
+      64,
+      43,
+      257,
+      75
+     ]
+    }
+   },
+   "clipped": false,
+   "sheet": "out/lie-patient-blue.png"
+  }
+ }
+}

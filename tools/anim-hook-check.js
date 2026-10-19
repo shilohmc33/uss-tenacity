@@ -59,17 +59,16 @@ const OUT = '/workspace/tenacity/shots/';
     await p.evaluate(() => { const { D } = window.__hook; delete D.SEAT_ART.lt; const n = D.NODEMAP.chair; if (n.standInterim) { n.x = n.standInterim.x; n.y = n.standInterim.y; n.face = n.standInterim.face; } });
     // 3 tint base: male crew on the bridge drawn from the grey sheet, tinted per department at draw time
     const tint = await p.evaluate(async () => { const { D } = window.__hook, AH = await import('/js/art-hooks.js'), NA = await import('/js/npc-ambient.js');
-      D.TINT_BASES['crew-male'] = { img: 'test-male', pronoun: 'he' };
-      D.CHAR_SHEETS['crew-male'] = { 'test-male': ['walk', 'talk', 'eat', 'computer', 'kneel', 'weld'] };
-      D.CHAR_FRAMES['crew-male'] = JSON.parse(JSON.stringify(D.CHAR_FRAMES['crew-red'], (k, v) => k === 'img' ? 'test-male' : v));
+      // art batch 1: the REAL male base (crew-male-v1, assets/crew-male-v1.webp + -mask) replaces the old injected test sheet
+      const BASE = Object.keys(D.TINT_BASES).find(k => D.TINT_BASES[k].pronoun === 'he'), IMG = BASE && D.TINT_BASES[BASE].img;
       const L = __T.G.lt; L.deck = 'bridge'; L.mode = 'idle'; L.path = null; L.x = 0.5; L.y = 0.55;
       let n = 0; const who = []; for (const a of __T.ambient) { const o = __T.G.prog.crew.occ[a.occId]; if (o && o.pronoun === 'he' && /^crew-/.test(a.who)) { a.who = AH.tintBaseFor('he') || a.who; n++; who.push([a.occId, a.deck, a.tint]); } }
       window.__HD = []; await new Promise(r => setTimeout(r, 500)); const tinted = [...new Set(window.__HD)];
-      return { male: n, greyPx: window.__greyed, who, base: AH.tintBaseFor('he'), cached: ['#d4a72c', '#3d8fc4', '#c8463c'].map(c => !!AH.tintedSheet('test-male', c)) }; });
+      return { male: n, greyPx: window.__greyed, who, base: AH.tintBaseFor('he'), cached: ['#d4a72c', '#3d8fc4', '#c8463c'].map(c => !!AH.tintedSheet(IMG, c)) }; });
     // show the tinted crew: park three male crew from different departments in view
-    await p.evaluate(() => { const L = __T.G.lt; const ms = __T.ambient.filter(a => a.who === 'crew-male'); const pos = [[0.36, 0.43], [0.5, 0.36], [0.64, 0.43]]; ms.slice(0, 3).forEach((a, i) => { a.deck = L.deck; a.x = pos[i][0]; a.y = pos[i][1]; a.mode = 'dwell'; a.t = 999; a.path = null; a.spot = { id: 'show', face: 'down', action: null, t: [999, 999] }; }); });
+    await p.evaluate(() => { const L = __T.G.lt; const ms = __T.ambient.filter(a => /^crew-male/.test(a.who)); const pos = [[0.36, 0.43], [0.5, 0.36], [0.64, 0.43]]; ms.slice(0, 3).forEach((a, i) => { a.deck = L.deck; a.x = pos[i][0]; a.y = pos[i][1]; a.mode = 'dwell'; a.t = 999; a.path = null; a.spot = { id: 'show', face: 'down', action: null, t: [999, 999] }; }); });
     await shot('tint-base', 0.5, 0.42, 1.2);
-    res[vp + '-tint'] = tint; if (!(tint.base === 'crew-male' && tint.male > 0 && tint.cached.every(Boolean))) { fail++; console.log('FAIL tint', vp, tint); }
+    res[vp + '-tint'] = tint; if (!(tint.base === 'crew-male-v1' && tint.male > 0 && tint.cached.every(Boolean))) { fail++; console.log('FAIL tint', vp, tint); }
     await p.close();
   }
   console.log(JSON.stringify(res));

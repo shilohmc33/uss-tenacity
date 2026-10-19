@@ -1,6 +1,6 @@
 // Deck renderer: plate + camera (follow, pinch/wheel zoom, drag pan), Lt sprites, rings, fx, turbolift overlay.
 import { G } from "../state.js";
-import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT } from "../data.js";
+import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT } from "../data.js";
 import { actionFrame, animSeed, walkPose } from "../anim.js";
 import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
 import { SLOTMAP, DEPTS } from "../roster.js";
@@ -8,7 +8,7 @@ import { tren } from "../npc.js";
 import { ambientOnDeck, ltChatPartner } from "../npc-ambient.js";
 import { IMG } from "../assets.js";
 import { clamp, dDist } from "../util.js";
-import { ZONE, LIFT_T } from "../crew.js";
+import { ZONE, LIFT_T, HEAD_Y } from "../crew.js";
 import { drawCabin, slots as cabinSlots } from "../cabin.js";
 import { isWalkable } from "../path.js";
 import { activeJob } from "../oddjobs.js";
@@ -18,16 +18,16 @@ import { TORP_BUILD_T } from "../crew.js";
 // debug overlay (?debug=1: "Walk grid" button, or ?debug=1&walk=1)
 export const DBG = { walk: /[?&]walk=1/.test(location.search) && /[?&]debug=1/.test(location.search), light: true };   // light:false = no crew tint (screenshots)
 const PAN_HOLD = 10;   // BUG-18: a manual pan/zoom holds this long (or until the next order) before easing back to the Lt
-const K = CHAR_SCALE;   // characters (and their shadows, labels, rings) are drawn at 2x
+const K = CHAR_SCALE;   // UI around the characters (labels, rings, task markers) is drawn at 2x; the BODY (sprites, shadows) uses FIG_H / FIG_K (option A scale)
 export const cam = { x: 0.45 * DW, y: 0.62 * DH, zoom: 2.2, scale: 1, fit: 1, w: 0, h: 0, manualT: 0, snap: true };
 const fxl = { sparks: [], floaters: [], pulses: [] };
 export function deckFx(kind, d) {
   if (kind === "spark") for (let i = 0; i < 2; i++) fxl.sparks.push({ x: d.x * DW, y: d.y * DH, vx: (Math.random() - 0.5) * 90, vy: -Math.random() * 80, t: 0, life: 0.4 + Math.random() * 0.3 });
   if (kind === "floater") fxl.floaters.push({ x: d.x * DW, y: d.y * DH, text: d.text, color: d.color, t: -(d.delay || 0), life: d.life || 1.4, big: !!d.big });
-  if (kind === "milestone") { const L = G.lt; fxl.floaters.push({ x: L.x * DW, y: (L.y - 0.235) * DH - 14 * K, text: d.text, color: "#7fe0ff", t: -2.2, life: 2.6, big: true }); }
-  if (kind === "promotion") { const L = G.lt, x = L.x * DW, y = (L.y - 0.235) * DH; fxl.floaters.push({ x, y: y - 30 * K, text: `PROMOTED: ${d.name.toUpperCase()}`, color: "#ffd75e", t: -0.1, life: 4, big: true }); for (let i = 0; i < 5; i++) fxl.pulses.push({ x, y: L.y * DH, t: -i * 0.15, gold: true }); }
+  if (kind === "milestone") { const L = G.lt; fxl.floaters.push({ x: L.x * DW, y: (L.y - HEAD_Y) * DH - 14 * K, text: d.text, color: "#7fe0ff", t: -2.2, life: 2.6, big: true }); }
+  if (kind === "promotion") { const L = G.lt, x = L.x * DW, y = (L.y - HEAD_Y) * DH; fxl.floaters.push({ x, y: y - 30 * K, text: `PROMOTED: ${d.name.toUpperCase()}`, color: "#ffd75e", t: -0.1, life: 4, big: true }); for (let i = 0; i < 5; i++) fxl.pulses.push({ x, y: L.y * DH, t: -i * 0.15, gold: true }); }
   if (kind === "levelUp") {   // progression: gold burst + big floater over the Lt (deck view only; the toast covers space view)
-    const L = G.lt, x = L.x * DW, y = (L.y - 0.235) * DH;
+    const L = G.lt, x = L.x * DW, y = (L.y - HEAD_Y) * DH;
     fxl.floaters.push({ x, y: y - 14 * K, text: `LEVEL ${d.level}!`, color: "#ffd75e", t: -0.2, life: 3.2, big: true });
     for (let i = 0; i < 3; i++) fxl.pulses.push({ x: L.x * DW, y: L.y * DH, t: -i * 0.18, gold: true });
   }
@@ -43,7 +43,8 @@ export function resizeCam(w, h) {
   const cover = Math.max(w / DW, h / DH) / cam.fit;
   cam.minZoom = Math.max(1, h > w ? cover * 0.85 : cover);
   // the mode's default framing never starts below "cover" (no margins unless the player pinches out)
-  if (cam.prefZoom != null) cam.zoom = Math.max(cam.prefZoom, Math.max(1, cover));
+  // option A: phones (cam.boost, set by main.js) frame ~22% tighter so the smaller figure is ~85-90 css px tall
+  if (cam.prefZoom != null) cam.zoom = Math.max(cam.prefZoom, Math.max(1, cover)) * (cam.boost || 1);
   cam.zoom = clamp(cam.zoom, cam.minZoom, 4.5);
   cam.scale = cam.fit * cam.zoom;
 }
@@ -166,8 +167,8 @@ function drawChar2(ctx, f, x, y, sy = 1, tint = null) {
 const LT_AS = animSeed("lt"), TREN_AS = animSeed("tren");
 function drawWalker(ctx, who, c, act, t, as = LT_AS) {
   const px = c.x * DW, py = c.y * DH;
-  ctx.fillStyle = "rgba(20,10,0,0.38)"; ctx.beginPath(); ctx.ellipse(px, py - 1, 13 * K, 4.2 * K, 0, 0, 6.29); ctx.fill();
-  if (!charReady(who, "walk")) { ctx.fillStyle = "#c9a14a"; ctx.fillRect(px - 8 * K, py - FIG_H, 16 * K, FIG_H); return; }   // art missing
+  ctx.fillStyle = "rgba(20,10,0,0.38)"; ctx.beginPath(); ctx.ellipse(px, py - 1, 13 * K * FIG_K, 4.2 * K * FIG_K, 0, 0, 6.29); ctx.fill();
+  if (!charReady(who, "walk")) { ctx.fillStyle = "#c9a14a"; ctx.fillRect(px - 8 * K * FIG_K, py - FIG_H, 16 * K * FIG_K, FIG_H); return; }   // art missing
   const F = CHAR_FRAMES[who], tint = isTintBase(who) ? c.tint || "#c8463c" : null;
   // action loops (weld/kneel, computer, eat, talk): A, M, B, M with per-action holds and seeded rests (anim.js
   // ACTION_TIMING); every character has its own seed + tempo, so nobody works in lockstep.
@@ -197,7 +198,7 @@ function drawPatient(ctx, t, i) {
 // wherever the bed is long enough (biobed 150, the bigger quarters racks), so the Lt matches the patients (pass 08 /
 // audit C4); a shorter bed (berthing bunk 96, the shared-room rack 120) scales the whole figure down to the bed's
 // length so he never overhangs it (pass 09 item 1). lieFit is exported for tools/pt09-metrics.js.
-export const LIE_FIG = 138;
+export const LIE_FIG = Math.round(138 * FIG_K);   // 86 at the option-A scale (was 138)
 export const lieFit = bedLen => Math.min(1, (bedLen > 0 ? bedLen : LIE_FIG) / LIE_FIG);
 // Art hook: a LIE_ART sprite for `who` (384x160 cell, head at the left, hip-centre anchor, breathing A/B) replaces the
 // legacy frame when present; it is drawn at the standing sheets' scale, turned with the bed (rot + 90 degrees, since

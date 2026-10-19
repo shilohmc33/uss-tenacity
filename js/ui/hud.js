@@ -5,7 +5,7 @@ import { CREW_ROSTER, DEPTS, DEPT_ORDER, POSTINGS, SPECIES, LADDERS, SLOTMAP, pr
 const PRON = p => pr({ pronoun: p || "they" });   // pt07 m1: the patient's own pronoun
 import { favourState, callFavour, perkState, alumRankShort, overhaulState, doOverhaul, casingOk, buildCasing, fixKit } from "../crewlife.js";
 import { DECKS, DECK_ORDER, SYSTEMS, NODEMAP, SEV_LABEL, PRI_LABEL, OFFICERS, DESTS } from "../data.js";
-import { on } from "../bus.js";
+import { on, log } from "../bus.js";
 import { dutyItems, shieldCap } from "../faults.js";
 import { voyageView } from "../voyage.js";
 import * as CB from "../cabin.js";
@@ -105,36 +105,87 @@ export function showAlertCard(c) {
   el.hidden = false; el.classList.remove("in"); void el.offsetWidth; el.classList.add("in");
   // pass 15: the sensor (crit) toast stays up alongside the card, and the card never covers a toast
   document.querySelectorAll("#toasts .toast.crit").forEach(t => t.classList.add("hold"));
+  // pass 16 B2: an auto-opened prompt that was already up (promotion board, specialisation, crew-safety prompt, romance
+  // disclosure) steps aside for red alert - it is still owed and autoModals brings it back after the fight. Anything the
+  // player opened stays open; the card sits above it (css z-index 56: above every modal and the play-mode sheet).
+  holdPromptsForAlert(); liftAlertCard(true);
   fitAlertCard();
-  clearTimeout(alertTimer); alertTimer = setTimeout(hideAlertCard, 7000);
+  clearTimeout(alertTimer); armAlertTimer();
+}
+// pass 16 B2: the 7 s auto-hide counts only time the card is actually SEEN - the page visible and the card on top at its
+// centre (elementFromPoint) - so it can never time out under a modal or in a hidden tab. Ticks every 250 ms.
+let alertSeen = 0, alertTick = 0;
+export const ALERT_SHOW_MS = 7000;
+function alertVisible() {
+  const el = $("#bcCard"); if (!el || el.hidden || document.hidden) return false;
+  const r = el.getBoundingClientRect(); if (r.width < 4 || r.height < 4) return false;
+  const x = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), y = Math.min(innerHeight - 1, Math.max(0, r.top + Math.min(r.height / 2, 40)));
+  const hit = document.elementFromPoint(x, y); return !!(hit && el.contains(hit));
+}
+function armAlertTimer() {
+  alertSeen = 0; clearInterval(alertTick);
+  alertTick = setInterval(() => { if (alertVisible()) alertSeen += 250; if (alertSeen >= ALERT_SHOW_MS) hideAlertCard(); }, 250);
+}
+export const alertCardState = () => ({ shown: !$("#bcCard").hidden, seenMs: alertSeen, visible: alertVisible() });
+// pass 16 B2: #app is position:fixed (its own stacking context, under every body-level modal at z 50), so no z-index inside
+// the stage can lift the card over a modal. While it is up the card moves into #alertLayer: a body-level fixed box laid exactly
+// over #stage (z 56, clips like the stage, pointer-events only on the card), so fitAlertCard's stage-relative geometry is unchanged.
+function syncAlertLayer() {
+  const lay = $("#alertLayer"), st = $("#stage"); if (!lay || !st) return;
+  const r = st.getBoundingClientRect(), cs = getComputedStyle(st);
+  Object.assign(lay.style, { left: r.left + "px", top: r.top + "px", width: r.width + "px", height: r.height + "px", borderRadius: cs.borderRadius });
+}
+function liftAlertCard(up) {
+  const el = $("#bcCard"); if (!el) return;
+  let lay = $("#alertLayer");
+  if (up) { if (!lay) { lay = document.createElement("div"); lay.id = "alertLayer"; document.body.appendChild(lay); } syncAlertLayer(); if (el.parentElement !== lay) lay.appendChild(el); lay.hidden = false; }
+  else { const box = $("#toasts"); if (box && el.parentElement !== box.parentElement) box.after(el); if (lay) lay.hidden = true; }
+}
+function holdPromptsForAlert() {
+  for (const id of ["specPanel", "safetyPanel"]) if (!$("#" + id).hidden) $("#" + id).hidden = true;
+  if (!$("#boardPanel").hidden && !boardResult) $("#boardPanel").hidden = true;   // a board RESULT already on screen stays (the card covers it)
+  if (!$("#romPanel").hidden && romView && romView.mode === "disc") { $("#romPanel").hidden = true; romView = null; }
 }
 function hideAlertCard() {
-  const el = $("#bcCard"); if (el) { el.hidden = true; el.style.top = ""; el.classList.remove("side"); } clearTimeout(alertTimer);
-  const box = $("#toasts"); if (box) { box.classList.remove("side"); box.querySelectorAll(".toast.hold").forEach(t => t.remove()); }
+  const el = $("#bcCard"); if (el) { el.hidden = true; el.style.top = ""; el.style.maxHeight = ""; el.classList.remove("side", "clamp"); } clearTimeout(alertTimer); clearInterval(alertTick);
+  liftAlertCard(false);
+  const box = $("#toasts"); if (box) { box.classList.remove("side"); box.style.top = ""; box.style.bottom = ""; box.querySelectorAll(".toast.hold").forEach(t => t.remove()); }
 }
 // pass 15: keep every toast clear of the red-alert card - below the toast stack if the card fits there (phone portrait), else the
 // card steps left and the toasts right (landscape: a 390 px tall stage has no room below, and above it would cover the RED ALERT banner). Card geometry from offsetTop / offsetHeight (the bcin scale
 // animation would shrink getBoundingClientRect).
 function fitAlertCard() {
   const el = $("#bcCard"), box = $("#toasts"); if (!el || el.hidden || !box) return;
-  el.style.top = ""; box.classList.remove("side"); el.classList.remove("side");
+  syncAlertLayer();
+  el.style.top = ""; el.style.maxHeight = ""; el.classList.remove("side", "clamp"); box.classList.remove("side"); box.style.top = ""; box.style.bottom = "";
   const par = el.offsetParent; if (!par) return;
-  const pr = par.getBoundingClientRect(), H = el.offsetHeight, W = el.offsetWidth;
-  const cardAt = top => { const l = pr.left + el.offsetLeft - W / 2; return { top, bottom: top + H, left: l, right: l + W }; };
+  const pr = par.getBoundingClientRect(), floor = Math.min(pr.bottom, innerHeight) - 6;   // pass 15 L1: the card must end inside the stage
+  const geo = () => { const l = pr.left + el.offsetLeft - (el.classList.contains("side") ? 0 : el.offsetWidth / 2); const t = pr.top + el.offsetTop; return { top: t, bottom: t + el.offsetHeight, left: l, right: l + el.offsetWidth }; };
   const ts = () => [...box.querySelectorAll(".toast")].map(t => t.getBoundingClientRect());
   const hit = (c, list) => list.some(r => r.left < c.right && r.right > c.left && r.top < c.bottom && r.bottom > c.top);
-  let c = cardAt(pr.top + el.offsetTop), list = ts();
-  if (!hit(c, list)) return;
   const setTop = y => { el.style.top = (y - pr.top) + "px"; };
+  // pass 15 L1: still too tall (small phones: 360x640, 667x375) -> cap the height; the copy scrolls and TAP TO DISMISS stays pinned (css .clamp)
+  const clamp = () => { const c = geo(); if (c.bottom > floor) { el.style.maxHeight = Math.max(90, floor - c.top) + "px"; el.classList.add("clamp"); } };
+  let list = ts();
+  if (!hit(geo(), list)) { clamp(); return; }
   const below = Math.max(...list.map(r => r.bottom)) + 8;
-  if (below + H <= innerHeight - 8) { setTop(below); return; }
-  box.classList.add("side"); el.classList.add("side");   // no room below (landscape): card to the left, toasts to its right at the card's top (css: clear of the zoom buttons, capped at 40%)
+  if (below + el.offsetHeight <= floor) { setTop(below); return; }
+  if (innerWidth > innerHeight) {   // landscape: card to the left, toasts to its right at the card's top (css: clear of the zoom buttons, capped at 40%)
+    box.classList.add("side"); el.classList.add("side"); clamp(); return;
+  }
+  // portrait with no room below the toasts (small phones): the card keeps its place under the banner, height capped to leave room, and the
+  // toast stack moves to just below it
+  const th = list.reduce((a, r) => a + r.height + 4, 0), c0 = geo();
+  el.style.maxHeight = Math.max(120, floor - c0.top - th - 8) + "px"; el.classList.add("clamp");
+  box.style.top = (geo().bottom + 6 - pr.top) + "px"; box.style.bottom = "auto";
 }
-addEventListener("resize", () => fitAlertCard());
+// pass 15 L2: rotating / resizing while the card is up re-lays it out - now, next frame, and once the layout (toast flip, stage) has settled
+const refit = () => { fitAlertCard(); requestAnimationFrame(() => fitAlertCard()); setTimeout(fitAlertCard, 200); };
+addEventListener("resize", refit); addEventListener("orientationchange", refit);
 export function showToast(msg, kind = "") {
   const box = $("#toasts"), d = document.createElement("div");
   d.className = "toast " + kind; d.textContent = msg; box.appendChild(d);
-  while (box.children.length > 3) box.firstChild.remove();
+  while (box.children.length > 3) (box.querySelector(".toast:not(.crit)") || box.firstChild).remove();   // pass 15: crit toasts (sensor, alpha strike) go last
   setTimeout(() => { if (!d.classList.contains("hold")) d.remove(); }, 3200);
   fitAlertCard();
 }
@@ -281,6 +332,8 @@ export function openLiftPanel() {
   $("#liftPanel").hidden = false;
 }
 export function showReport(r) {
+  // pass 16 B1: a live-started fight was on - nothing was simulated; the fight resumes live and the report waits for it
+  if (r && r.deferred) { log("Back on watch — red alert is still on. The fight held while you were away; the night crew's report waits until it's over.", "comm"); return; }
   const fmt = s => s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
   const d = (v, u = "") => (v >= 0 ? "+" : "") + Math.round(v) + u;
   const vv = voyageView(), SP = G.sp;
@@ -437,10 +490,11 @@ function renderSafetyPrompt() {
 }
 function autoModals() {
   renderMedScene();
-  const busy = !$("#report").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden;
+  const busy = !$("#report").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden
+    || !$("#bcCard").hidden;   // pass 15 L3: the safety prompt / board / spec / disclosure wait while the red-alert card is up (dismissed or auto-hidden after 7 s)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && MD.gentlePromptDue()) { renderSafetyPrompt(); return; }
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && RM.pendingDisc()) { openRom({ mode: "disc" }); return; }
-  if (!busy && $("#boardPanel").hidden && BD.boardWaiting()) openBoard();
+  if (!busy && $("#boardPanel").hidden && BD.boardWaiting() && !G.sp.battle) openBoard();   // pass 16 B2: never mid-fight (it waits for the all-clear, like the others)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && BD.specPending() && (G.prog.specOffered || 0) < BD.specOwed() && !G.sp.battle) { G.prog.specOffered = BD.specOwed(); openSpec(); }
 }
 const mood = o => o.pass >= 0.7 ? "favourable" : o.pass >= 0.4 ? "uncertain" : "an uphill climb";

@@ -1,0 +1,320 @@
+{
+ "walkA_right": {
+  "head_top": 125,
+  "sole": 375,
+  "height": 251,
+  "x_min": 10,
+  "x_max": 150,
+  "spread": 141,
+  "torso_cx": 76.5,
+  "head_cx": 79.9,
+  "feet_runs": [
+   [
+    10,
+    47
+   ],
+   [
+    95,
+    150
+   ]
+  ]
+ },
+ "walkM_right": {
+  "head_top": 122,
+  "sole": 375,
+  "height": 254,
+  "x_min": 43,
+  "x_max": 119,
+  "spread": 77,
+  "torso_cx": 73.5,
+  "head_cx": 80.1,
+  "feet_runs": [
+   [
+    58,
+    117
+   ]
+  ]
+ },
+ "walkB_right": {
+  "head_top": 125,
+  "sole": 375,
+  "height": 251,
+  "x_min": 9,
+  "x_max": 151,
+  "spread": 143,
+  "torso_cx": 74.5,
+  "head_cx": 79.9,
+  "feet_runs": [
+   [
+    9,
+    48
+   ],
+   [
+    104,
+    151
+   ]
+  ]
+ },
+ "cycle_right": {
+  "head_bob_px": 3,
+  "heights": [
+   251,
+   254,
+   251
+  ],
+  "spread_A": 141,
+  "spread_B": 143
+ },
+ "walkA_left": {
+  "head_top": 125,
+  "sole": 375,
+  "height": 251,
+  "x_min": 10,
+  "x_max": 150,
+  "spread": 141,
+  "torso_cx": 83.5,
+  "head_cx": 80.1,
+  "feet_runs": [
+   [
+    10,
+    65
+   ],
+   [
+    113,
+    150
+   ]
+  ]
+ },
+ "walkM_left": {
+  "head_top": 122,
+  "sole": 375,
+  "height": 254,
+  "x_min": 41,
+  "x_max": 117,
+  "spread": 77,
+  "torso_cx": 86.5,
+  "head_cx": 79.9,
+  "feet_runs": [
+   [
+    43,
+    102
+   ]
+  ]
+ },
+ "walkB_left": {
+  "head_top": 125,
+  "sole": 375,
+  "height": 251,
+  "x_min": 9,
+  "x_max": 151,
+  "spread": 143,
+  "torso_cx": 85.5,
+  "head_cx": 80.1,
+  "feet_runs": [
+   [
+    9,
+    56
+   ],
+   [
+    112,
+    151
+   ]
+  ]
+ },
+ "cycle_left": {
+  "head_bob_px": 3,
+  "heights": [
+   251,
+   254,
+   251
+  ],
+  "spread_A": 141,
+  "spread_B": 143
+ },
+ "walkA_down": {
+  "head_top": 122,
+  "sole": 375,
+  "height": 254,
+  "x_min": 31,
+  "x_max": 131,
+  "spread": 101,
+  "torso_cx": 80.8,
+  "head_cx": 79.8,
+  "feet_runs": [
+   [
+    59,
+    78
+   ]
+  ]
+ },
+ "walkM_down": {
+  "head_top": 121,
+  "sole": 375,
+  "height": 255,
+  "x_min": 31,
+  "x_max": 131,
+  "spread": 101,
+  "torso_cx": 80.5,
+  "head_cx": 79.8,
+  "feet_runs": [
+   [
+    59,
+    78
+   ],
+   [
+    81,
+    97
+   ]
+  ]
+ },
+ "walkB_down": {
+  "head_top": 122,
+  "sole": 375,
+  "height": 254,
+  "x_min": 29,
+  "x_max": 131,
+  "spread": 103,
+  "torso_cx": 80.5,
+  "head_cx": 79.8,
+  "feet_runs": [
+   [
+    80,
+    97
+   ]
+  ]
+ },
+ "cycle_down": {
+  "head_bob_px": 1,
+  "heights": [
+   254,
+   255,
+   254
+  ],
+  "spread_A": 101,
+  "spread_B": 103
+ },
+ "walkA_up": {
+  "head_top": 123,
+  "sole": 375,
+  "height": 253,
+  "x_min": 30,
+  "x_max": 130,
+  "spread": 101,
+  "torso_cx": 80.0,
+  "head_cx": 80.4,
+  "feet_runs": [
+   [
+    71,
+    76
+   ],
+   [
+    80,
+    100
+   ]
+  ]
+ },
+ "walkM_up": {
+  "head_top": 122,
+  "sole": 375,
+  "height": 254,
+  "x_min": 30,
+  "x_max": 130,
+  "spread": 101,
+  "torso_cx": 80.0,
+  "head_cx": 80.4,
+  "feet_runs": [
+   [
+    65,
+    76
+   ],
+   [
+    80,
+    100
+   ]
+  ]
+ },
+ "walkB_up": {
+  "head_top": 123,
+  "sole": 375,
+  "height": 253,
+  "x_min": 29,
+  "x_max": 130,
+  "spread": 102,
+  "torso_cx": 79.5,
+  "head_cx": 79.7,
+  "feet_runs": [
+   [
+    62,
+    81
+   ],
+   [
+    83,
+    96
+   ]
+  ]
+ },
+ "cycle_up": {
+  "head_bob_px": 1,
+  "heights": [
+   253,
+   254,
+   253
+  ],
+  "spread_A": 101,
+  "spread_B": 102
+ },
+ "notes": {
+  "game_frames": "160x384 RGBA, feet anchor (80,376), lowest sole on row 375, head centre x fixed at 80 in all directions",
+  "hires": {
+   "folder": "out/hires",
+   "cell": [
+    360,
+    860
+   ],
+   "anchor": [
+    180,
+    842
+   ],
+   "note": "one common cell for all 12 Lt frames; head centre on x=180, lowest sole on row 841. Source-resolution pixels (1280x720 generations), never resampled. Each direction came from a different generation so its source scale differs slightly; game = hires x scale below.",
+   "scale_hires_to_game": {
+    "right": 0.495,
+    "left": 0.495,
+    "down": 0.46,
+    "up": 0.47
+   },
+   "scale_game_to_hires": {
+    "right": 2.0202,
+    "left": 2.0202,
+    "down": 2.1739,
+    "up": 2.1277
+   }
+  },
+  "raw_leg_adjust_px_at_source": {
+   "walkA_right": 26.1,
+   "walkA_left": 26.1,
+   "walkM_right": -7.9,
+   "walkM_left": -7.9,
+   "walkB_right": 19.1,
+   "walkB_left": 19.1,
+   "walkA_down": -25.8,
+   "walkM_down": -23.7,
+   "walkB_down": -29.8,
+   "walkA_up": 2.3,
+   "walkM_up": 4.4,
+   "walkB_up": -2.7
+  },
+  "scale_check": "head/shoulder widths at game scale match lt_topdown_v3 within ~2% (down shoulders 96 vs 94-98, up 89 vs 90)",
+  "sources": {
+   "right_A": "raw/side_A1.jpg",
+   "right_M": "raw/side_M3.jpg",
+   "right_B": "raw/side_B1.jpg (+leg depth swap, far hand inpainted)",
+   "down_A": "raw/down_A1.jpg",
+   "down_B": "raw/down_B1.jpg (separate generation, NOT a mirror)",
+   "down_M": "synth: A upper body + A planted leg + B's other leg lifted 28 src px",
+   "up_A": "raw/up_A1.jpg",
+   "up_B": "raw/up_B1.jpg (separate generation, NOT a mirror)",
+   "up_M": "synth: A upper body + A planted leg + B's other leg lifted 26 src px"
+  },
+  "left": "horizontal mirror of right; combadge re-placed as foreshortened sliver at front chest edge (far-side left chest)"
+ }
+}

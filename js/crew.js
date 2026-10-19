@@ -1,6 +1,6 @@
 // The Lieutenant: movement, intents, station work, repair, rest, turbolift.
 import { G } from "./state.js";
-import { DECKS, NODEMAP, SYSTEMS, CHAIR_LINES, BAR_LINES, ENG_ROOM } from "./data.js";
+import { DECKS, NODEMAP, SYSTEMS, CHAIR_LINES, BAR_LINES, ENG_ROOM, HEAD_Y, FIG_K } from "./data.js";
 import { walkStep, walkSettle, keepPace } from "./anim.js";
 import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
@@ -22,7 +22,7 @@ export const ZONE = 40;          // activation radius, design px (tap zones, tas
 export const ARRIVE_R = 3;       // walk all the way to the stand spot (2x figure: early stops looked like clipping)
 export const LIFT_T = 1.3;       // turbolift transit seconds
 const lt = () => G.lt;
-export const HEAD_Y = 0.235;     // floaters: just above the 2x Lt's head (FIG_H 134 / 640 = 0.21)
+export { HEAD_Y };               // floaters: just above the Lt's head (data.js; option A, was 0.235 for the 134 px figure)
 // put his feet exactly on a stand spot when he's within a cell of it (paths end on cell centres)
 function settleAt(x, y) { const L = lt(); if (dDist(L.x, L.y, x, y) <= 24) { L.x = x; L.y = y; } }
 // Lt notes: a one-off explanation shown on the Lt line while he's idle (cleared by his next command)
@@ -206,7 +206,7 @@ export function beginRepair(sysId, manual = false) {
 // walk speed (deck fraction of 960 px per s). Pass 08: 110 design px/s (was 149) so his ~45 px side step reads at ~2.4
 // steps/s; tired = half. x level walk bonus: the walk frames advance by distance (anim.js stepLen), so the bonus raises
 // the cadence with the speed and the feet stay planted.
-export const LT_SPEED = 110 / 960, LT_SPEED_TIRED = 55 / 960;
+export const LT_SPEED = 68 / 960, LT_SPEED_TIRED = 34 / 960;   // option A scale: 110 / 55 x FIG_K (0.62), so the stride cadence matches the smaller body
 export const engSpeed = () => (G.ship.energy < 15 ? LT_SPEED_TIRED : LT_SPEED) * walkMult();
 
 // pass 11 HOLD 3: the system the Lt is repairing or heading (or riding the lift) to repair
@@ -234,7 +234,7 @@ export function stepLt(dt) {
       L.repairT += dt * (S.energy < 10 ? 0.55 : 1) * repairMult(L.repairSys);
       S.energy = clamp(S.energy - D.repair * eTempo * dt, 0, 100);
       faceToward(sys.mx, sys.my);
-      if (Math.random() < dt * 14) fx("spark", { x: L.x + (L.dir === "left" ? -0.03 : L.dir === "right" ? 0.03 : 0), y: L.y - 0.07 });
+      if (Math.random() < dt * 14) fx("spark", { x: L.x + (L.dir === "left" ? -0.03 : L.dir === "right" ? 0.03 : 0) * FIG_K, y: L.y - 0.07 * FIG_K });   // at his hands (option A scale)
       if (L.repairT >= sys.dur) finishRepair();
     }
   } else if (L.mode === "use") {

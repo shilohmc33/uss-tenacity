@@ -6,7 +6,7 @@ import { log, toast, shipNews, redAlertCard } from "./bus.js";
 import { chooseEncounter, noteEncounter, noteBcEnd } from "./encounters.js";
 import { spawnFault, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
-import { PACE, PACE_RT, nightActive } from "./pacing.js";
+import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
 import { hooks } from "./progression.js";
 import { SHIPS, makeAlly, makeEnemy, foe, shipOf, gunOf, hullPct } from "./ships.js";
 
@@ -63,9 +63,11 @@ export function startBattle(kind = "enroute", opts = {}) {
   const away = nightActive();   // pass 15 D2: the player isn't watching - the battlecruiser rolls at PACE.encounter.awayWeights
   const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: opts && opts.enemy, away }), enemy = pick.id, d = SHIPS[enemy];
   noteEncounter(SP, enemy, kind, G.prog.playDays, pick.held, away);
-  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, allies: [makeAlly("tenacity", 0)], enemies: [makeEnemy(enemy, 0)], target: 0 };
+  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, live: !away, allies: [makeAlly("tenacity", 0)], enemies: [makeEnemy(enemy, 0)], target: 0 };
+  PACE_RT.liveFight = !away;   // pass 16 B1: live-started = live rules to the end (saved with the battle)
   G.stats.battles++;
   if (SP.battle.bc && away) nightWatch();
+  const alpha = enemy === "jh_battlecruiser" && !away ? alphaStrike() : null;   // pass 15: live (debug drills too: battle-sim) - her opening volley knocks the READY abilities
   SFX.jink = { x: 0, y: 0, tx: 0, ty: 0, next: 1.4 }; SFX.shieldFlare = null; SFX.anim = {}; SFX.smoke.length = 0; SFX.flares.length = 0;
   if (SP.preScanned) { SP.preScanned = false; const E = foe(SP.battle); E.hull = Math.round(E.max * 0.76); log("Diallo: 'The defector's shield frequencies are exact. She starts this fight pre-scanned.'", "comm"); }
   if (SP.travel) SP.travelPaused = true;
@@ -74,6 +76,10 @@ export function startBattle(kind = "enroute", opts = {}) {
     // the card: never quiet-gated; offline catch-up drops the toast and card, the log keeps the line (and the return report headlines the fight)
     log("Hale: 'Long-range sensors — capital-class contact, Dominion signature, closing fast.'", "fault");
     toast("⚠ SENSORS — capital-class contact", "crit");
+    if (alpha && alpha.length) {   // pass 15: the player sees why the officers' abilities are suddenly cooling
+      log(`Hale: 'Polaron alpha strike on the bridge! ${alpha.join(", ")} knocked offline — half recharge to bring them back.'`, "fault");
+      toast(`⚡ ALPHA STRIKE — ${alpha.length} bridge abilit${alpha.length > 1 ? "ies" : "y"} knocked offline`, "crit");
+    }
   }
   log(openLine(kind, d), "fault");
   if (enemy === "jh_battlecruiser") {   // encounter weighting: the capital ship is an EVENT - a red-alert card, not just a toast.
@@ -133,7 +139,7 @@ export function damageShip(dmg, label, pierce = 0) {
   if (S.shields >= dmg) {
     // pass 13: a piercing weapon (the battlecruiser's polarons: weapon.pierce) bleeds part of an absorbed hit through to the hull.
     // Hull only - no fault / injury roll (those stay with real shield breaches). Weapons without pierce (fighter, Galor) are untouched.
-    const bleed = pierce > 0 ? Math.min(S.hull - (nightActive() ? PACE.offlineHullFloor : 0), dmg * pierce) : 0;
+    const bleed = pierce > 0 ? Math.min(S.hull - (offRules() ? PACE.offlineHullFloor : 0), dmg * pierce) : 0;
     S.shields -= dmg - Math.max(0, bleed); setAnim("tenacity", "shieldsHit");
     if (!SFX.evasiveGraze) SFX.shieldFlare = { t: 0, dur: 0.65 };
     SFX.floaters.push({ x: tp[0], y: tp[1] - 0.05, t: 0, text: "SHIELDS −" + Math.round(dmg - Math.max(0, bleed)), color: "#9cd2ff" });
@@ -147,7 +153,7 @@ export function damageShip(dmg, label, pierce = 0) {
   SFX.booms.push({ x: tp[0], y: tp[1], t: 0, dur: 0.5, big: false });
   for (let i = 0; i < 9; i++) SFX.smoke.push({ x: tp[0] + rand(-0.02, 0.02), y: tp[1] + rand(-0.015, 0.015), vx: rand(-0.05, 0.05), vy: rand(-0.05, 0.02), t: 0, life: rand(0.3, 0.7), r: 0.006, kind: "spark" });
   const through = (dmg - S.shields) * 0.6;
-  S.shields = 0; S.hull = Math.max(nightActive() ? PACE.offlineHullFloor : 0, S.hull - through);   // offline / idle tab (N-2): damage control holds the line
+  S.shields = 0; S.hull = Math.max(offRules() ? PACE.offlineHullFloor : 0, S.hull - through);   // offline / idle tab (N-2): damage control holds the line
   SFX.floaters.push({ x: tp[0], y: tp[1] - 0.05, t: 0, text: "HULL −" + Math.round(through), color: "#ff8a7a" });
   log(`${label} — shields down, the hull takes ${Math.round(through)}%. Hull at ${Math.round(S.hull)}%.`, "fault");
   if (S.hull <= 0) { towToDS9(); return; }
@@ -258,6 +264,14 @@ export function towToDS9() {
 // ---- officer abilities (autonomous) ----
 // pass 15 D2: an away battlecruiser fight starts on the night watch (PACE.encounter.bcAway) - the senior staff are not all at their
 // posts, so their abilities start partly cooled down and she can't be one-volleyed by a fully rested bridge.
+// pass 15 (manager call): her opening polaron volley hits the bridge - abilities with less than knockFrac x cdMax left go to it; ones cooling longer are untouched
+const AB_NAME = { pattern: "Attack Pattern Analysis", miracle: "Miracle Worker", scan: "Weak-Point Scan", spread: "Torpedo Spread" };   // pass 16 B4: the full ability names (as on the officer cards, js/data.js OFFICERS)
+function alphaStrike() {
+  const c = PACE.encounter.bcAlpha; if (!c) return null; const hit = [];
+  // judged: "ready" includes nearly ready - every ability is raised to at least knockFrac x cdMax; one with more than that left keeps its timer
+  for (const [k, a] of Object.entries(G.ab)) { const to = a && typeof a === "object" && a.cdMax ? a.cdMax * c.knockFrac : 0; if (to && a.cd < to && !(a.active > 0)) { a.cd = to; hit.push(AB_NAME[k] || k); } }
+  return hit;
+}
 function nightWatch() {
   const c = PACE.encounter.bcAway; if (!c) return; const [lo, hi] = c.cdFrac;
   for (const a of Object.values(G.ab)) a.cd = Math.max(a.cd, a.cdMax * (lo + Math.random() * (hi - lo)));

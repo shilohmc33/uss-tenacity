@@ -3,14 +3,23 @@
 import { dDist, clamp } from "./util.js";
 
 // ---- 1. step distance: design px per step (one half walk cycle, contact to contact), PER CHARACTER and PER DIRECTION,
-// measured from the art at the shared 0.53-0.56 draw scale so the planted foot stays put. Keys are the sheet character
+// measured from the art at the shared draw scale so the planted foot stays put. Keys are the sheet character
 // ("lt", "tren", or an ambient sheet such as "crew-gold" / "andorian"); anything missing falls back to default.
 // The walk frame advances by distance (walkPhase += moved / step * PI), so a faster walk (level bonus, low energy)
 // changes the CADENCE with the speed and the feet never slide.
+// Option A (2026-10-18): FIG_H 83. Steps set from tools/foot-slide.js (foot travel per step on the contact frames A / B
+// x the draw scale; shots/foot-slide-{before,after}.json): Lt side 173/207 heel-to-heel sheet px x 0.163 = 31.0, down
+// 99/105 x 0.1515 = 15.5, up 84/73 x 0.1548 = 12.2; T'Ren (and every crewmate on her body) side 170/227 x 0.1522 = 30.2,
+// down (walkfix_v1) 53 x 0.329 = 17.5, up 46 x 0.329 = 15.2. Rounded to the nearest px: drift <= 0.8 design px per step.
 export const STEP = {
-  default: { side: 44, up: 30, down: 30 },
-  lt: { side: 48, up: 30, down: 30 },      // lt_walkfix_v1: heel-to-heel 81 sheet px side, 54 up/down; side 45 x 1.07 (data.js DIR_SCALE, pass 09)
-  tren: { side: 44, up: 26, down: 30 },    // tren_walkfix_v1: up/down separation 46 / 54 sheet px; side walk not redrawn yet
+  default: { side: 30, up: 15, down: 18 },   // crew drawn on T'Ren's body
+  lt: { side: 31, up: 13, down: 15 },        // lt_walk_v2 (all 4 directions)
+  tren: { side: 30, up: 15, down: 18 },      // tren_walk_v2 side + tren_walkfix_v1 up/down
+  // art batch 1 (tools/foot-slide.js on the packed masters, 0.329 design px per cell px): Thelev side 77-79/98-99 -> 29,
+  // down 44/49 -> 15.3, up 28/19 -> 7.7; male crew base side 73/105 -> 29.4, down 43/48 -> 15, up 28/22 -> 8.2. The up
+  // walk is drawn with a short visible stride, so its no-slide step is short (quicker cadence going up-screen).
+  andorian: { side: 29, up: 8, down: 15 },   // Thelev (thelev-v1)
+  "crew-male-v1": { side: 29, up: 8, down: 15 },   // male crew tint base
 };
 export function stepLen(who, dir) {
   const s = STEP[who] || STEP.default, d = STEP.default;

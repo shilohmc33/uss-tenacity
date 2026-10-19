@@ -1,0 +1,170 @@
+{
+ "walkA_right": {
+  "head_top": 126,
+  "sole": 375,
+  "height": 250,
+  "x_min": 13,
+  "x_max": 153,
+  "spread": 141,
+  "torso_cx": 77.5,
+  "head_cx": 72.1,
+  "feet_runs": [
+   [
+    13,
+    48
+   ],
+   [
+    99,
+    153
+   ]
+  ]
+ },
+ "walkM_right": {
+  "head_top": 124,
+  "sole": 375,
+  "height": 252,
+  "x_min": 42,
+  "x_max": 130,
+  "spread": 89,
+  "torso_cx": 76.5,
+  "head_cx": 71.6,
+  "feet_runs": [
+   [
+    55,
+    87
+   ],
+   [
+    92,
+    130
+   ]
+  ]
+ },
+ "walkB_right": {
+  "head_top": 126,
+  "sole": 375,
+  "height": 250,
+  "x_min": 13,
+  "x_max": 156,
+  "spread": 144,
+  "torso_cx": 74.5,
+  "head_cx": 72.5,
+  "feet_runs": [
+   [
+    13,
+    49
+   ],
+   [
+    107,
+    156
+   ]
+  ]
+ },
+ "cycle_right": {
+  "head_bob_px": 2,
+  "heights": [
+   250,
+   252,
+   250
+  ],
+  "spread_A": 141,
+  "spread_B": 144
+ },
+ "walkA_left": {
+  "head_top": 126,
+  "sole": 375,
+  "height": 250,
+  "x_min": 7,
+  "x_max": 147,
+  "spread": 141,
+  "torso_cx": 82.5,
+  "head_cx": 87.9,
+  "feet_runs": [
+   [
+    7,
+    61
+   ],
+   [
+    112,
+    147
+   ]
+  ]
+ },
+ "walkM_left": {
+  "head_top": 124,
+  "sole": 375,
+  "height": 252,
+  "x_min": 30,
+  "x_max": 118,
+  "spread": 89,
+  "torso_cx": 83.5,
+  "head_cx": 88.4,
+  "feet_runs": [
+   [
+    30,
+    68
+   ],
+   [
+    73,
+    105
+   ]
+  ]
+ },
+ "walkB_left": {
+  "head_top": 126,
+  "sole": 375,
+  "height": 250,
+  "x_min": 4,
+  "x_max": 147,
+  "spread": 144,
+  "torso_cx": 85.5,
+  "head_cx": 87.5,
+  "feet_runs": [
+   [
+    4,
+    53
+   ],
+   [
+    111,
+    147
+   ]
+  ]
+ },
+ "cycle_left": {
+  "head_bob_px": 2,
+  "heights": [
+   250,
+   252,
+   250
+  ],
+  "spread_A": 141,
+  "spread_B": 144
+ },
+ "notes": {
+  "game_frames": "160x384 RGBA, feet anchor (80,376), soles on row 375; head centre x fixed at 72 (right) / 88 (left), same convention as old set",
+  "hires": {
+   "folder": "out/hires",
+   "cell": [
+    346,
+    831
+   ],
+   "anchor": [
+    173,
+    813
+   ],
+   "scale_hires_to_game": 0.462,
+   "scale_game_to_hires": 2.1645,
+   "note": "source-resolution pixels from the 1280x720 generations, never resampled up or down (only the few-% vertical leg remap below, done at source res); game frames = hires x 0.462 (Lanczos)"
+  },
+  "raw_leg_adjust_px_at_source": {
+   "walkA_right": 13.1,
+   "walkM_right": -7.5,
+   "walkB_right": 20.1
+  },
+  "sources": {
+   "A": "raw/A2.jpg",
+   "M": "raw/M1.jpg (+far boot lifted 16 src px)",
+   "B": "raw/B1.jpg (+leg depth swap: front/far leg up 32, back/near leg down 40 src px, stride -13 px/leg; far forearm+hand removed)"
+  },
+  "left": "horizontal mirror of right; combadge inpainted out and re-placed as a 50%-width foreshortened sliver at the front chest edge (far-side left chest)"
+ }
+}

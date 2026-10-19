@@ -4,7 +4,7 @@ import { SYSTEMS, SEV_LABEL, SEV_RANK, OKAFOR_SHORT, GATE_SYSTEMS, NODEMAP } fro
 import { pick } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
 import { sendRepair, cancelRepairIf } from "./crew.js";
-import { PACE, PACE_RT, rr, nightActive, isPresent } from "./pacing.js";
+import { PACE, PACE_RT, rr, nightActive, offRules, isPresent } from "./pacing.js";
 import { activeJob } from "./oddjobs.js";
 import { nightFixMult } from "./crewlife.js";
 // phase 6: systems a seriously injured crewmate depends on (G.prog.med; read directly to avoid an import cycle with injuries.js)
@@ -127,7 +127,7 @@ export function nightHandover() {
 // them), CRITICAL ones get stabilised to MED. Never touches the fault the Lt is repairing. Tunables: PACE.nightFix.
 export function tickNightCrew(dt) {
   const S = G.ship, N = G.night, L = G.lt;
-  if (!nightActive()) { N.sys = null; N.t = 0; return; }
+  if (!offRules()) { N.sys = null; N.t = 0; return; }   // pass 16 B1: no night-crew patching inside a live-started fight
   if (N.sys && !S.faults[N.sys]) { N.sys = null; N.t = 0; }
   if (N.sys && medFrozen().includes(N.sys)) { N.sys = null; N.t = 0; }   // pass 11 HOLD 3: hand it back, no progress kept
   if (!N.sys) {

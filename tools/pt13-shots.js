@@ -41,6 +41,8 @@ const SIZES = [[390, 844, true], [844, 390, true], [1280, 800, false]];
     // 3) the return-report headline after an offline battlecruiser
     await boot(); await ready();
     const s3 = await p.evaluate(async () => { const BT = await import('/js/battle.js'), SIM = await import('/js/sim.js'), HUD = await import('/js/ui/hud.js'), G = __T.G; __T.app.paused = true;
+      // pass 16 B1: an OFFLINE battlecruiser = one that started while the player was away (idle); a live-started fight is no longer resolved by the catch-up (pt16-livefight)
+      const P = await import('/js/pacing.js'); P.PACE_RT.idleT = 1e6;
       const hid = document.querySelector('#bcCard'); const ok = BT.startBattle('enroute', { enemy: 'jh_battlecruiser' }); hid.hidden = true;
       const r = SIM.catchUp(1800); HUD.showReport(r); const body = document.querySelector('#reportBody'), first = body.firstElementChild;
       document.querySelector('#bcCard').hidden = true; return { ok, bc: r.bcFights, battles: r.battles, firstIsHead: !!first && first.classList.contains('bcHead'), head: first ? first.innerText : '', shown: !document.querySelector('#report').hidden }; });

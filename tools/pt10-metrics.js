@@ -51,7 +51,7 @@ async function run() {
     await new Promise(r => setTimeout(r, 1200));
     await p.evaluate(async () => {
       const [{ stepSim }, { tickTren }, { tickAmbient }, { drawDeck }, D, CB, CD] = await Promise.all(['/js/sim.js', '/js/npc.js', '/js/npc-ambient.js', '/js/render/deck.js', '/js/data.js', '/js/cabin.js', '/js/cabin-data.js'].map(u => import(u)));
-      window.__D = D; window.__CB = CB; window.__CD = CD;
+      window.__D = D; window.__CB = CB; window.__CD = CD; window.__IMG = (await import('/js/assets.js')).IMG;   // art batch 1: lie-art body measure
       const dctx = document.querySelector('#deck').getContext('2d'); window.__rt = 100; __T.app.paused = true; window.__noSave = true;
       window.__frame = null;   // per-tick observer
       window.__adv = (ms, draw = true) => { const n = Math.round(ms / (1000 / 60)); for (let i = 0; i < n; i++) { const s = 1 / 60; stepSim(s); tickTren(s); tickAmbient(s); window.__rt += s; if (window.__frame) window.__frame(s); if (draw && (i % 2 === 1 || n === 1)) drawDeck(dctx, window.__rt, 2 / 60); } };
@@ -86,7 +86,9 @@ async function run() {
       await ev(([node]) => { const L = __T.G.lt; L.mode = 'use'; L.node = node; L.useT = 0; __T.G.ship.energy = 20; }, [node]);
       await adv(1200); await camFix(n.lie[0], n.lie[1], vpn === 'phone' ? 3.2 : 2.4); await ev(() => { window.__DL = []; }); await adv(1000 / 30);
       const m = await ev(() => { const F = __D.CREW_FRAMES.lying; const e = window.__DL.filter(e => e.k === 'crew-atlas' || /^lie/.test(e.k)); if (!e.length) return null; const a = e[e.length - 1], w = __w2(a, 0, 0);
-        const len = a.k === 'crew-atlas' ? a.dh * F.refH / F.h * w[2] : a.dw * w[2]; return { figLen: +len.toFixed(1) }; });
+        // art batch 1: a LIE_ART cell (384 x 160 per frame) has transparent margins - measure the opaque body along it, not the cell width
+        let frac = 1; if (a.k !== 'crew-atlas') { const im = window.__IMG && window.__IMG[a.k]; if (im) { const c = document.createElement('canvas'); c.width = 384; c.height = 160; const x = c.getContext('2d'); x.drawImage(im, 0, 0, 384, 160, 0, 0, 384, 160); const d = x.getImageData(0, 0, 384, 160).data; let x0 = 384, x1 = -1; for (let yy = 0; yy < 160; yy++) for (let xx = 0; xx < 384; xx++) if (d[(yy * 384 + xx) * 4 + 3] > 64) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; } if (x1 > x0) frac = (x1 - x0 + 1) / 384; } }
+        const len = a.k === 'crew-atlas' ? a.dh * F.refH / F.h * w[2] : a.dw * w[2] * frac; return { figLen: +len.toFixed(1), bodyFrac: +frac.toFixed(3) }; });
       const bedNow = await ev(([deck, node]) => __D.DECKS[deck].nodes[node].lieLen, [deck, node]);
       const art = tier ? await ev(([tier]) => { const b = (__CD.CABIN_TIERS[tier].beds || [])[0]; return b ? { rackPx: +((b[2] - b[0]) * 960).toFixed(1), mattressPx: +((b[2] - b[0]) * 960 - 16).toFixed(1) } : null; }, [tier]) : null;
       const key = tier ? `rack-${tier}` : node; R.lying[key] = { bedLen: bedNow, ...(art || {}), tierKept: !tier || bedNow === n.lieLen, ...(m || { figLen: null }), fits: !!m && m.figLen <= bedNow + 0.5, fullSize: !!m && m.figLen >= 137.5 };

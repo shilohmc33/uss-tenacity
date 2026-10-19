@@ -24,7 +24,7 @@ export const DECKS = {
       // the chair still selects it.
       // seat (art hook): once SEAT_ART.lt exists he walks to stand (the dais step) and sits facing the viewscreen
       chair: { name: "Captain's Chair", chip: "Captain's Chair", x: 0.415, y: 0.537, mx: 0.495, my: 0.395, face: "down",
-        seat: { at: [0.495, 0.40], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.495, 0.49] } },
+        seat: { at: [0.495, 0.41], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.495, 0.49] } },   // art batch 1: hip y .40 -> .41 = the painted cushion centre (seat_v1 shots)
     },
   },
   engineering: {
@@ -36,24 +36,27 @@ export const DECKS = {
       R(0.04, 0.79, 0.28, 0.92), R(0.40, 0.79, 0.75, 0.92), R(0.77, 0.755, 0.815, 0.905), R(0.115, 0.715, 0.27, 0.78),
       R(0.69, 0.64, 0.78, 0.765), R(0.05, 0.38, 0.125, 0.76), R(0.06, 0.235, 0.115, 0.275), R(0.205, 0.235, 0.275, 0.275),
       R(0.03, 0.755, 0.29, 0.79), R(0.37, 0.755, 0.755, 0.79)],
+    // option A re-tune (2026-10-18): the smaller figure left gaps at the consoles, so core (0.59 -> 0.575), shield
+    // (x 0.335 -> 0.325) and torpbay (x 0.755 -> 0.775) moved toward what they face (SYSTEMS spots follow). Mask-checked.
     nodes: {
-      core: { name: "Warp Core Console", chip: "Warp Core", x: 0.455, y: 0.59, mx: 0.455, my: 0.505, system: "warpcore" },
-      shield: { name: "Shield Console", chip: "Shields", x: 0.335, y: 0.50, mx: 0.29, my: 0.50, system: "shields" },
-      torpbay: { name: "Torpedo Bay", chip: "Torpedo Bay", x: 0.755, y: 0.42, mx: 0.86, my: 0.42, system: "phasers" },
+      core: { name: "Warp Core Console", chip: "Warp Core", x: 0.455, y: 0.575, mx: 0.455, my: 0.505, system: "warpcore" },
+      shield: { name: "Shield Console", chip: "Shields", x: 0.325, y: 0.50, mx: 0.29, my: 0.50, system: "shields" },
+      torpbay: { name: "Torpedo Bay", chip: "Torpedo Bay", x: 0.775, y: 0.42, mx: 0.86, my: 0.42, system: "phasers" },
       locker: { name: "Parts Locker", chip: "Parts Locker", x: 0.58, y: 0.92, mx: 0.58, my: 0.85 },
       pads: { name: "Transporter Pads", chip: "Transporter", x: 0.16, y: 0.27, mx: 0.16, my: 0.20 },
     },
   },
   medical: {
     name: "Medical", plate: "deck-medical", glow: [0.185, 0.475, "120,255,215"],
-    lift: { x: 0.51, y: 0.7625, mx: 0.51, my: 0.83 },
+    lift: { x: 0.51, y: 0.6875, mx: 0.51, my: 0.755 },   // art batch 1: up .075 for the taller doorfix lift (feet on the alcove rim, like before)
     base: [R(0.105, 0.23, 0.35, 0.845), R(0.35, 0.44, 0.665, 0.775), R(0.665, 0.44, 0.875, 0.815), R(0.55, 0.23, 0.79, 0.315),
       R(0.595, 0.295, 0.67, 0.445), R(0.105, 0.76, 0.875, 0.865)],
     blocks: [R(0.115, 0.235, 0.295, 0.315), R(0.115, 0.335, 0.29, 0.41), R(0.11, 0.435, 0.28, 0.515), R(0.105, 0.55, 0.27, 0.64),
       R(0.10, 0.685, 0.255, 0.775), R(0.345, 0.29, 0.605, 0.695), R(0.685, 0.315, 0.875, 0.51), R(0.69, 0.575, 0.805, 0.695),
       R(0.86, 0.46, 0.96, 0.815), R(0.535, 0.03, 0.815, 0.225)],
     nodes: {
-      biobed: { name: "Biobed", chip: "Biobed", x: 0.308, y: 0.4375, mx: 0.205, my: 0.435, lie: [0.205, 0.433], lieRot: -Math.PI / 2, lieLen: 150, rest: 10 },
+      // option A re-tune: x 0.308 -> 0.295 so the smaller figure stands at the bed rail, not a stride off it
+      biobed: { name: "Biobed", chip: "Biobed", x: 0.295, y: 0.4375, mx: 0.205, my: 0.435, lie: [0.205, 0.433], lieRot: -Math.PI / 2, lieLen: 150, rest: 10 },
     },
   },
   berthing: {
@@ -106,11 +109,11 @@ for (const d of DECK_ORDER) for (const [id, n] of Object.entries(DECKS[d].nodes)
 
 // Optional per-system repairPose: "kneel" (floor-level work) — default repair animation is "weld".
 export const SYSTEMS = {
-  warpcore: { name: "Warp Core", fault: "Warp core instability", deck: "engineering", x: 0.455, y: 0.59, mx: 0.45, my: 0.30, node: "core", dur: 6 },
-  shields: { name: "Shield Generator", fault: "Shield emitter failure", deck: "engineering", x: 0.335, y: 0.50, mx: 0.29, my: 0.47, node: "shield", dur: 5 },
-  phasers: { name: "Torpedo Launcher", fault: "Launcher misalignment", deck: "engineering", x: 0.755, y: 0.42, mx: 0.86, my: 0.20, node: "torpbay", dur: 5 },
+  warpcore: { name: "Warp Core", fault: "Warp core instability", deck: "engineering", x: 0.455, y: 0.575, mx: 0.45, my: 0.30, node: "core", dur: 6 },
+  shields: { name: "Shield Generator", fault: "Shield emitter failure", deck: "engineering", x: 0.325, y: 0.50, mx: 0.29, my: 0.47, node: "shield", dur: 5 },
+  phasers: { name: "Torpedo Launcher", fault: "Launcher misalignment", deck: "engineering", x: 0.775, y: 0.42, mx: 0.86, my: 0.20, node: "torpbay", dur: 5 },
   eps: { name: "EPS Conduit", fault: "EPS fault — locker conduit", deck: "engineering", x: 0.47, y: 0.92, mx: 0.47, my: 0.83, node: null, dur: 5 },
-  coolant: { name: "Coolant Line", fault: "Coolant leak", deck: "engineering", x: 0.455, y: 0.59, mx: 0.565, my: 0.28, node: null, dur: 6 },
+  coolant: { name: "Coolant Line", fault: "Coolant leak", deck: "engineering", x: 0.455, y: 0.575, mx: 0.565, my: 0.28, node: null, dur: 6 },
   transporter: { name: "Transporter", fault: "Transporter buffer fault", deck: "engineering", x: 0.16, y: 0.27, mx: 0.175, my: 0.19, node: null, dur: 4 },
   loader: { name: "Torpedo Loader", fault: "Torpedo loader jam", deck: "engineering", x: 0.755, y: 0.55, mx: 0.815, my: 0.575, node: null, dur: 4 },
 };
@@ -159,12 +162,19 @@ export const BAR_LINES = [
 ];
 
 // ---- sprite atlases (harvested, per-frame anchors from the prototype) ----
-// Characters are drawn at 2x (Shiloh, 2026-10-17): standing Lt ~134 design px tall (was 67). STEP_LEN is the
+// SCALE (Shiloh picked option A, 2026-10-18, shots/scale-report.md): one global character scale, the standing figure is
+// FIG_H = 83 design px (0.62 x the old 134, which was 1.5-2.9x the painted door heights). FIG_K = 83/134 scales
+// everything sized to the BODY (steps, walk speeds, shadows, lying length, seat/lie art, head offsets). UI drawn with
+// CHAR_SCALE (rings, labels, name tags, task rings) and the tap zones stay at their old size on purpose.
+// (history) Characters were drawn at 2x (Shiloh, 2026-10-17): standing Lt ~134 design px tall (was 67). STEP_LEN is the
 // distance per walk half-cycle (scaled with the figure, slightly under 2x because walk speed went up 1.35x).
-// node.lieLen: the painted bed's length. The lying figure is LIE_FIG = 138 (render/deck.js, the standing height) and is
-// scaled down to lieLen on any shorter bed (only the berthing bunk, 96) so it never overhangs (pass 09); every quarters rack is >= 138 (pass 10).
+// node.lieLen: the painted bed's length. The lying figure is LIE_FIG = 86 (render/deck.js, 138 x FIG_K) and is scaled
+// down to lieLen on any shorter bed so it never overhangs (pass 09). At the option-A scale every bed is longer (bunk 96,
+// biobed 150, quarters racks >= 138), so nobody is shrunk any more.
 // LIE_LEN is legacy (unused).
-export const FIG_H = 134, LIE_LEN = 178, STEP_LEN = 70;   // STEP_LEN: legacy, unused since pass 08 (per-character, per-direction steps live in js/anim.js STEP)
+export const FIG_H = 83, FIG_K = FIG_H / 134, LIE_LEN = 178, STEP_LEN = 70;
+// floaters start just above the Lt's head: deck fractions above his feet (FIG_H 83 / 640 = 0.13 + a little air; was 0.235)
+export const HEAD_Y = 0.155;   // STEP_LEN: legacy, unused since pass 08 (per-character, per-direction steps live in js/anim.js STEP)
 export const CHAR_SCALE = 2;
 export const CREW_FRAMES = {
   "down-idle": { x: 6, y: 6, w: 111, h: 372, ax: 54.8, ay: 372, refH: 372 },
@@ -227,7 +237,7 @@ export function socialPose(t) {
 // ---- Lieutenant (v3 near-top-down set, sprites/lt_topdown_v3) ----
 // Sheet grid: 160x384 cells, columns up/down/right/left, one row per frame (A, M, B) per action in
 // sheet_layout.json order, feet anchored at (80,376), one shared scale for every frame. Standing height in the
-// cell is ~252px (walkM/talk rows measure 247-254), so refH = 252 renders the standing Lt at FIG_H (134) on screen.
+// cell is ~252px (walkM/talk rows measure 247-254), so refH = 252 renders the standing Lt at FIG_H (83; was 134) on screen.
 // Walk/idle, station work, eating, bar talk, kneel and weld all come from this sheet; only the berth/biobed
 // lying pose still uses CREW_FRAMES.lying from crew-atlas (v3 has no lying frame).
 export const LT2_CELL = { w: 160, h: 384, ax: 80, ay: 376 };
@@ -238,27 +248,52 @@ export const LT2_FRAME_T = { walk: 0.20, default: 0.22 }; // s/frame (walk is no
 export const LT2_IDLE = ["walk", 1];                    // standing idle = walk M (feet together, neutral)
 // ---- ART HOOKS (pass 08): new poses switch on when the files are in assets/ AND an entry is added here ----
 // Nothing is listed yet, so nothing extra is loaded and the current render is used (legacy lying frame, standing at the
-// conn panel, T'Ren-recolour crew). One shared draw scale everywhere: 252 sheet px of standing height = FIG_H (134).
+// conn panel, T'Ren-recolour crew). One shared draw scale everywhere: 252 sheet px of standing height = FIG_H (83 design px,
+// 0.329 design px per sheet px; option A). ARTIST SIZE GUIDE (option A): on screen the standing figure is ~114 css px at
+// 1280x800 and ~87-88 css px on phones (390x844 / 844x390, with the phone zoom boost), i.e. up to ~230 device px on a
+// dpr-2 screen. The 160x384 grid (252 px standing) stays the delivery format and is already enough; hi-res masters (e.g.
+// walk_v2 at ~509-548 px standing) are welcome and are drawn downscaled through WALK_V2-style entries (refH = 252 / the
+// master's hires -> 160x384 factor). Hip offsets (seat.hip) and anchors are in design px / cell px and need no change.
 // LIE_ART[who] = { img, ax?, ay? }: assets/<img>.webp, ONE ROW of two 384x160 cells (A, B breathing; B optional), the
 //   figure lying horizontal with the HEAD AT THE LEFT, anchored at the hip centre (ax, ay) = (192, 80) by default.
 //   who: "lt", "patient-red" / "patient-gold" / "patient-blue" (by uniform), or "patient" (any patient). Drawn centred on
 //   the bed's lie point, rotated with the bed (lieRot), breathing A/B on anim.js ACTION_TIMING.lying; cross-fades like now.
-export const LIE_ART = {};
+export const LIE_ART = {
+  // art batch 1 (sprites/lie_v1, 2026-10-18): body ~257 cell px -> 84.7 design px at ART_SCALE (option A), fits every bed
+  lt: { img: "lie-lt" }, patient: { img: "lie-patient" },
+  "patient-red": { img: "lie-patient-red" }, "patient-gold": { img: "lie-patient-gold" }, "patient-blue": { img: "lie-patient-blue" },
+};
 // SEAT_ART[who] = { img, ax?, ay?, talk? }: assets/<img>.webp in the 160x384 grid, COLUMNS [up, down], rows seated idle
 //   A, B (+ seated talk A, B when talk: true), anchored at the hip centre (ax, ay) = (80, 300) by default.
 //   Where a character sits is per seat spot, on the node: seat: { at: [x, y] hip point (deck fractions), face: "up"|"down",
 //   hip: { up: [dx, dy], down: [dx, dy] } fine offset in design px per facing, stand: [x, y] where he walks to (feet) }.
 //   With the art present the Lt walks to seat.stand and sits; without it he keeps the interim stand spot.
-export const SEAT_ART = {};
+export const SEAT_ART = {
+  // art batch 1 (sprites/seat_v1): seated idle A/B + talk A/B, columns up/down, hip (80,300), no chair drawn
+  lt: { img: "seat-lt", talk: true },
+  tren: { img: "seat-tren", talk: true },   // loaded and ready; no T'Ren behaviour sits yet (she stands at the chair by design)
+};
 // TINT_BASES[key] = { img, pronoun: "he", actions: [...] }: a crew sheet in the v3 grid (walk/talk/eat/computer/kneel/weld
 //   rows like tren-v1) whose uniform panels are MID-GREY (about rgb 128,128,128, low saturation). Department colour
 //   (roster.js DEPTS[dept].color) is multiplied into the grey at draw time (cached per colour), so one sheet serves every
 //   department. Optional mask: "<img>-mask" (white = tint) when the auto grey detection catches hair or metal.
 //   Crew with that pronoun and no own/species sheet use it instead of the T'Ren recolour.
-export const TINT_BASES = {};
+export const TINT_BASES = {
+  // art batch 1 (crew_male_v1): generic male crewman, grey yoke + mask; every "he" crewmate without his own / species sheet
+  // wears it in his department colour (replaces T'Ren's body for the men). Packed from the hi-res masters (tools/pack-masters.py).
+  "crew-male-v1": { img: "crew-male-v1", pronoun: "he", mask: "crew-male-v1-mask" },
+};
+// Sheets packed from hi-res masters by tools/pack-masters.py use a larger cell (no clipped weld sparks), same draw scale
+// (standing ~252 cell px -> FIG_H): img -> { w, h, ax, ay }. Anything not listed uses LT2_CELL (160x384, feet 80,376).
+// crewmates with their OWN sheet, by roster id (checked before species / tint-base / uniform fallbacks; works for old saves too)
+export const OWN_SHEETS = { thelev: "andorian" };   // art batch 1: Ensign/Crewman Thelev sh'Zarath -> thelev-v1
+export const SHEET_CELL = {
+  "thelev-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-male-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+};
 // Per-character sheets: character -> { sheet asset (assets/<key>.webp) -> actions in row order (3 rows each: A, M, B) }.
 // Every v3-format set shares the grid above (160x384, feet 80,376, cols up/down/right/left, A,M,B,M playback) and
-// the same draw scale (refH 252 -> FIG_H), so characters of matching height stand at matching size.
+// the same draw scale (refH 252 -> FIG_H 83), so characters of matching height stand at matching size.
 // Adding a character = one asset + one entry here.
 export const CHAR_SHEETS = {
   ...Object.fromEntries(Object.entries(TINT_BASES).map(([k, b]) => [k, { [b.img]: b.actions || ["walk", "talk", "eat", "computer", "kneel", "weld"] }])),
@@ -269,7 +304,7 @@ export const CHAR_SHEETS = {
   // (one-line swap; it is preloaded automatically via IMAGES). The new sheet must use the same v3 layout: 160x384
   // cells, feet anchor (80,376), columns up/down/right/left, rows walk/talk/eat/computer/kneel/weld x A/M/B
   // (played A,M,B,M), standing height ~252 px in the cell (refH LT2_STAND_H). Fewer actions = shorten the list.
-  andorian: { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
+  andorian: { "thelev-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },   // art batch 1: Thelev's own sheet (thelev_v1 masters; gold, not tinted)
   // phase 3 roster fallbacks (own sheet -> species base sheet -> these): the generic crew sheet is T'Ren's for now, in
   // department uniform colours (tools/make-uniform-sheets.py recolours only the red shoulder panels).
   // When a species gets real art, add it here and set SPECIES[id].sheet in js/roster.js (Thelev: "andorian" above).
@@ -284,7 +319,7 @@ export const CHAR_SHEETS = {
 // artist's +-6 px tolerance is scaled to 253 about the feet (feet stay planted); talk (gap 4) and kneel (a real crouch)
 // are left alone. STEP.lt.side (js/anim.js) grows with the side-walk scale. Drop an entry once the art is redrawn.
 export const DIR_SCALE = { "lt-v3": {
-  walk: { right: 1.071, left: 1.072 },
+  walk: { right: 1.071, left: 1.072 },   // (unused since option A: the walk rows come from WALK_V2)
   eat: { up: 1.034, down: 1.06, right: 1.033, left: 1.038 },
   computer: { up: 1.034, down: 1.062, right: 1.031, left: 1.035 },
   weld: { up: 1.028, down: 1.027 },
@@ -296,8 +331,9 @@ for (const [who, sheets] of Object.entries(CHAR_SHEETS)) {
   for (const [img, actions] of Object.entries(sheets)) actions.forEach((action, ai) => {
     F[action] = {};
     LT2_DIRS.forEach((dir, col) => {
-      F[action][dir] = [0, 1, 2].map(k => ({ img, x: col * LT2_CELL.w, y: (ai * 3 + k) * LT2_CELL.h,
-        w: LT2_CELL.w, h: LT2_CELL.h, ax: LT2_CELL.ax, ay: LT2_CELL.ay, refH: LT2_STAND_H / ((DIR_SCALE[img] && DIR_SCALE[img][action] && DIR_SCALE[img][action][dir]) || 1) }));
+      const C = SHEET_CELL[img] || LT2_CELL;
+      F[action][dir] = [0, 1, 2].map(k => ({ img, x: col * C.w, y: (ai * 3 + k) * C.h,
+        w: C.w, h: C.h, ax: C.ax, ay: C.ay, refH: LT2_STAND_H / ((DIR_SCALE[img] && DIR_SCALE[img][action] && DIR_SCALE[img][action][dir]) || 1) }));
     });
   });
 }
@@ -309,6 +345,22 @@ export const LT2_FRAMES = CHAR_FRAMES.lt;
 export const charFrame = (who, action, dir, t) =>
   CHAR_FRAMES[who][action][dir][LT2_LOOP[Math.floor(t / (LT2_FRAME_T[action] || LT2_FRAME_T.default)) % 4]];
 export const lt2Frame = (action, dir, t) => charFrame("lt", action, dir, t);
+// ---- walk_v2 (approved 2026-10-18; option A): the walk rows come from the HI-RES masters, downscaled at draw time ----
+// tools/pack-walk-v2.py packs sprites/{lt,tren}_walk_v2/out/hires into lossless sheets (rows A/M/B, columns as below).
+// refH = the master's standing height in master px = 252 / (the artist's hires -> 160x384 factor), so a walk frame
+// stands exactly FIG_H tall like every other row. The Lt gets all 4 directions; T'Ren and every crewmate drawn on her
+// body (crew-red, the Andorian stand-in, the gold / blue department recolours made by the same script) get the side
+// walk; their up / down walk stays tren_walkfix_v1 (already in tren-v1 / crew-*-v1).
+export const WALK_V2 = {
+  lt:   { img: "lt-walk-v2", w: 360, h: 860, ax: 180, ay: 842, dirs: { up: [0, 0.47], down: [1, 0.46], right: [2, 0.495], left: [3, 0.495] } },
+  tren: { img: "tren-walk-v2", w: 346, h: 831, ax: 173, ay: 813, dirs: { right: [0, 0.462], left: [1, 0.462] } },
+};
+const V2_BODY = { lt: ["lt", "lt-walk-v2"], tren: ["tren", "tren-walk-v2"], "crew-red": ["tren", "tren-walk-v2"],
+  "crew-gold": ["tren", "crew-gold-walk-v2"], "crew-blue": ["tren", "crew-blue-walk-v2"] };
+for (const [who, [body, img]] of Object.entries(V2_BODY)) {
+  const V = WALK_V2[body], W = CHAR_FRAMES[who] && CHAR_FRAMES[who].walk; if (!W) continue;
+  for (const [dir, [col, k]] of Object.entries(V.dirs)) W[dir] = [0, 1, 2].map(r => ({ img, x: col * V.w, y: r * V.h, w: V.w, h: V.h, ax: V.ax, ay: V.ay, refH: LT2_STAND_H / k }));
+}
 
 // ---- Captain T'Ren on the Bridge (visual crew, not saved) ----
 // home = standing beside the Captain's Chair (starboard side, on the dais); stations = consoles she works.
@@ -321,7 +373,7 @@ export const TREN = {
     { x: 0.785, y: 0.50, face: "right" },  // starboard console bank
     { x: 0.658, y: 0.30, face: "left" },   // Master Systems Display, starboard end
   ],
-  homeT: [25, 50], stationT: [15, 30], speed: 0.10,   // s at home, s at a console, walk speed (deck fraction/s)
+  homeT: [25, 50], stationT: [15, 30], speed: 0.062,   // s at home, s at a console, walk speed (deck fraction/s; option A: 0.10 x FIG_K)
 };
 
 // ---- work spots: where a crewmember can actually type (pass 08, audit C11) ----
@@ -351,7 +403,7 @@ export const AMBIENT_NPCS = [
   {
     // Thelev is a crewwoman (she/her; Shiloh: "a regular crew woman andorian"). "Crewman" is the Starfleet rank title only.
     id: "thelev", who: "andorian", rank: "Crewman", name: "Thelev sh'Zarath", short: "Thelev", pronoun: "she",
-    deck: "lounge", speed: 0.09, start: "mess-east",
+    deck: "lounge", speed: 0.056, start: "mess-east",   // speed: option A, 0.09 x FIG_K
     spots: [
       { id: "mess-east", near: "mess", dx: 0.125, dy: 0.0, face: "down", action: "eat", t: [25, 45], w: 3 },    // next table east of the Lt's
       { id: "mess-west", near: "mess", dx: -0.125, dy: 0.0, face: "down", action: "eat", t: [25, 45], w: 2 },   // next table west
@@ -406,7 +458,7 @@ export const SHIP_ART = {
   jh_fighter: { img: null }, galor: { img: null }, jh_battlecruiser: { img: null },
 };
 export const IMAGES = [...new Set(["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
-  "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security",
+  "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security", "lt-walk-v2", "tren-walk-v2", "crew-gold-walk-v2", "crew-blue-walk-v2",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
   ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
   ...[LIE_ART, SEAT_ART].flatMap(o => Object.values(o).map(a => a.img)), ...Object.values(TINT_BASES).map(b => b.mask).filter(Boolean),

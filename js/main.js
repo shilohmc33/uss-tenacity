@@ -33,6 +33,10 @@ export const app = { view: "deck", mode: "info", timeScale: 1, paused: false };
 const PLAY_ZOOM = 1.8, INFO_ZOOM = 1.45, LAND_ZOOM = 1.6;
 // landscape phone (NEW-04): the stage is now ~360 px tall; frame a little wider so the 2x Lt is ~1/3 of it
 const landPhone = () => matchMedia("(orientation: landscape) and (max-height: 500px)").matches;
+// option A scale (FIG_H 83): phones start this much tighter than the plain framing so the figure is ~85-90 css px tall
+// (portrait 390x844: 71 -> 87 px; landscape 844x390: 69 -> 88 px). Desktop / tablet keep 1 (figure ~114 px at 1280x800).
+const PHONE_BOOST = 1.22, PHONE_BOOST_LAND = 1.28;
+const phoneBoost = () => landPhone() ? PHONE_BOOST_LAND : matchMedia("(max-width: 520px)").matches ? PHONE_BOOST : 1;
 const modeZoom = () => app.mode === "play" ? (landPhone() ? LAND_ZOOM : PLAY_ZOOM) : INFO_ZOOM;
 // any real input counts as the player being present (the night crew stands down)
 for (const ev of ["pointerdown", "keydown", "wheel"]) window.addEventListener(ev, () => playerInput(), { passive: true, capture: true });
@@ -44,6 +48,7 @@ function resize() {
   const st = $("#stage"), w = st.clientWidth, h = st.clientHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
   for (const c of [deckCv, spaceCv]) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
   if (cam.prefZoom != null) cam.prefZoom = modeZoom();
+  cam.boost = phoneBoost();
   resizeCam(w, h);
   document.documentElement.style.setProperty('--pb', $("#playbar").offsetHeight + 'px');
 }
@@ -128,6 +133,8 @@ function frame(now) {
   tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
   let simDt = dt * app.timeScale;
   while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); simDt -= s; }
+  // pass 16 B1: the catch-up that waited behind a live fight runs once the fight is over (report as usual)
+  if (G.sp.awayDefer > 0 && !G.sp.battle) { const s = G.sp.awayDefer; G.sp.awayDefer = 0; if (s > 30) { const r = catchUp(s); renderLog(); showReport(r); } }
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }
   saveT += dt; if (saveT > 5) { saveT = 0; saveGame(); }
@@ -139,7 +146,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (!window.__noSave) saveGame(); }
   else {
     const gap = (Date.now() - hiddenAt) / 1000;
-    if (hiddenAt && gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }
+    if (hiddenAt && gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }   // pass 16 B1: a live fight -> deferred (showReport notes it)
     if (hiddenAt && gap > 600) { PACE_RT.sessionT = 0; markPlayDay(); }   // back after a real break = a new session (calm opening again)
     playerInput();
     app.paused = false; last = performance.now();

@@ -8,7 +8,7 @@ import { tickBattle } from "./battle.js";
 import { tickEvents } from "./events.js";
 import { tickJobs } from "./oddjobs.js";
 import { tickVoyage } from "./voyage.js";
-import { PACE, PACE_RT, nightActive } from "./pacing.js";
+import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
 import { tickDay, offlineXP, tickProg, rankShort } from "./progression.js";
 import { tickCrew, endOffline } from "./crewlife.js";
 import { tickCabin } from "./cabin.js";
@@ -25,6 +25,7 @@ export function stepSim(dt) {
   tickCrew(dt);  // phase 3: replacement crew arriving (crewlife.js; the daily crew roll hangs off the ship's day)
   tickProg(dt);  // relationships (ignored faults, station help), readiness, promotion checks (progression.js PROG.dayLength); offline catch-up advances it too
   PACE_RT.idleT += dt;
+  PACE_RT.liveFight = !!(SP.battle && SP.battle.live);   // pass 16 B1
   if (!PACE_RT.offline) PACE_RT.sessionT += dt;
   tickFaults(dt);
   tickNightCrew(dt);
@@ -44,7 +45,7 @@ export function stepSim(dt) {
   S.gen = gen; S.load = load;
   S.power = clamp(S.power + (gen - load) * dt, 0, 100);
   // night crew holds a power floor while the player is away
-  if (nightActive()) S.power = Math.max(S.power, SP.battle ? PACE.powerFloorBattle : PACE.powerFloor);
+  if (offRules()) S.power = Math.max(S.power, SP.battle ? PACE.powerFloorBattle : PACE.powerFloor);
   if (S.power <= 0.5 && !S.powerWarned) { S.powerWarned = true; log("Power grid critical — output cannot meet load. Man the warp core console or shed load.", "fault"); }
   if (S.power > 12) S.powerWarned = false;
   if (impairing("shields")) S.shields = clamp(S.shields - (SP.battle ? 2 : 0.3) * dt, 0, 100);
@@ -70,9 +71,9 @@ export function stepSim(dt) {
 // also keeps the hull above PACE.offlineHullFloor.
 function applyNightFloors() {
   const S = G.ship;
-  if (nightActive()) S.power = Math.max(S.power, G.sp.battle ? PACE.powerFloorBattle : PACE.powerFloor);
-  // pass-03 N-2: the same hull floor while the tab is open but idle (no input for PACE.idleAfter s)
-  if (nightActive()) S.hull = Math.max(S.hull, PACE.offlineHullFloor);
+  if (offRules()) S.power = Math.max(S.power, G.sp.battle ? PACE.powerFloorBattle : PACE.powerFloor);
+  // pass-03 N-2: the same hull floor while the tab is open but idle (no input for PACE.idleAfter s); pass 16 B1: never in a live-started fight
+  if (offRules()) S.hull = Math.max(S.hull, PACE.offlineHullFloor);
 }
 const NODE_REST = L => L.node === "bunk" || L.node === "biobed" || L.node === "mess" || L.node === "bar" || L.node === "rack";
 
@@ -80,10 +81,16 @@ const NODE_REST = L => L.node === "bunk" || L.node === "biobed" || L.node === "m
 export function catchUp(seconds) {
   const S = G.ship, before = { hull: S.hull, parts: S.parts, torps: S.torps, rep: G.sp.rep, energy: S.energy, stats: { ...G.stats }, loc: G.sp.location, fixes: G.night.fixes || 0, avoided: G.night.avoided || 0,
     lvl: G.prog.level, xp: G.prog.totalXp, xpM: G.prog.xpManual, xpA: G.prog.xpAuto, day: G.prog.day, rank: G.prog.rank, crewN: G.prog.crew.evN || 0, maint: G.prog.sinks.n.maintain || 0, trades: G.prog.sinks.n.autoTrade || 0, rr: G.prog.rationsLife };
-  const sim = Math.min(seconds, PACE.offlineMaxSim);
+  // pass 16 B1: a live-started fight is never resolved or advanced offline. While one is open the whole catch-up
+  // waits (deferred into G.sp.awayDefer, run by main.js once the fight is over): running the rest of the night
+  // "around" a frozen fight isn't safe - faults, power, hull, voyage legs and the night crew all touch the ship
+  // the fight is using. The fight itself stayed frozen while hidden (app.paused) and resumes live.
+  const deferred = !!(G.sp.battle && G.sp.battle.live);
+  if (deferred) G.sp.awayDefer = Math.min(PACE.offlineMaxSim, (+G.sp.awayDefer || 0) + seconds);
+  const sim = deferred ? 0 : Math.min(seconds, PACE.offlineMaxSim);
   const entries = [];
-  setQuiet(true); capture.list = entries; PACE_RT.offline = true;
-  applyNightFloors();   // clamp straight after load: a save taken at 7% power comes back at the floor
+  setQuiet(true); capture.list = entries; PACE_RT.offline = !deferred;
+  if (!deferred) applyNightFloors();   // clamp straight after load: a save taken at 7% power comes back at the floor
   const step = 0.25; let minPower = S.power, minHull = S.hull, powerZeroS = 0, battleWasOn = !!G.sp.battle;
   // pass 13: every battlecruiser fought during catch-up (outcome + hull after), for the return report's headline
   const bcFights = []; let bcCur = null; const isBc = () => { const B = G.sp.battle; return !!(B && B.enemies && B.enemies[0] && B.enemies[0].ship === "jh_battlecruiser" && B.ctx !== "debug"); };
@@ -98,8 +105,8 @@ export function catchUp(seconds) {
       if (S.hull < minHull) minHull = S.hull;
       if (S.power < 1) powerZeroS += step;
     }
-    nightHandover();   // the night crew hands over at most PACE.nightFaultCap open faults
-    endOffline(sim);   // phase 3: a Starbase 375 loaner team covers one offline stretch
+    if (!deferred) nightHandover();   // the night crew hands over at most PACE.nightFaultCap open faults
+    if (!deferred) endOffline(sim);   // phase 3: a Starbase 375 loaner team covers one offline stretch
     offlineXP(sim);    // progression: watch-officer XP for the night crew's work (1/min first 2 h, then 0.25/min)
   } finally { setQuiet(false); capture.list = null; PACE_RT.offline = false; PACE_RT.idleT = 0; }
   if (bcCur) bcFights.push({ out: "ongoing", hull: Math.round(S.hull), lost: Math.max(0, Math.round(bcCur.hull - S.hull)) });
@@ -113,7 +120,7 @@ export function catchUp(seconds) {
   });
   const highlights = [...seen.values()].sort((a, b) => a - b).slice(-8).map(i => entries[i]);
   return {
-    away: seconds, simulated: sim, battleWasOn,
+    away: seconds, simulated: sim, battleWasOn, deferred,
     legs: st.legs - before.stats.legs, battles: st.battles - before.stats.battles, wins: st.wins - before.stats.wins,
     events: st.events - before.stats.events, repairs: st.repairs - before.stats.repairs, torpsBuilt: st.torpsBuilt - before.stats.torpsBuilt, tows: st.tows - before.stats.tows,
     crewFixes: (G.night.fixes || 0) - before.fixes, avoided: (G.night.avoided || 0) - before.avoided,

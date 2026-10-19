@@ -5,7 +5,7 @@
 // that crew member's opinion. Never offline or while idle (the night crew doesn't need errands), never during a battle.
 // Tuning: PROG.jobs. State: G.prog.jobs (not saved across sessions in a meaningful way; safe to drop).
 import { G } from "./state.js";
-import { DECKS, NODEMAP } from "./data.js";
+import { DECKS, NODEMAP, HEAD_Y } from "./data.js";
 import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, awardXP, taskMult, taskDone, nudge, crewList, opinionOf, addr } from "./progression.js";
 import { PACE_RT, nightActive } from "./pacing.js";
@@ -73,7 +73,7 @@ export function tickJobs(dt) {
         j.done++; j.xp += xp; j.active = null; j.next = rr(k.gap);
         log(a.kind === "request" ? `${a.short} — sorted.${cheer(` 'I owe you one, ${addr()}.'`, "")} (+${xp} XP)` : `Odd job done — ${a.label.replace(/^./, c => c.toLowerCase())}. (+${xp} XP)`, "good");
         toast(`Odd job done · +${xp} XP${k.rep > 0 ? ` · +${k.rep} rep` : ""}`, "good");
-        fx("floater", { x: L.x, y: L.y - 0.235, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 });
+        fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 });
       }
     }
     if (j.active && a.t <= 0) { j.active = null; j.expired++; j.next = rr(k.gap); }   // quietly picked up by the crew, no penalty

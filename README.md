@@ -13,6 +13,16 @@ Static ES-module build. There's no build step.
   The Lieutenant uses assets/lt-v3.webp (LT2_SHEETS / LT2_FRAMES: walk, talk, eat, computer, kneel, weld x up/down/right/left x A/M/B,
   160x384 cells, feet at 80,376, refH 252 -> FIG_H). Only the bunk/biobed lying pose still comes from crew-atlas.
   Sheets are per character (CHAR_SHEETS / CHAR_FRAMES / charFrame): Captain T'Ren uses assets/tren-v1.webp (same grid and scale).
+  CHARACTER SCALE (option A, 2026-10-18, shots/scale-report.md): FIG_H = 83 design px (was 134; FIG_K = 0.62 scales every
+  body-sized number: steps, speeds (Lt 68 px/s), shadows, LIE_FIG 86, HEAD_Y floaters, weld sparks). On screen: ~114 css px
+  at 1280x800 (cam.scale 1.368), ~87 px at 390x844 and ~88 px at 844x390 (phones start 1.22x / 1.28x tighter: main.js
+  PHONE_BOOST / PHONE_BOOST_LAND -> cam.boost), ~68 / ~58 px on the 360x640 / 667x375 card sizes. Rings, labels, name tags and
+  the 40 px tap zones keep their old size. Walking uses the walk_v2 masters (assets/lt-walk-v2.webp: Lt up/down/right/left;
+  assets/tren-walk-v2.webp: T'Ren right/left; crew-gold/blue-walk-v2 = the same recolour as tools/make-uniform-sheets.py; packed
+  by tools/pack-walk-v2.py, drawn downscaled via data.js WALK_V2, refH = 252 / hires factor). T'Ren's up/down (and every
+  crewmate's) stay tren_walkfix_v1. Artist guide: keep delivering the 160x384 grid (252 px standing, enough for ~230 device px
+  on dpr 2); hi-res masters (~500+ px standing) are welcome and get downscaled. tools/foot-slide.js checks the planted foot,
+  tools/node-shots.js shows the Lt at every node.
 - js/npc.js: Captain T'Ren on the Bridge (visual only, not saved): stands beside the chair, works consoles, talks when the Lt
   reports at the chair or stands beside her, holds at the chair in battle. Spots in data.js TREN.
 - js/npc-ambient.js: generic ambient crew NPCs from AMBIENT_NPCS (data.js). First one: Crewman Thelev sh'Zarath, an Andorian crewwoman (she/her) in the
@@ -145,7 +155,7 @@ Static ES-module build. There's no build step.
     friends only, a date with the fade, disclosure, letters, the partner memorial from a real present-only surgery death, the quiet
     gate and pronoun checks); prog-sim `romance` mode (shots/plog4-sim.txt: stages, anti-farm audit, death safeguards).
 - js/anim.js + js/art-hooks.js (animation pass): walk frames advance by distance with a step length per character and
-  direction (anim.js STEP: side 44 / Lt 45, up-down 30, T'Ren up 26), so speed bonuses raise cadence; seeded per-crew action
+  direction (anim.js STEP, option A: Lt side 31 / up 13 / down 15, T'Ren and crew 30 / 15 / 18, set by tools/foot-slide.js), so speed bonuses raise cadence; seeded per-crew action
   timelines (ACTION_TIMING) instead of lockstep; facing from a look-ahead with hysteresis; give-way and step-aside (AVOID);
   crew type only at data.js CONSOLES. ART HOOKS (data.js LIE_ART / SEAT_ART / TINT_BASES, empty = current render): lying =
   assets/<img>.webp, one row of 384x160 cells (A, B), head left, hip anchor (192,80); seated = 160x384 cells, columns up/down,
@@ -242,8 +252,8 @@ Static ES-module build. There's no build step.
 - The battlecruiser's gate (all must hold, `bcBlock` says which fails): rank >= Lieutenant (rank 1) AND ship's day >= 21 (the battle
   groundwork's gate, kept on the pass 12 manager's call; Lt is guaranteed by play day 7); never twice running and spaced (pass 13): at
   least 2 other battles AND at least 2 play days since the last one (`gapBattles`, `gapPlayDays`); and (pass 13 manager call: she is an
-  EVENT) blocked only for a CRIPPLED ship: hull < 60% or an open CRIT fault (`minHull`, `blockSev`), and (pass 15 D1) 0 torpedoes or
-  main power < 30% (`minTorps`, `minPower`) -> the roll falls back to fighter / Galor and counts as `held`. A med / low fault doesn't hold her.
+  EVENT) blocked only for a CRIPPLED ship: hull < 60% or an open CRIT fault (`minHull`, `blockSev`), and (pass 15 D1 / N1) fewer than 2
+  torpedoes or main power < 30% (`minTorps` 2, `minPower` 30) -> the roll falls back to fighter / Galor and counts as `held`. A med / low fault doesn't hold her.
 - `G.sp.enc = { last, since, lastBcPD, n: { type: count }, held }` (saved; additive to the v14 shape; `hardenEnc` clamps junk at load).
   Pass 13: the memory survives migration - a valid `enc` rides through every migration step untouched, and a save without one (pre-encounter
   builds, or a junk value) is rebuilt by `seedEnc` from its saved battle and the ship log's red-alert openers (a battlecruiser found there
@@ -279,6 +289,25 @@ Static ES-module build. There's no build step.
   its cdMax (36 s+, so none in the fight), torpedoes capped at 4 (`torpsMax`), and T'Ren logs "The night watch has the bridge". Probe (catchUp steady state, ~190 fights):
   won-fight hull lost p50 19-22% (p25 11-12, p90 66-69 - the floor of 30% replaces break-off), like the gated live sim's p50 22%. Fighters and
   Galors have the same rested-bridge mechanism offline but their live full-ready fights are just as cheap, so they are unchanged.
+- Pass 15 (manager call): LIVE she opens with a polaron ALPHA STRIKE at the bridge (`PACE.encounter.bcAlpha.knockFrac` 0.5): every officer
+  ability with less than half its cdMax left (ready or nearly ready) goes to 0.5 x cdMax; one cooling longer keeps its timer (never pushed
+  further). The player sees why: Hale's log line names the abilities ("Polaron alpha strike on the bridge! ... knocked offline - half recharge")
+  and a crit toast "ALPHA STRIKE - n bridge abilities knocked offline" that stays clear of the card like the sensor toast (toast overflow now
+  evicts non-crit toasts first). Away fights keep the night watch start instead (its 0.8-1.0 x cdMax already exceeds the knock, so no
+  double penalty). Rested-bridge probe (full ship, 8 torpedoes): won-fight hull lost p50 0% -> 22.8%, wins 100%; 2 torpedoes p50 42.5%.
+  Gated battle-sim (2000): passive win 88.5% -> 84.2%, won p50 22.1 -> 23.8% · active 90.8% -> 86.9%, won p50 22.5 -> 24.1%.
+  Debug drills (battle-sim) get the strike too. Proof: tools/pt15-shots.js -> shots/pt15-alpha-*.png.
+- Pass 15 N1: she needs >= 2 torpedoes (power floor stays 30). battle-sim `START=worst` (the worst start that passes the gate: hull 60,
+  power 30, shields 20, one MED fault, cooldowns x1.5; torpedoes = minTorps or WORST_TORPS), 1000 fights, with the alpha strike:
+  1 torpedo: win 0% · break off 61.6% · TOW 38.4% (passive) / 38.4% (active) -> 2 torpedoes: win 1.2-1.4% · break off 61-62% · TOW 37.7%
+  (passive) / 36.5% (active). The tow rate barely moves: the harshness is hull 60 + shields 20 + power 30, not the tubes (as the tester found).
+- Pass 15 L1-L3 (card layout): L1 at 360x640 / 667x375 the card is height-capped inside the stage (copy scrolls, TAP TO DISMISS pinned;
+  tighter type below 380 px wide / 400 px tall; a portrait phone with no room under the toasts keeps the card under the banner and moves the
+  toasts below it). L2 resize / orientationchange re-run the layout (now, next frame, +200 ms). L3 the crew-safety prompt, board, spec and
+  disclosure wait while the card is up. Proof: tools/pt15-shots.js -> shots/pt15-alpha-fit-{360x640,667x375}.png, pt15-rotate-*.png,
+  pt15-safety-{queued,after}-*.png.
+- Pass 15: death attribution - an injury carries `src` (battle: the enemy ship id, hazard: the hazard kind), the death audit keeps it, and
+  prog-sim prints DEATH ATTRIBUTION (cause:source x surgery / timeout, per 120 play days) and the battlecruiser-linked death rate.
 
 ## Ship sprites (art hook; the artist's copy is notes/ship-sprite-spec.md)
 - Hook: `SHIP_ART[sprite] = { img, len?, pivot?, rows?, engine? }` in js/data.js, keyed by `SHIPS[id].sprite` (tenacity, freighter,
@@ -314,3 +343,26 @@ Static ES-module build. There's no build step.
   keeps one per crewmate at render time (the romance entry while on, the plain one while off; same for a plain transfer next to a
   "letter" v2). Proof: romance-scan `off_build09` loads a real build09 save (tools/fixtures/rom-build09-lostpartner.json, made on
   efdb4b8; its death entry pinned to v1, the line the tester saw) - fails before (2 death lines on and off), passes after.
+
+## Art batch 1 (2026-10-18; sources copied from the artist's sprites/ folder into assets/src/, proof tools/lie-seat-fit.js -> shots/art1-fit.json, tools/art1-shots.js -> shots/art1-<room>-<size>.png, tools/anim-hook-check.js)
+- **Thelev** (thelev_v1, Andorian, she/her, gold, NOT tinted): own sheet `assets/thelev-v1.webp` via `OWN_SHEETS.thelev -> "andorian"`.
+  **Male crew base** (crew_male_v1, mid-grey panels + mask): `TINT_BASES['crew-male-v1']`; every man without his own sheet wears it
+  in department colour (women keep the T'Ren body). Both packed from the hi-res masters by `tools/pack-masters.py` (per-frame
+  scale from measurements.json, 240x288 cells / anchor 120,280 = `SHEET_CELL`, so the masters' weld sparks are not clipped).
+  Steps (tools/foot-slide.js): side 29 / up 8 / down 15.
+- **Lying** (lie_v1): `LIE_ART` lie-lt, lie-patient, lie-patient-red/-gold/-blue (768x160, A + breathing B, hip 192,80). Body
+  84.6 design px; fits every bed with lieFit 1: bunk 96 (margin 11.4), biobed / sickbay beds 150 (65.4), quarters racks 154-192.
+- **Seated** (seat_v1): `SEAT_ART` seat-lt, seat-tren (idle A/B, talk A/B; hip 80,300; no chair drawn). Bridge chair seat
+  y .41: seated hip 1.6 design px from the painted cushion centre. seat-tren is loaded; T'Ren still stands by design.
+- **Doors** (decks_doorfix_v1): deck-berthing (walk grid unchanged), deck-medical full raise; medical lift node y .6875
+  (walk-medical regenerated by tools/make-walk-masks.py). Person/door at FIG_H 83: berthing cabin 0.86, berthing lift 0.85, medical lift 0.86.
+
+## Pass 16 HOLD fixes (2026-10-18; proof tools/pt16-livefight.js -> shots/pt16-livefight-{before,after}.json, tools/pt16-alert.js -> shots/pt16-alert-*)
+- **B1** a fight that started live (`battle.live`, saved) keeps live rules to the end: `offRules()` (= nightActive && !liveFight)
+  gates the offline hull/power floors, night-crew patching and the x0.006 injury rate. `catchUp()` never simulates while a
+  live-started fight is open: the gap goes to `G.sp.awayDefer` and runs (with its report) once the fight is over. Hidden =
+  frozen at any length; reload / reopen resumes the same fight live. Hard-kill with no exit save still rolls back to the last
+  5 s autosave (N5).
+- **B2** the red-alert card moves into a body-level `#alertLayer` over the stage while up (above every modal); auto-opened
+  prompts step aside (still owed; the board no longer opens mid-fight); the 7 s auto-hide counts only time it is visible and on top.
+- **B3** opaque pinned TAP TO DISMISS strip. **B4** Hale's alpha-strike line names "Attack Pattern Analysis".

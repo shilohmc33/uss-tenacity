@@ -68,13 +68,17 @@ DECKS = {
     ('add', R(0.555, 0.235, 0.610, 0.290)),
     ('add', R(0.610, 0.280, 0.668, 0.800)),       # aisle east of surgery
     ('add', R(0.668, 0.520, 0.790, 0.800)),       # lab floor
-    ('add', R(0.362, 0.700, 0.668, 0.800)),       # lower corridor
+    # art batch 1 (decks_doorfix_v1, full raise): the taller front-wall turbolift alcove now reaches the surgery suite's
+    # front wall at the centre, so the lower corridor is only the strip under the OR (y .665-.700, feet on the alcove rim
+    # as before) and the alcove itself is carved out; the lift node moved up .075 to y .6875 (data.js)
+    ('add', R(0.362, 0.665, 0.668, 0.700)),       # strip under the OR, in front of the lift alcove
     ('add', R(0.230, 0.290, 0.300, 0.305)),       # bed-foot gaps (between beds)
     ('add', R(0.240, 0.375, 0.300, 0.392)),
     ('sub', R(0.700, 0.560, 0.800, 0.705)),       # lab island
     ('sub', R(0.760, 0.450, 0.880, 0.830)),       # lab side cabinets
     ('sub', R(0.390, 0.780, 0.415, 0.830)),       # cart by the lift
     ('sub', P((0.440, 0.800), (0.460, 0.780), (0.560, 0.780), (0.580, 0.800), (0.580, 0.860), (0.440, 0.860))),  # lift housing
+    ('sub', P((0.372, 0.860), (0.380, 0.760), (0.400, 0.725), (0.440, 0.702), (0.580, 0.702), (0.620, 0.725), (0.640, 0.760), (0.648, 0.860))),  # taller lift alcove (doorfix)
   ],
   # Berthing: the long corridor, the bunk room (foot of the bed), the starboard corridor around the lockers, and the
   # lift vestibule between its benches (entered past the top of the starboard bench).

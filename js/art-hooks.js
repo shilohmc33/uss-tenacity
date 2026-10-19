@@ -3,7 +3,7 @@
 import { LIE_ART, SEAT_ART, TINT_BASES, NODEMAP, LT2_STAND_H, FIG_H } from "./data.js";
 import { IMG } from "./assets.js";
 
-export const ART_SCALE = FIG_H / LT2_STAND_H;   // every v3-format cell: 252 px of standing height -> 134 design px
+export const ART_SCALE = FIG_H / LT2_STAND_H;   // every v3-format cell: 252 px of standing height -> FIG_H (83 design px, option A; was 134)
 // lying art for a character ("lt") or a patient (uniform tint): { img, w, h, ax, ay, frames } or null
 export function lieArt(who, tint) {
   for (const k of who === "patient" ? ["patient-" + (tint || "red"), "patient"] : [who]) {

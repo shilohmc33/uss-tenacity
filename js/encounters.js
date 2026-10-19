@@ -18,7 +18,7 @@ const BC_REC = 60;
 export function shipCrippled(ship) {
   const c = PACE.encounter.bc, S = ship || {};
   if (!(S.hull >= c.minHull)) return true;
-  if (!(S.torps >= c.minTorps) || !(S.power >= c.minPower)) return true;   // pass 15 D1: empty tubes or power below 30% count as crippled too
+  if (!(S.torps >= c.minTorps) || !(S.power >= c.minPower)) return true;   // pass 15 D1 / N1: fewer than 2 torpedoes or power below 30% count as crippled too
   return !!(S.faults && Object.values(S.faults).some(f => f && f.sev === c.blockSev));
 }
 export const shipWorn = shipCrippled;   // pass 12 name, kept for the tools

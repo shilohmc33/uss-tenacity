@@ -7,7 +7,7 @@
 // comes over and both play "talk" (PROG.roster cooldowns). A newcomer (intro pending) crosses the deck to introduce
 // themself the first time the Lt is on their deck. Slot "mess-regular-1" keeps Thelev's hand-made config (AMBIENT_NPCS).
 import { G } from "./state.js";
-import { AMBIENT_NPCS, NODEMAP, CHAR_SHEETS, DECKS, TREN, CONSOLES } from "./data.js";
+import { AMBIENT_NPCS, NODEMAP, CHAR_SHEETS, DECKS, TREN, CONSOLES, HEAD_Y, OWN_SHEETS } from "./data.js";
 import { walkStep, walkSettle, keepPace, animSeed, pathNear, blockedAhead, faceDir as faceTo, AVOID } from "./anim.js";
 import { tren, trenHooks } from "./npc.js";
 import { tintBaseFor } from "./art-hooks.js";
@@ -79,6 +79,7 @@ function pickSpot(cfg, notId, n = null) {
 // sprite: own sheet -> species base sheet -> generic crew sheet in the department's uniform colour
 export function sheetFor(o, sl) {
   if (o.sheet && CHAR_SHEETS[o.sheet]) return o.sheet;
+  if (OWN_SHEETS[o.id] && CHAR_SHEETS[OWN_SHEETS[o.id]]) return OWN_SHEETS[o.id];
   const sp = SPECIES[o.species]; if (sp && sp.sheet && CHAR_SHEETS[sp.sheet]) return sp.sheet;
   const base = tintBaseFor(o.pronoun); if (base) return base;   // art hook: tint-ready grey crew base (data.js TINT_BASES)
   return "crew-" + ((DEPTS[sl.dept] && DEPTS[sl.dept].tint) || "red");
@@ -196,7 +197,7 @@ function startChat(n, kind = "social") {
     const got = Math.round(S.energy - before);
     if (got > 0) {   // energy already full: the chat still happens, but no "energy +0" line or floater
       log(`A few words with ${c.short} lift the Lieutenant's spirits — energy +${got}.`, "good");
-      fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `+${got} ENERGY`, color: "#66e0d0", delay: 0.3, life: 2.2 });
+      fx("floater", { x: G.lt.x, y: G.lt.y - HEAD_Y, text: `+${got} ENERGY`, color: "#66e0d0", delay: 0.3, life: 2.2 });
     }
   }
 }

@@ -94,6 +94,7 @@ export function hardenBattle(sp) {
   B.allies = B.allies.filter(a => a && typeof a === "object" && SHIPS[a.ship] && SHIPS[a.ship].side === "ally");
   if (!B.allies.some(a => a.ship === "tenacity")) B.allies.unshift(makeAlly("tenacity", 0));
   B.target = fin(B.target, 0, 0, B.enemies.length - 1) | 0;
+  B.live = B.live === true;   // pass 16 B1 (v14-compatible additive field): pre-fix saves mid-fight keep the old (away) rules
   if (!B.cd || typeof B.cd !== "object" || Array.isArray(B.cd)) B.cd = {};
   for (const k of ["phaser", "torp", "evasive", "divert"]) B.cd[k] = fin(B.cd[k], 0, 0, 60);
   for (const k of ["enterT", "dying", "inflight", "injN"]) if (B[k] !== undefined) B[k] = fin(B[k], 0, 0, k === "inflight" ? 1000 : 100);

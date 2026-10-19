@@ -6,7 +6,7 @@ import { G } from "./state.js";
 import { log, toast, fx, cheerful, cheer, cheerToast } from "./bus.js";
 import { clamp } from "./util.js";
 import { PACE_RT, nightActive } from "./pacing.js";
-import { NODEMAP } from "./data.js";
+import { NODEMAP, HEAD_Y } from "./data.js";
 import { CREW_ROSTER, SLOTMAP, START_CREW, LADDERS, DEPTS, SPECIES, POSTINGS, PRONOUNS, pr } from "./roster.js";
 import { GIFT } from "./gift-data.js";
 import { CABIN_TIERS, CABIN_ORDER, DECOR } from "./cabin-data.js";
@@ -130,7 +130,7 @@ export const PROG = {
     chatEvery: 300,                            // s (ship time) before the same crew member comes over for another chat
     chatGap: 45,                               // s after any crew chat before someone else comes over
     joinRange: 330, introRange: 2000,          // design px: they come over from this far (a newcomer crosses the whole deck to introduce themself)
-    speed: 0.09,                               // walk speed (deck fraction / s)
+    speed: 0.056,                              // walk speed (deck fraction / s; option A scale: 0.09 x 0.62)
   },
   crewEvents: {
     // the daily crew roll: once per ship's day, and only on a ship's day that falls on a new day of play (a week away
@@ -908,6 +908,7 @@ function hardenMed10(p) {
     x.left = clamp(num(x.left, K.window), 0, K.window); x.ack = !!x.ack; x.pendT = Math.max(0, num(x.pendT, 0)); x.ackT = Math.max(0, num(x.ackT, 0)); x.acked = !!x.acked || x.ack || x.ackT > 0;   /* pass 09 (2): first-ack flag; older saves: acked if ever acked */ x.away = !!x.away; x.paused = !!x.paused; x.floored = !!x.floored; x.leftAtLeave = Number.isFinite(x.leftAtLeave) ? clamp(x.leftAtLeave, 0, K.window) : null;   /* pass 10 (1): clock at leave, optional */   // pass 08 (3): optional flags, default false (no version bump)
     if (x.state === "surgery") { x.surg = clamp(num(x.surg, K.surgery.scene), 0, K.surgery.scene); x.sx = clamp(num(x.sx, K.surgery.chance), 0, K.surgery.max); x.assist = x.assist === true; x.held = x.held === true; x.fast = x.fast === true; }
     if (x.state !== "warning" && x.state !== "surgery" && x.healAt == null) x.healAt = 0;
+    x.src = typeof x.src === "string" ? x.src.slice(0, 32) : "";   // pass 15: death attribution (enemy / hazard kind)
   }
   m.hushUntil = Math.max(0, num(m.hushUntil, 0)); m.prompt12 = !!m.prompt12;
   m.scene = isObj(m.scene) && typeof m.scene.name === "string" && ["surgery", "saved", "lost", "evac", "hospital", "expired", "away"].includes(m.scene.phase) ? m.scene : null;
@@ -1204,7 +1205,7 @@ export function repEvent(forceKind = null, forceId = null) {
   log(`${line} Reputation ${ev.rep > 0 ? "+" : ""}${ev.rep}.`, kind === "good" ? "good" : "fault");
   if (kind === "good") cheerToast(`${ev.toast} — reputation +${ev.rep}`, "good", `Reputation +${ev.rep}`);   // pass 10 (2): praise toasts sober in the quiet period
   else toast(`${ev.toast} — reputation ${ev.rep}`, "warn");
-  fx("floater", { x: G.lt.x, y: G.lt.y - 0.235, text: `${ev.rep > 0 ? "+" : ""}${ev.rep} REP`, color: ev.rep > 0 ? "#ffaa77" : "#ff8a7a", life: 2.4, big: true });
+  fx("floater", { x: G.lt.x, y: G.lt.y - HEAD_Y, text: `${ev.rep > 0 ? "+" : ""}${ev.rep} REP`, color: ev.rep > 0 ? "#ffaa77" : "#ff8a7a", life: 2.4, big: true });
   hooks.repEvent.forEach(f => f(ev, d));
   return ev;
 }

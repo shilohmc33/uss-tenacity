@@ -1,0 +1,370 @@
+{
+ "cell": [
+  160,
+  384
+ ],
+ "anchor_hip": [
+  80,
+  300
+ ],
+ "columns": [
+  "up",
+  "down"
+ ],
+ "rows": [
+  "idleA",
+  "idleB",
+  "talkA",
+  "talkB"
+ ],
+ "sheet": "2 cols x 4 rows = 320x1536, SEAT_ART talk:true",
+ "hires": {
+  "cell": [
+   640,
+   1536
+  ],
+  "anchor_hip": [
+   320,
+   1200
+  ],
+  "note": "source resolution, never upscaled; game frame = hires * scale about the same hip anchor"
+ },
+ "scale_method": "per view, from idleA: mean of (standing-set head width / seated head width) and (standing head height / seated head height); standing refs measured on lt_walk_v2 / tren_topdown_v1 walk frames",
+ "hip_rule": "hip y = head top + k * head height (k per character/view, set by eye on idleA: top of thighs / seat contact); hip x = alpha-weighted centre of the legs/seat rows",
+ "chars": {
+  "lt": {
+   "frames": {
+    "idleA_up": {
+     "source": "seat_lt_up_idleA",
+     "head_src": [
+      109.9,
+      117.0
+     ],
+     "src_hip": [
+      147.7,
+      324.3
+     ],
+     "bbox_xywh": [
+      32,
+      182,
+      96,
+      141
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "idleB_up": {
+     "source": "seat_lt_up_idleA (synth breathing)",
+     "head_src": [
+      109.9,
+      117.0
+     ],
+     "src_hip": [
+      147.7,
+      324.3
+     ],
+     "bbox_xywh": [
+      32,
+      180,
+      96,
+      143
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkA_up": {
+     "source": "seat_lt_up_talkA (gesture arm squeezed x0.70 to stay inside the 160 cell)",
+     "head_src": [
+      113.4,
+      112.0
+     ],
+     "src_hip": [
+      149.7,
+      311.6
+     ],
+     "bbox_xywh": [
+      31,
+      187,
+      127,
+      146
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkB_up": {
+     "source": "seat_lt_up_talkA (mirrored) (gesture arm squeezed x0.70 to stay inside the 160 cell)",
+     "head_src": [
+      113.4,
+      112.0
+     ],
+     "src_hip": [
+      253.3,
+      311.6
+     ],
+     "bbox_xywh": [
+      2,
+      187,
+      127,
+      146
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "idleA_down": {
+     "source": "seat_lt_down_idleA",
+     "head_src": [
+      178.7,
+      143.0
+     ],
+     "src_hip": [
+      201.2,
+      419.2
+     ],
+     "bbox_xywh": [
+      32,
+      195,
+      95,
+      164
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "idleB_down": {
+     "source": "seat_lt_down_idleA (synth breathing)",
+     "head_src": [
+      178.7,
+      143.0
+     ],
+     "src_hip": [
+      201.2,
+      419.2
+     ],
+     "bbox_xywh": [
+      32,
+      194,
+      95,
+      165
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkA_down": {
+     "source": "seat_lt_down_talkA",
+     "head_src": [
+      178.4,
+      144.0
+     ],
+     "src_hip": [
+      223.2,
+      422.0
+     ],
+     "bbox_xywh": [
+      27,
+      194,
+      99,
+      166
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkB_down": {
+     "source": "seat_lt_down_talkB",
+     "head_src": [
+      177.7,
+      144.0
+     ],
+     "src_hip": [
+      202.4,
+      422.0
+     ],
+     "bbox_xywh": [
+      33,
+      194,
+      94,
+      166
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    }
+   },
+   "scale_up": 0.39318,
+   "head_src_up": [
+    109.9,
+    117.0
+   ],
+   "scale_down": 0.26589,
+   "head_src_down": [
+    178.7,
+    143.0
+   ],
+   "sheet": "out/seat-lt.png"
+  },
+  "tren": {
+   "frames": {
+    "idleA_up": {
+     "source": "seat_tren_up_idleA",
+     "head_src": [
+      120.1,
+      131.0
+     ],
+     "src_hip": [
+      161.7,
+      438.6
+     ],
+     "bbox_xywh": [
+      40,
+      181,
+      79,
+      144
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "idleB_up": {
+     "source": "seat_tren_up_idleA (synth breathing)",
+     "head_src": [
+      120.1,
+      131.0
+     ],
+     "src_hip": [
+      161.7,
+      438.6
+     ],
+     "bbox_xywh": [
+      40,
+      180,
+      79,
+      145
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkA_up": {
+     "source": "seat_tren_up_talkA",
+     "head_src": [
+      120.4,
+      129.0
+     ],
+     "src_hip": [
+      161.7,
+      432.3
+     ],
+     "bbox_xywh": [
+      41,
+      183,
+      90,
+      144
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkB_up": {
+     "source": "seat_tren_up_talkA (mirrored)",
+     "head_src": [
+      120.4,
+      129.0
+     ],
+     "src_hip": [
+      200.3,
+      432.3
+     ],
+     "bbox_xywh": [
+      29,
+      183,
+      90,
+      144
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "idleA_down": {
+     "source": "seat_tren_down_idleA",
+     "head_src": [
+      123.3,
+      120.0
+     ],
+     "src_hip": [
+      164.3,
+      399.0
+     ],
+     "bbox_xywh": [
+      38,
+      187,
+      85,
+      190
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "idleB_down": {
+     "source": "seat_tren_down_idleA (synth breathing)",
+     "head_src": [
+      123.3,
+      120.0
+     ],
+     "src_hip": [
+      164.3,
+      399.0
+     ],
+     "bbox_xywh": [
+      38,
+      186,
+      85,
+      191
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkA_down": {
+     "source": "seat_tren_down_talkA",
+     "head_src": [
+      123.0,
+      121.0
+     ],
+     "src_hip": [
+      215.0,
+      400.1
+     ],
+     "bbox_xywh": [
+      22,
+      187,
+      101,
+      190
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    },
+    "talkB_down": {
+     "source": "seat_tren_down_talkB",
+     "head_src": [
+      121.0,
+      121.0
+     ],
+     "src_hip": [
+      164.5,
+      401.1
+     ],
+     "bbox_xywh": [
+      37,
+      186,
+      86,
+      191
+     ],
+     "clipped_game": false,
+     "clipped_hires": false
+    }
+   },
+   "scale_up": 0.28756,
+   "head_src_up": [
+    120.1,
+    131.0
+   ],
+   "scale_down": 0.30103,
+   "head_src_down": [
+    123.3,
+    120.0
+   ],
+   "sheet": "out/seat-tren.png"
+  }
+ }
+}

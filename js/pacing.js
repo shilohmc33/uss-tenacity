@@ -42,7 +42,7 @@ export const PACE = {
       awayGapPlayDays: 14,         //   ... and, rolled while away, at least 14 play days since her (pass 15 D2)
       minHull: 60,                 //   and never against a CRIPPLED ship (pass 13 manager call): hull below 60% ...
       blockSev: "crit",            //   ... or an open CRIT fault ...
-      minTorps: 1,                 //   ... or 0 torpedoes (pass 15 D1) ...
+      minTorps: 2,                 //   ... or fewer than 2 torpedoes (pass 15 D1: 0; pass 15 N1: < 2) ...
       minPower: 30,                //   ... or main power below 30% (pass 15 D1) -> the roll falls back to fighter / Galor. Med / low faults don't hold her.
     },
     // pass 15 D2: an AWAY battlecruiser fight (offline catch-up / idle tab) starts on the night watch: hours away let every officer
@@ -50,6 +50,10 @@ export const PACE = {
     // bridge instead: each ability starts on cooldown at cdFrac x its cdMax (uniform; >= 36 s, so in practice none in the fight), and the
     // tubes hold at most torpsMax (only the ready rack is loaded).
     bcAway: { cdFrac: [0.8, 1.0], torpsMax: 4 },
+    // pass 15 (manager call): LIVE, she opens with a polaron alpha strike at the bridge - every officer ability that is ready (or has less
+    // than knockFrac x cdMax left) goes to knockFrac x its cdMax; abilities cooling longer than that keep their timer (never pushed further). A rested bridge used to one-volley
+    // her (Scan + Spread) for 0% hull. Away fights skip it: the night watch start (bcAway) already has every ability cooling.
+    bcAlpha: { knockFrac: 0.5 },
   },
   // --- faults ---
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)
@@ -74,9 +78,13 @@ export const PACE = {
   // repair rewards (repairRep / repairParts) moved to js/progression.js (PROG) with the quality roll
 };
 // runtime-only pacing state (not saved)
-export const PACE_RT = { offline: false, idleT: 0, sessionT: 0, hidden: false };
+export const PACE_RT = { offline: false, idleT: 0, sessionT: 0, hidden: false, liveFight: false };
 export const rr = ([a, b]) => a + Math.random() * (b - a);
 export const nightActive = () => PACE_RT.offline || PACE_RT.idleT >= PACE.idleAfter;
+// pass 16 B1: a fight that STARTED live (battle.live) stays live until it ends, whatever the player does meanwhile -
+// no offline hull floor, no night-crew patching, no x0.006 injury rate, no power floor. PACE_RT.liveFight mirrors
+// G.sp.battle.live (set by startBattle, refreshed every stepSim). The away-weighted roll itself still uses nightActive().
+export const offRules = () => nightActive() && !PACE_RT.liveFight;
 export function playerInput() { PACE_RT.idleT = 0; }
 // pass 06: the player is PRESENT when the app is visible, not in an offline catch-up, and there was input within the
 // last PROG.deaths.presentIdle s (60). Injury clocks, surgery outcomes and deaths only ever run while present.

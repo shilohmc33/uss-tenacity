@@ -1,0 +1,23 @@
+{
+ "plate_px": [1920, 1280], "art_px_per_design_px": 2,
+ "figure_design_px": 83, "target_person_over_door": "0.80-0.85 (report uses 0.825)",
+ "edits": {
+  "deck-berthing": {
+   "cabin_doors": {"method": "pixel composite: wall cap + upper face (plate y 362-440, x 0-1386) moved up 100 px unchanged; plain lower band (y 440-462) stretched 22->122 px; skirting and corridor floor (y>=462) untouched; plant leaves restored from the original",
+     "opening_design_px_before": 47, "opening_design_px_after": 97, "person_over_door_before": 1.77, "person_over_door_after": 0.86},
+   "turbolift": {"method": "per-column warp: rows y 940-1048 moved up by s(x), band 1048-1094 stretched; s = 90 px across the back wall x 1000-1360, smoothstep ramps to 0 at x 840 / 1530 over the angled side walls",
+     "leaves_design_px_before": 53, "leaves_design_px_after": 98, "person_over_door_before": 1.57, "person_over_door_after": 0.85},
+   "walk_mask_impact": "none: the covered areas are cabin floors (rugs, desks) and the bottom of the shower stalls, none walkable; the corridor rows (y>=500) and the lift lobby are unchanged"
+  },
+  "deck-medical": {
+   "front_wall_lift": {"method": "per-column warp: rows y 945-1103 moved up by s(x), plain lower door band 1103-1131 stretched; s = 95 px across the back wall x 858-1058, smoothstep ramps to 0 at x 725 / 1215",
+     "leaves_design_px_before": 49, "leaves_design_px_after": 96.5, "person_over_door_before": 1.70, "person_over_door_after": 0.86},
+   "walk_mask_impact": "CONFLICT: the taller wall covers plate y ~850-1000 at the centre, i.e. the bottom strip of the walk ring below the OR and the lift node (y 0.7625). walk-medical.png and the lift node would need moving up/around; see deck-medical-d50 for a gentler option"
+  },
+  "deck-medical-d50": {
+   "front_wall_lift": {"method": "as deck-medical with s = 50 px", "leaves_design_px_after": 74, "person_over_door_after": 1.12},
+   "walk_mask_impact": "keeps a thin strip under the OR; the lift node still wants ~0.04 up"
+  }
+ },
+ "generations": 0
+}

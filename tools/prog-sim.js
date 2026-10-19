@@ -20,6 +20,8 @@ const ROMSIM = process.argv[5] === 'romance';   // Personal Log phase 4: regular
   const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.goto(BASE + '?reset=1');
   await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 30000 });
+  // BC_GATE='{"minHull":70,"minPower":40}' overrides the battlecruiser's crippled-check floors in-page (gate tuning only; post-5f3cbd2)
+  if (process.env.BC_GATE) await p.evaluate(async g => { Object.assign((await import('/js/pacing.js')).PACE.encounter.bc, g); }, JSON.parse(process.env.BC_GATE));
   if (DEATHS) await p.evaluate(cfg => { __T.PROG.deaths.enabled = true; window.__DSIM = cfg; }, { late: [+(process.env.LATE_R || 0.05), +(process.env.LATE_C || 0.10)], awayP: +(process.env.AWAY_P || 0.15), assist: [0.7, 0.5] });   // pass 07: slow responders (regular 5% / casual 10%), look-away 15%, assist 70% / 50%   // (on by default since retune v2; kept explicit)
   await p.evaluate(async () => {
     window.__noSave = true; __T.app.paused = true;
@@ -116,6 +118,7 @@ const ROMSIM = process.argv[5] === 'romance';   // Personal Log phase 4: regular
             if (A[key] === undefined) { A[key] = { assist: Math.random() < (window.__kind === 'casual' ? DSIM.assist[1] : DSIM.assist[0]), away: Math.random() < DSIM.awayP }; if (A[key].away) { A[key].away = false; t += lookAway(); continue; } }
             if (A[key].assist && !x.assist) __T.MD.assistSurgery(); } }
         sim.stepSim(0.1); AM.tickAmbient(0.1); t += 0.1; if (DSIM) dmon();
+        if (G.sp.awayDefer > 0 && !G.sp.battle) { const s3 = G.sp.awayDefer; G.sp.awayDefer = 0; if (s3 > 30) { const d0 = G.prog.med.n.deaths; sim.catchUp(s3); window.__offDeaths = (window.__offDeaths || 0) + G.prog.med.n.deaths - d0; } }   // pass 16 B1: main.js runs a catch-up deferred behind a live fight once it ends
         window.__liveRep = (window.__liveRep || 0) + (G.stats.repairs || 0) - r0;   // roster NPCs on the Lt's deck come over for chats / intros
         for (const m of marks) if (!m.done && t >= m.at) { m.done = true; out.push(snapT(m.tag)); }
       }
@@ -481,6 +484,12 @@ const ROMSIM = process.argv[5] === 'romance';   // Personal Log phase 4: regular
       const awayGrave = aw.length ? aw.filter(x => x.grave).length / aw.length : 0, fastGrave = w.filter(x => x.fast).length ? w.filter(x => x.fast).filter(x => x.grave).length / w.filter(x => x.fast).length : 0;
       const bad = v.freeSave + v.awayBetter + v.windowGrewBack;
       console.log(`\n${name}: deaths/${DAYS_N}d p10/p50/p90 ${q3(dd)} mean ${(dd.reduce((a, b2) => a + b2, 0) / runs.length).toFixed(2)} · by source: surgery ${A.filter(a => a.how === 'surgery').length} (per run p50 ${med(perRun('surgery'))}) / timeout ${A.filter(a => a.how !== 'surgery').length} (per run p50 ${med(perRun('timeout'))})`);
+      { // pass 15: death attribution - cause:source (battle:<enemy> / hazard:<kind>) x how (surgery = lost on the table, timeout = the window ran out)
+        const lab = a => `${a.cause || '?'}:${a.src || '?'}`, keys = [...new Set(A.map(lab))].sort(), per = n => (n / runs.length).toFixed(3);
+        console.log(`  DEATH ATTRIBUTION (per ${DAYS_N} play days, ${runs.length} runs): ` + (keys.length ? keys.map(k => { const xs = A.filter(a => lab(a) === k), sg = xs.filter(a => a.how === 'surgery').length; return `${k} ${per(xs.length)} (n ${xs.length}: surgery ${sg} / timeout ${xs.length - sg})`; }).join(' · ') : 'no deaths'));
+        const bcD = A.filter(a => a.cause === 'battle' && a.src === 'jh_battlecruiser').length;
+        console.log(`  battlecruiser-linked deaths: ${bcD} in ${runs.length} runs = ${per(bcD)} per ${DAYS_N} play days (${A.length ? (bcD / A.length * 100).toFixed(1) : 0}% of deaths) · battle deaths ${A.filter(a => a.cause === 'battle').length} · hazard deaths ${A.filter(a => a.cause === 'hazard').length}`);
+      }
       console.log(`  surgery odds and outcomes ('grave' = the roll went against the patient: death, evacuation or a close call the safeguards caught):`);
       console.log(`  - fast fix by the Lt, watched: ${rate(w.filter(x => x.fast))}; of them assisted: ${rate(w.filter(x => x.fast && x.assist))}`);
       console.log(`  - slower fix by the Lt, watched: ${rate(w.filter(x => !x.fast && x.by === 'lt'))} · fixed by the crew, watched: ${rate(w.filter(x => x.by === 'crew'))}`);
