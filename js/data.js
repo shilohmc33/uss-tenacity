@@ -609,9 +609,33 @@ export const SHIP_SHEET = {
     { state: "engine", frames: 4, fps: 8, loop: true, blend: "lighter" },   // OPTIONAL overlay: engine / nacelle glow only, drawn additively over every state
   ],
 };
+// SHIP_ART_BATCH2: the artist's ships batch 2 sheets (sprites/ships_batch2, not yet approved by Shiloh). false = those
+// classes fall back to painted/vector. Revert: set false, or git revert the commit that added this.
+export const SHIP_ART_BATCH2 = true;
+const B2 = id => (SHIP_ART_BATCH2 ? { img: "ship-" + id, engine: false } : { img: null });
 export const SHIP_ART = {
-  tenacity: { img: null }, freighter: { img: null }, klingon_bop: { img: null },
-  jh_fighter: { img: null }, galor: { img: null }, jh_battlecruiser: { img: null },
+  tenacity: { img: null }, freighter: B2("freighter"), klingon_bop: B2("klingon_bop"),
+  jh_fighter: { img: null }, galor: B2("galor"), jh_battlecruiser: B2("jh_battlecruiser"),
+};
+// FX_SHEET: the artist's explosion sheets (sprites/fx_explosion_v1/fx.json). 256px cells, pivot (128,128).
+// fx-explosion: normal blend, straight alpha. fx-additive: 'lighter' on black. Used by render/shipfx.js; a missing sheet
+// falls back to procedural gradients.
+export const FX_SHEET = { cell: 256, sheets: {
+  explosion: { img: "fx-explosion", blend: "source-over", rows: { fireball: { row: 0, frames: 8, fps: 14 }, smoke: { row: 1, frames: 6, fps: 8 } } },
+  additive: { img: "fx-additive", blend: "lighter", rows: { warpBreach: { row: 0, frames: 6, fps: 12 }, sparks: { row: 1, frames: 6, fps: 14 } } },
+} };
+// EXPLOSION: ship death sequence (render/shipfx.js). Sizes are in units of the ship's drawn length. Ships with
+// bigBoom: true (js/ships.js) use the big profile. total = B.dying (victory fires when it runs out).
+export const EXPLOSION = {
+  default: { total: 2.4, chain: { n: [3, 4], over: 1.0, size: 0.32 }, det: 1.05, flash: 0.07, hitStop: { dur: 0.1, scale: 0.08 },
+    shake: { dur: 0.45, amp: 9 }, ring: { dur: 0.9, r: 1.15, squash: 0.22, width: 3 }, chunks: { n: 6, speed: 0.55, spin: 3.5, life: 1.35, glow: 0.9 },
+    wreck: { drift: 3, spin: 1.5, life: 2.6, glow: 0.3, debrisDrift: 4, debrisLife: [1.4, 2.4] },
+    fireball: { size: 0.95 }, smoke: { size: 1.25, delay: 0.32 }, embers: { n: 26, speed: 0.7, life: [0.6, 1.3] }, specks: { n: 18, life: [1.0, 1.4] }, breach: null },
+  big: { total: 2.7, chain: { n: [4, 4], over: 1.1, size: 0.26 }, det: 1.15, flash: 0.09, hitStop: { dur: 0.12, scale: 0.06 },
+    shake: { dur: 0.6, amp: 13 }, ring: { dur: 0.8, r: 1.7, squash: 0.2, width: 4 }, chunks: { n: 9, speed: 0.45, spin: 2.6, life: 1.5, glow: 1 },
+    wreck: { drift: 2.5, spin: 1.2, life: 2.9, glow: 0.35, debrisDrift: 3.5, debrisLife: [1.6, 2.6] },
+    fireball: { size: 0.8 }, smoke: { size: 1.1, delay: 0.3 }, embers: { n: 40, speed: 0.8, life: [0.7, 1.5] }, specks: { n: 26, life: [1.1, 1.5] },
+    breach: { size: 0.9, stretch: 3.2 } },
 };
 // SHIP_PAINTED[sprite key] = { img, facing }: the legacy single painted image per class (pre-groundwork art), used by
 // render/ships.js when the class has no SHIP_ART sheet loaded, before the vector placeholder. img: asset key (preloaded
@@ -622,10 +646,11 @@ export const SHIP_PAINTED = {
   jh_fighter: { img: "ship-jemhadar", facing: "left" },    // 1400x715, prongs forward on the left (the old enemy, drawn unmirrored)
 };
 import { DOOR_IMAGES } from "./doors-data.js";
-export const IMAGES = [...new Set([...DOOR_IMAGES, "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
+import { SHIP_STATE_IMAGES } from "./ship-states.js";
+export const IMAGES = [...new Set([...DOOR_IMAGES, ...SHIP_STATE_IMAGES, "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security", "lt-walk-v2", "tren-walk-v2", "crew-gold-walk-v2", "crew-blue-walk-v2",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
-  ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(SHIP_PAINTED).map(a => a.img), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
+  ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(SHIP_PAINTED).map(a => a.img), ...Object.values(FX_SHEET.sheets).map(x => x.img), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
   ...[LIE_ART, SEAT_ART].flatMap(o => Object.values(o).map(a => a.img)), ...Object.values(TINT_BASES).map(b => b.mask).filter(Boolean),
   ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean), ...DECOR_ITEMS.filter(d => d.art).map(d => "decor-" + d.id),
   ...Object.values(DECK_OCCL).flatMap(T => T.items.map(it => it.src)).filter(Boolean)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)

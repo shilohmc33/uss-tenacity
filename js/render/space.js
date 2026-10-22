@@ -6,6 +6,7 @@ import { voyageView } from "../voyage.js";
 import { clamp } from "../util.js";
 import { SHIPS, FORMATION, foe, shipOf } from "../ships.js";
 import { drawShip, drawShipLabel } from "./ships.js";
+import { startShipDeath, shipFxHidden, tickShipFx, drawShipFx, fxShake } from "./shipfx.js";
 
 const bg = { cur: null, prev: null, f: 1 };
 const stars = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), z: Math.random() }));
@@ -16,7 +17,8 @@ function cover(ctx, img, w, h, alpha, drift) {
 }
 export function drawSpace(ctx, t, dt) {
   const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, dpr = ctx.canvas.width / w;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  tickShipFx(dt || 0); const [shx, shy] = fxShake();   // death screen shake
+  ctx.setTransform(dpr, 0, 0, dpr, shx * dpr, shy * dpr);
   const vv = voyageView(), SP = G.sp, B = SP.battle;
   if (vv.bg !== bg.cur) { bg.prev = bg.cur; bg.cur = vv.bg; bg.f = bg.prev ? 0 : 1; }
   bg.f = Math.min(1, bg.f + dt / 1.0);
@@ -64,8 +66,9 @@ export function drawSpace(ctx, t, dt) {
   const allies = B && Array.isArray(B.allies) ? B.allies : [{ id: "tenacity", ship: "tenacity", slot: 0, ref: "ship" }];
   const drawSide = (list, side) => { for (const c of [...list].sort((a, b) => (b.slot | 0) - (a.slot | 0))) {
     const [x, y, bw, bh] = boxOf(c, side), self = c.ref === "ship", pct = self ? G.ship.hull : Math.round(c.hull / (c.max || 1) * 100);
-    const dying = side === "enemy" && c === E && B && B.dying > 0, alpha = dying ? clamp(B.dying / 1.3, 0, 1) : 1;
-    drawShip(ctx, c.ship, x, y, bw, bh, { mirror: side === "enemy", t, pct, anim: fx[c.id], dying, alpha });
+    const dying = !!(B && B.dying > 0 && ((side === "enemy" && c === E) || (self && B.allyDying))), key = (B ? B.startedAt : 0) + "|" + c.id, mirror = side === "enemy";
+    if (dying) startShipDeath(key, c.ship, [x, y, bw, bh], w, h, mirror, (o, ox, oy, ow, oh) => drawShip(o, c.ship, ox, oy, ow, oh, { mirror, t, pct, anim: fx[c.id] }));
+    if (!(dying && shipFxHidden(key))) drawShip(ctx, c.ship, x, y, bw, bh, { mirror, t, pct, anim: fx[c.id], dying, alpha: 1, key });   // per-battle key: damaged crossfade resets for each new combatant (P21 #3)
     rects[c.id] = { x: x / w, y: y / h, w: bw / w, h: bh / h, side };
   } };
   drawSide(allies, "ally");
@@ -104,6 +107,7 @@ export function drawSpace(ctx, t, dt) {
     const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(255,255,220,${1 - p})`); g.addColorStop(0.35, `rgba(255,160,60,${0.9 * (1 - p)})`); g.addColorStop(1, "rgba(200,40,10,0)");
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 6.29); ctx.fill();
   }
+  drawShipFx(ctx, w, h);   // ship deaths (render/shipfx.js)
   ctx.font = "bold 16px Antonio, sans-serif"; ctx.textAlign = "center";
   for (const f of SFX.floaters) { ctx.globalAlpha = 1 - f.t / 1.2; ctx.fillStyle = f.color; ctx.fillText(f.text, f.x * w, f.y * h - f.t * 30); }
   ctx.globalAlpha = 1; ctx.textAlign = "left";

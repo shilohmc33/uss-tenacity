@@ -3,6 +3,7 @@
 // clean vector placeholder per class in faction colours.
 // Every ship is authored FACING RIGHT inside its box (x, y, w, h); mirror = true flips it to face left (the enemy side).
 import { SHIP_ART, SHIP_SHEET, SHIP_PAINTED } from "../data.js";
+import { SHIP_STATES } from "../ship-states.js";
 import { IMG } from "../assets.js";
 import { SHIPS, FACTIONS } from "../ships.js";
 
@@ -146,6 +147,18 @@ function drawPainted(ctx, pa, w, h, pct) {
   o.globalCompositeOperation = "source-over";
   ctx.drawImage(PC, 0, 0, cw, ch, dx, dy, dw, dh); ctx.restore();
 }
+// Painted damaged cell (ship-states.js, approved art): crossfades in over DMG_FADE s once hull <= DMG_AT %. Placed like a
+// sheet cell (pivot at the box centre, len = SHIP_SHEET.len). Over a sheet (same silhouette) it overlays the live frame, and
+// only half-covers a firing / shields-hit frame so the flash reads; over painted / vector art it replaces the base.
+export const DMG_AT = 40, DMG_FADE = 0.5;
+const dmgMix = new Map();   // opts.key -> { m, t }
+export function damagedArt(sprite) { const s = SHIP_STATES.ships[sprite], im = s && IMG[s.damaged]; return im && im.width > 0 ? im : null; }
+function dmgMixOf(key, pct, t) {
+  const on = pct <= DMG_AT ? 1 : 0; if (key == null) return on;
+  let e = dmgMix.get(key); if (!e) { e = { m: on, t }; dmgMix.set(key, e); if (dmgMix.size > 64) dmgMix.delete(dmgMix.keys().next().value); }
+  const dt = Math.max(0, Math.min(0.1, t - e.t)); e.t = t; e.m += Math.sign(on - e.m) * Math.min(Math.abs(on - e.m), dt / DMG_FADE); return e.m;
+}
+function drawCell(ctx, im, w, h) { const [cw, chh] = SHIP_STATES.cell, [px, py] = SHIP_STATES.pivot, k = w / SHIP_SHEET.len; ctx.drawImage(im, w / 2 - px * k, h / 2 - py * k, cw * k, chh * k); }
 // Draw one ship into its box. opts: { mirror, t (seconds, for loops), pct (hull %), anim ({ state, t }), dying, alpha }.
 // Returns what was drawn ({ art: true, state, frame } or { art: false }) for tests.
 export function drawShip(ctx, shipId, x, y, w, h, opts = {}) {
@@ -154,10 +167,12 @@ export function drawShip(ctx, shipId, x, y, w, h, opts = {}) {
   ctx.save(); ctx.translate(x, y); if (opts.mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   if (opts.alpha != null) ctx.globalAlpha = opts.alpha;
   let res;
-  const painted = art ? null : shipPainted(d.sprite);
+  const painted = art ? null : shipPainted(d.sprite), dmgIm = opts.dying ? null : damagedArt(d.sprite), mix = dmgIm ? dmgMixOf(opts.key, pct, opts.t || 0) : 0;
+  const a0 = ctx.globalAlpha; if (mix > 0 && !art) ctx.globalAlpha = a0 * (1 - mix);
   if (art) res = { art: true, ...drawSheet(ctx, art, shipState(opts.anim, pct, opts.dying), opts.t || 0, w, h) };
   else if (painted) { drawPainted(ctx, painted, w, h, pct); res = { art: false, painted: painted.p.img, state: shipState(opts.anim, pct, opts.dying).state }; }
-  else { ctx.beginPath(); ctx.rect(-w * 0.1, -h * 0.2, w * 1.2, h * 1.4); ctx.clip(); drawVectorRim(ctx, d, w, h, opts.t || 0, pct); res = { art: false, state: shipState(opts.anim, pct, opts.dying).state }; }
+  else { ctx.save(); ctx.beginPath(); ctx.rect(-w * 0.1, -h * 0.2, w * 1.2, h * 1.4); ctx.clip(); drawVectorRim(ctx, d, w, h, opts.t || 0, pct); ctx.restore(); res = { art: false, state: shipState(opts.anim, pct, opts.dying).state }; }
+  if (mix > 0) { const busy = art && (res.state === "firing" || res.state === "shieldsHit"); ctx.globalAlpha = a0 * mix * (busy ? 0.5 : 1); drawCell(ctx, dmgIm, w, h); res.damaged = +mix.toFixed(2); }
   ctx.restore();
   return res;
 }

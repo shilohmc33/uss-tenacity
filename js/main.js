@@ -12,6 +12,7 @@ import { tickAmbient, ambient, ambientTo, npcOf, visibleOn } from "./npc-ambient
 import * as CL from "./crewlife.js";
 import { drawDeck, resizeCam, hitTest, screenToDeck, setZoom, panBy, cam, deckFx } from "./render/deck.js";
 import { drawSpace } from "./render/space.js";
+import { clearShipFx } from "./render/shipfx.js";
 import { buildHud, wireHud, updateHud, openLiftPanel, closeLiftPanel, showReport, closeSheet, renderLog, flashLevel, openDecor } from "./ui/hud.js";
 import * as CB from "./cabin.js";
 import * as BD from "./boards.js";
@@ -57,6 +58,7 @@ function resize() {
   document.documentElement.style.setProperty('--pb', $("#playbar").offsetHeight + 'px');
 }
 function setView(v) {
+  if (v !== app.view) clearShipFx();   // P21 #1/#2: no hit-stop or half-played explosion survives a view change
   app.view = v;
   document.body.classList.toggle("view-deck", v === "deck"); document.body.classList.toggle("view-space", v === "space");
   $("#btnView").textContent = v === "deck" ? "SPACE ▸" : "◂ DECK";

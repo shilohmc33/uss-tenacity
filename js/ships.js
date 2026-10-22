@@ -25,7 +25,7 @@ export const FACTIONS = {
 };
 export const SHIPS = {
   // ---- allies ----
-  tenacity: { name: "USS Tenacity", short: "Tenacity", a: "the Tenacity", cls: "Miranda class", faction: "starfleet", side: "ally", hull: 100, shields: 100, speed: 1, sprite: "tenacity", aspect: 3.5, size: 1,
+  tenacity: { name: "USS Tenacity", short: "Tenacity", a: "the Tenacity", cls: "Miranda class", faction: "starfleet", side: "ally", hull: 100, shields: 100, speed: 1, sprite: "tenacity", aspect: 3.5, size: 1, bigBoom: true,
     weapons: [{ id: "phaser", name: "phaser strike from the saucer banks", kind: "beam", dmg: [10, 16], cd: 2.5, cdImpaired: 5, power: 8, col: "255,150,60" },
       { id: "torpedo", name: "Photon torpedo", kind: "torpedo", dmg: [22, 30], cd: 4, ammo: "torps" }],
     hp: { fire: [0.9, 0.45], torp: [0.42, 0.18], hit: [0.6, 0.45], miss: [0.1, 0.2], boom: [0.6, 0.45] } },
@@ -44,7 +44,7 @@ export const SHIPS = {
     parting: [8, 14], salvage: 3, death: "The Galor's spine buckles — her reactor goes, and the wreck tumbles away dark. She's gone.",
     hp: { fire: [0.95, 0.5], hit: [0.55, 0.5], boom: [0.5, 0.5] } },
   jh_battlecruiser: { name: "Jem'Hadar battlecruiser", short: "battlecruiser", a: "a Jem'Hadar battlecruiser", cls: "Dominion capital ship",   // pass 12 m7: was the name again (label read 'Jem'Hadar battlecruiser / Jem'Hadar battlecruiser')
-    faction: "dominion", side: "enemy", hull: 170, shields: 0, speed: 0.7, sprite: "jh_battlecruiser", aspect: 2.3, size: 0.9,
+    faction: "dominion", side: "enemy", hull: 170, shields: 0, speed: 0.7, sprite: "jh_battlecruiser", bigBoom: true, aspect: 2.3, size: 0.9,
     weapons: [{ id: "polaron", name: "Heavy polaron barrage", kind: "beam", dmg: [12, 20], every: [3.4, 4.2], first: 2.4, pierce: 0.5, col: "200,120,255", hits: "a heavy polaron hit" }],   // pass 13 tuning (gated start, battle-sim): hull 150 -> 170, pierce 0.5 = half of each absorbed hit bleeds to the hull
     parting: [10, 16], salvage: 5, rep: 1, death: "The battlecruiser's shields fail all at once; a chain of detonations tears her open from the bow back. She's gone.",   // rare and gated: js/encounters.js + PACE.encounter
     hp: { fire: [0.95, 0.52], hit: [0.5, 0.5], boom: [0.5, 0.5] } },

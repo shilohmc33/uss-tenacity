@@ -8,6 +8,7 @@ import { spawnFault, impairing, shieldCap, medFrozen, medDepends } from "./fault
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
 import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
 import { hooks } from "./progression.js";
+import { fxTimeScale, deathTotal, clearShipFx } from "./render/shipfx.js";
 import { SHIPS, makeAlly, makeEnemy, foe, shipOf, gunOf, hullPct } from "./ships.js";
 
 // Battle groundwork: G.sp.battle = { ctx, enterT, dying, cd, startedAt, inflight, injN, allies: [combatant], enemies: [combatant],
@@ -51,6 +52,7 @@ export function battleAllowed(kind) {
 }
 // opts.enemy: force an enemy type (tests, debug); otherwise encounters.js (story context, then the gated weighted table)
 export function startBattle(kind = "enroute", opts = {}) {
+  clearShipFx(true);   // P21 #2: no explosion carries into a new battle
   const SP = G.sp;
   if (SP.battle) return false;
   if (!battleAllowed(kind)) {
@@ -109,9 +111,7 @@ function damageEnemy(dmg, label) {
   SFX.floaters.push({ x: jp[0], y: jp[1], t: 0, text: "−" + dmg, color: "#ffb3ab" });
   log(`${label} — ${d.name} hull at ${hullPct(E)}%.`);
   if (E.hull <= 0) {
-    B.dying = 1.3; setAnim(E.id, "explode");
-    const p = jemHp(E, "boom");
-    SFX.booms.push({ x: p[0], y: p[1], t: 0, dur: 1.3, big: true });
+    B.dying = deathTotal(E.ship); setAnim(E.id, "explode");   // the death visual is render/shipfx.js (EXPLOSION in data.js)
     log(d.death || `The ${d.name} breaks apart — secondary explosions walking her spine. She's gone.`, "good");
   }
 }
@@ -124,7 +124,7 @@ function recBc(B, out, h1) {
 function endBattleVictory() {
   const SP = G.sp, S = G.ship, kind = SP.battle ? SP.battle.ctx : null, d = shipOf(foe(SP.battle));
   recBc(SP.battle, "won", S.hull);
-  SP.battle = null; SP.evasiveT = 0; G.stats.wins++;
+  SP.battle = null; SP.evasiveT = 0; G.stats.wins++; clearShipFx();   // P21 #2
   const salvage = Math.max(0, Math.min(d.salvage ?? 3, S.partsCap - S.parts)); S.parts += salvage;
   log(`Victory. Tractor crews pull ${salvage} usable part(s) from the wreckage.`, "good");
   toast(`Victory — ${d.short} destroyed`, "good");
@@ -234,7 +234,7 @@ function trenDisengage() {
   const SP = G.sp, B = SP.battle;
   if (!B || B.dying || coreCrit()) return;
   const enroute = !!(SP.travel && SP.travelPaused), kind = B.ctx;
-  SP.battle = null; SP.evasiveT = 0; SP.cap.decideT = 30;
+  SP.battle = null; SP.evasiveT = 0; SP.cap.decideT = 30; clearShipFx();
   if (enroute) { SP.travel = null; SP.travelPaused = false; SP.location = null; }
   if (kind === "convoy") SP.escortDone = true;
   log("T'Ren: 'Helm — emergency warp, disengage.' The Tenacity breaks off and runs.", "comm");
@@ -258,7 +258,7 @@ function officerOrders() {
 export function towToDS9() {
   const SP = G.sp, S = G.ship;
   recBc(SP.battle, "towed", 0);
-  SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++;
+  SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++; clearShipFx();
   SP.location = "ds9"; SP.escortDone = true;
   Object.assign(SP.cap, { decideT: PACE.dockDwell[0], dest: "convoy", holdLogged: false, reason: "Towed home to Deep Space Nine — holding for repairs. Departure pending my hull minimum of 40%." });
   S.hull = 20; S.shields = 0; S.power = Math.min(S.power, 30);
@@ -327,6 +327,7 @@ function tickAbilities(dt) {
   if (ab.scan.active > 0) { ab.scan.active -= dt; if (ab.scan.active <= 0) { ab.scan.active = 0; if (G.sp.battle) log("Weak-Point Scan expired — targeting back to standard.", "comm"); } }
 }
 export function tickBattle(dt) {
+  dt *= fxTimeScale();   // death hit-stop (render/shipfx.js)
   tickAbilities(dt);
   autoFire();
   const SP = G.sp, B = SP.battle, E = foe(B), spd = E ? shipOf(E).speed : 1;
@@ -337,7 +338,6 @@ export function tickBattle(dt) {
     if (SP.evasiveT > 0) SP.evasiveT = Math.max(0, SP.evasiveT - dt);
     if (B.dying) {
       B.dying -= dt;
-      if (Math.random() < dt * 10) { const p = jemPoint(rand(0.15, 0.8), rand(0.2, 0.8)); SFX.booms.push({ x: p[0], y: p[1], t: 0, dur: 0.5 }); }
       if (B.dying <= 0) endBattleVictory();
     } else {
       E.volleyT -= dt;
@@ -371,3 +371,4 @@ export function tickBattle(dt) {
   }
   if (!SP.battle) SFX.shots.length = 0;
 }
+export const debugKillEnemy = () => { for (let i = 0; i < 30 && G.sp.battle && !G.sp.battle.dying; i++) damageEnemy(1e6, "Debug kill"); };   // tools/boom-shots.js
