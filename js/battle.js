@@ -116,7 +116,11 @@ function damageEnemy(dmg, label) {
   }
 }
 // pass 15 D2: a battlecruiser fight's record (hull before / after, outcome, whether the player was away) -> G.sp.enc.bcRec
-function recBc(B, out, h1) { if (B && B.bc) noteBcEnd(G.sp, { pd: B.bc.pd, away: !!B.bc.away, h0: B.bc.h0, h1: Math.round(h1), out }); }
+function recBc(B, out, h1) {
+  if (B && B.bc) noteBcEnd(G.sp, { pd: B.bc.pd, away: !!B.bc.away, h0: B.bc.h0, h1: Math.round(h1), out });
+  // pass 17 P4: every fight's end (enemy + outcome) for the report of a catch-up that was deferred behind it (main.js / hud showReport)
+  if (B) { const E = foe(B), d = E && shipOf(E); G.sp.lastFight = { a: d ? d.a : "the enemy", out, hull: Math.round(h1), live: !!B.live }; }
+}
 function endBattleVictory() {
   const SP = G.sp, S = G.ship, kind = SP.battle ? SP.battle.ctx : null, d = shipOf(foe(SP.battle));
   recBc(SP.battle, "won", S.hull);
@@ -223,9 +227,12 @@ function trenDivert() {
   BR.tren = "Power diverted to shields";
   log(`T'Ren: 'Divert power to shields.' Shields ${Math.round(before)}% → ${Math.round(S.shields)}%.`, "good");
 }
+// N1 lever (manager-approved, art batch 2 follow-up): only a CRITICAL warp-core fault denies T'Ren's break-off. An impairing
+// LOW / MEDIUM core fault still blocks evasive manoeuvres (it costs the ship agility) but no longer traps her in the fight.
+const coreCrit = () => { const f = G.ship.faults.warpcore; return !!f && f.sev === "crit"; };
 function trenDisengage() {
   const SP = G.sp, B = SP.battle;
-  if (!B || B.dying || impairing("warpcore")) return;
+  if (!B || B.dying || coreCrit()) return;
   const enroute = !!(SP.travel && SP.travelPaused), kind = B.ctx;
   SP.battle = null; SP.evasiveT = 0; SP.cap.decideT = 30;
   if (enroute) { SP.travel = null; SP.travelPaused = false; SP.location = null; }
@@ -244,7 +251,7 @@ function officerOrders() {
   if (!impairing("warpcore") && B.cd.evasive <= 0 && (S.shields < 35 || hot)) trenEvasive();
   if (B.cd.divert <= 0 && S.shields < 40 && S.power >= 30) trenDivert();
   if (S.hull < 25) {
-    if (impairing("warpcore")) { if (!B.deniedLogged) { B.deniedLogged = true; BR.tren = "Disengage denied — warp core fault"; log("T'Ren: 'Disengage denied — warp core fault. We hold, Lieutenant. Keep her alive.'", "fault"); } }
+    if (coreCrit()) { if (!B.deniedLogged) { B.deniedLogged = true; BR.tren = "Disengage denied — warp core critical"; log("T'Ren: 'Disengage denied — the warp core is critical. We hold, Lieutenant. Keep her alive.'", "fault"); } }
     else trenDisengage();
   }
 }

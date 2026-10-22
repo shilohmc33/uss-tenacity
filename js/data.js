@@ -3,7 +3,7 @@
 // Walkable floor comes from the painted walk masks assets/walk-<deck>.png (see tools/make-walk-masks.py, sampled into the
 // 60x40 grid by path.js). The base/blocks rectangles below are only a coarse fallback if a mask fails to load.
 // Node x,y = where the Lt's feet stand (always on mask floor); mx,my = what he faces / where markers sit.
-import { CABIN_TIERS } from "./cabin-data.js";
+import { CABIN_TIERS, DECOR_ITEMS } from "./cabin-data.js";
 export const DW = 960, DH = 640;
 export const COLS = 60, ROWS = 40;
 const R = (x0, y0, x1, y1) => [x0, y0, x1, y1];
@@ -12,19 +12,47 @@ export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "quar
 export const CREW_DECKS = ["bridge", "engineering", "medical", "berthing", "lounge"];   // decks with painted plates + walk masks
 export const DECKS = {
   bridge: {
-    name: "Bridge", plate: "deck-bridge", glow: [0.50, 0.255, "140,180,255"],
-    lift: { x: 0.49, y: 0.1625, mx: 0.49, my: 0.105 },
-    base: [R(0.105, 0.055, 0.895, 0.60)],
-    blocks: [R(0.40, 0.185, 0.60, 0.32), R(0.44, 0.345, 0.55, 0.455), R(0.27, 0.46, 0.44, 0.645), R(0.56, 0.46, 0.72, 0.645),
-      R(0.06, 0.235, 0.225, 0.665), R(0.765, 0.235, 0.94, 0.65), R(0.315, 0.05, 0.385, 0.16), R(0.615, 0.05, 0.685, 0.16)],
+    // art batch 2: sprites/deck_bridge_v3 layout, plate + fg from sprites/deck_bridge_v3_hires (same geometry, 1920x1280 = 2 art
+    // px per design px like the other plates; v3 was 1080x720) drawn at DW x DH; walk-bridge.png; seats / stations / lift from out/bridge_spots.json. Viewscreen at the BOTTOM:
+    // every seat faces down. fg-bridge.webp = the console fronts drawn over seated figures (render/deck.js drawBridgeFg).
+    name: "Bridge", plate: "deck-bridge", glow: [0.50, 0.86, "150,180,255"],
+    lift: { x: 0.2104, y: 0.275, mx: 0.2094, my: 0.1484 },
+    // starboard aft turbolift (clear opening 712-795 x 44-142 px): a second boarding point for the same lift system
+    lift2: { x: 0.7854, y: 0.2625, mx: 0.7854, my: 0.1453 },
+    // fallback grid only (the mask normally loads): the walk-bridge.png floor cells as 40 rectangles, exact on the 60x40 grid
+    base: [
+      R(0.2833, 0.175, 0.7167, 0.275), R(0.2833, 0.55, 0.7167, 0.625), R(0.2, 0.225, 0.3, 0.525), R(0.7167, 0.225, 0.8, 0.525),
+      R(0.45, 0.525, 0.55, 0.775), R(0.1333, 0.45, 0.2, 0.7), R(0.8, 0.45, 0.8667, 0.7), R(0.7167, 0.625, 0.8333, 0.75),
+      R(0.2, 0.625, 0.2833, 0.75), R(0.6167, 0.45, 0.7167, 0.625), R(0.3, 0.45, 0.3833, 0.625), R(0.7, 0.275, 0.7167, 0.675),
+      R(0.2667, 0.2, 0.4167, 0.3), R(0.4667, 0.475, 0.5333, 0.775), R(0.4167, 0.625, 0.5833, 0.675), R(0.2833, 0.525, 0.3333, 0.675),
+      R(0.6, 0.275, 0.8, 0.3), R(0.65, 0.625, 0.8667, 0.675), R(0.1667, 0.25, 0.8333, 0.275), R(0.35, 0.4, 0.4167, 0.425),
+      R(0.5833, 0.4, 0.65, 0.425), R(0.2667, 0.525, 0.4333, 0.55), R(0.1667, 0.7, 0.2833, 0.75), R(0.3, 0.3, 0.35, 0.325),
+      R(0.65, 0.3, 0.8, 0.325), R(0.5667, 0.525, 0.7167, 0.625), R(0.4333, 0.675, 0.55, 0.75), R(0.35, 0.425, 0.3833, 0.625),
+      R(0.6167, 0.425, 0.65, 0.625), R(0.45, 0.475, 0.55, 0.5), R(0.25, 0.75, 0.2833, 0.775), R(0.7167, 0.75, 0.75, 0.775),
+      R(0.7167, 0.2, 0.7333, 0.525), R(0.3, 0.325, 0.3167, 0.35), R(0.6833, 0.325, 0.8, 0.35), R(0.5833, 0.375, 0.6, 0.425),
+      R(0.3833, 0.5, 0.4, 0.625), R(0.6, 0.5, 0.8667, 0.525), R(0.15, 0.7, 0.2833, 0.725), R(0.8333, 0.7, 0.85, 0.725)],
+    blocks: [],
     nodes: {
-      msd: { name: "Master Systems Display", chip: "Master Systems", x: 0.425, y: 0.3375, mx: 0.47, my: 0.26 },
-      // pass 08 (audit C12): until seated art exists the Lt reports from the port conn panel just forward of the chair (feet
-      // x,y, facing the console and viewscreen) instead of typing in mid-air behind it. mx,my stay on the chair so a tap on
-      // the chair still selects it.
-      // seat (art hook): once SEAT_ART.lt exists he walks to stand (the dais step) and sits facing the viewscreen
-      chair: { name: "Captain's Chair", chip: "Captain's Chair", x: 0.415, y: 0.537, mx: 0.495, my: 0.395, face: "down",
-        seat: { at: [0.495, 0.41], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.495, 0.49] } },   // art batch 1: hip y .40 -> .41 = the painted cushion centre (seat_v1 shots)
+      // the plate has no Master Systems Display any more: the "msd" node (id kept for tasks, odd jobs, saves) is the
+      // forward port science station (v2/v3 notes: retarget msd here)
+      msd: { name: "Master Systems Display", chip: "Master Systems", x: 0.2042, y: 0.4094, mx: 0.15, my: 0.4094, face: "left" },
+      chair: { name: "Captain's Chair", chip: "Captain's Chair", x: 0.499, y: 0.4813, mx: 0.499, my: 0.4234, face: "down",
+        seat: { at: [0.499, 0.4234], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.499, 0.4813] } },
+      fo: { name: "First Officer's Seat", x: 0.4625, y: 0.4813, mx: 0.4448, my: 0.4328, face: "down",
+        seat: { at: [0.4448, 0.4328], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.4625, 0.4813] } },
+      counsel: { name: "Counsellor's Seat", x: 0.5354, y: 0.4813, mx: 0.5531, my: 0.4328, face: "down",
+        seat: { at: [0.5531, 0.4328], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.5354, 0.4813] } },
+      conn: { name: "Conn", chip: "Conn", x: 0.376, y: 0.6219, mx: 0.376, my: 0.6984, face: "down",
+        seat: { at: [0.376, 0.6984], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.376, 0.6219] } },
+      ops: { name: "Ops", chip: "Ops", x: 0.6156, y: 0.6219, mx: 0.6156, my: 0.6984, face: "down",
+        seat: { at: [0.6156, 0.6984], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.6156, 0.6219] } },
+      tactical: { name: "Tactical", chip: "Tactical", x: 0.499, y: 0.2672, mx: 0.499, my: 0.2984, face: "down" },
+      science2: { name: "Science Station (aft)", x: 0.1417, y: 0.55, mx: 0.09, my: 0.55, face: "left" },
+      engineering: { name: "Engineering Station", x: 0.7979, y: 0.4094, mx: 0.85, my: 0.4094, face: "right" },
+      engineering2: { name: "Engineering Station (aft)", x: 0.8625, y: 0.55, mx: 0.915, my: 0.55, face: "right" },
+      mission_ops: { name: "Mission Ops", x: 0.2354, y: 0.5328, mx: 0.235, my: 0.585, face: "down" },
+      environment: { name: "Environment", x: 0.7625, y: 0.5328, mx: 0.763, my: 0.585, face: "down" },
+      lift2: { name: "Starboard Turbolift", x: 0.7854, y: 0.2625, mx: 0.7854, my: 0.1453, face: "up", liftDoor: true },
     },
   },
   engineering: {
@@ -77,6 +105,7 @@ export const DECKS = {
     base: CABIN_TIERS.ltjg.floor, blocks: CABIN_TIERS.ltjg.blocks,
     nodes: {
       rack: { name: "Your Rack", chip: "Rest (quarters)", ...CABIN_TIERS.ltjg.bed, rest: CABIN_TIERS.ltjg.rest, quarters: true },
+      desk: { name: "Desk", chip: "Desk", ...CABIN_TIERS.ltjg.desk, quarters: true },   // art batch 2: cabin_v4 desk stand (applyTier re-points it per tier)
     },
   },
   lounge: {
@@ -97,7 +126,7 @@ export const DECKS = {
 //   tint:  "r,g,b" multiplied into crew sprites at strength a (0.10-0.15 = subtle cast of the room's light)
 //   The low-power darkening (power < 20) is applied after the characters, so it dims them with the deck.
 export const DECK_LIGHT = {
-  bridge:      { tint: "190,205,255", a: 0.10 },   // cool console light
+  bridge:      { tint: "255,220,175", a: 0.07 },   // art batch 2: warm amber plate (deck_bridge_v2/v3 light notes)
   engineering: { tint: "120,200,255", a: 0.12 },   // warp-core blue
   medical:     { tint: "120,255,215", a: 0.13 },   // dim sickbay teal
   berthing:    { tint: "255,196,110", a: 0.14 },   // warm amber cabin light
@@ -271,7 +300,10 @@ export const LIE_ART = {
 export const SEAT_ART = {
   // art batch 1 (sprites/seat_v1): seated idle A/B + talk A/B, columns up/down, hip (80,300), no chair drawn
   lt: { img: "seat-lt", talk: true },
-  tren: { img: "seat-tren", talk: true },   // loaded and ready; no T'Ren behaviour sits yet (she stands at the chair by design)
+  tren: { img: "seat-tren", talk: true },   // art batch 2: T'Ren sits in the first officer's seat at home (TREN.home.seat)
+  // art batch 2 NPC seat hook: crew drawn on T'Ren's body sit with her seated cells, recoloured like their walk sheets
+  // (tools/make-uniform-sheets.py seat). Sheets without seat art (male base, Thelev, Okafor) stand at the seat instead.
+  "crew-red": { img: "seat-tren", talk: true }, "crew-gold": { img: "seat-crew-gold", talk: true }, "crew-blue": { img: "seat-crew-blue", talk: true },
 };
 // TINT_BASES[key] = { img, pronoun: "he", actions: [...] }: a crew sheet in the v3 grid (walk/talk/eat/computer/kneel/weld
 //   rows like tren-v1) whose uniform panels are MID-GREY (about rgb 128,128,128, low saturation). Department colour
@@ -282,14 +314,49 @@ export const TINT_BASES = {
   // art batch 1 (crew_male_v1): generic male crewman, grey yoke + mask; every "he" crewmate without his own / species sheet
   // wears it in his department colour (replaces T'Ren's body for the men). Packed from the hi-res masters (tools/pack-masters.py).
   "crew-male-v1": { img: "crew-male-v1", pronoun: "he", mask: "crew-male-v1-mask" },
+  // suite 20 (crew_female_v1): generic crewwoman, grey yoke + mask; every "she" crewmate without her own / species sheet wears
+  // it in her department colour (replaces T'Ren's recoloured body for the women). Packed from the hi-res masters like the male base.
+  "crew-female-v1": { img: "crew-female-v1", pronoun: "she", mask: "crew-female-v1-mask" },
+  // suite 20 (species_betazoid_v1): Betazoid crewwoman = crew_female_v1 body + Betazoid hair (hair-only composite), tinted like
+  // the bases. species: a SPECIES-ONLY base (picked through SPECIES_SHEETS below, never as a pronoun fallback).
+  "crew-betazoid-v1": { img: "crew-betazoid-v1", pronoun: "she", mask: "crew-betazoid-v1-mask", species: "betazoid" },
+  // suite 20 (species_bolian_v1): Bolian crewman = crew_male_v1 body, bald scalp kit + blue skin + centre ridge, tinted like the bases
+  "crew-bolian-v1": { img: "crew-bolian-v1", pronoun: "he", mask: "crew-bolian-v1-mask", species: "bolian" },
+  // wrap-up (approved species set): human variants on the male / female bodies (hair + skin-tone composites), the Trill v2
+  // crewwoman (crew_female_v1 body, leopard spot bands), a male Vulcan (T'Ren's rig + male head, scaled to crew_male heights)
+  "crew-human-m2-v1": { img: "crew-human-m2-v1", pronoun: "he", mask: "crew-human-m2-v1-mask", species: "human" },
+  "crew-human-f2-v1": { img: "crew-human-f2-v1", pronoun: "she", mask: "crew-human-f2-v1-mask", species: "human" },
+  "crew-trill-v2": { img: "crew-trill-v2", pronoun: "she", mask: "crew-trill-v2-mask", species: "trill" },
+  "crew-vulcan-m-v1": { img: "crew-vulcan-m-v1", pronoun: "he", mask: "crew-vulcan-m-v1-mask", species: "vulcan" },
 };
+// species -> sheet (CHAR_SHEETS key), data-driven: adding a species' art = one asset + one entry here (+ a TINT_BASES entry if
+// it is a grey tint base). Sheet precedence for a crewmate (npc-ambient.js sheetFor): own sheet (o.sheet / OWN_SHEETS) ->
+// SPECIES_SHEETS[species] -> gender base (TINT_BASES by pronoun) -> T'Ren's department recolour. A species sheet whose
+// TINT_BASES entry has a pronoun only serves crew with that pronoun (a Betazoid man keeps the male base).
+// Keys are species ids (roster.js SPECIES) or VARIANT keys: a species with several looks lists its variant keys in
+// SPECIES_VARIANTS; a crewmate gets CREW_SHEET_PICK[id] if listed (null = no variant: the plain gender base), otherwise a
+// stable hash of their id picks among the pronoun-eligible variants AND the plain base (so not every human looks alike, and
+// a crewmate keeps the same look across saves and roster changes). "they" crew (no gender base of their own; they otherwise
+// wear T'Ren's recolour) may use a species sheet of either pronoun; he/she crew only use a sheet with their pronoun.
+export const SPECIES_SHEETS = { betazoid: "crew-betazoid-v1", bolian: "crew-bolian-v1", trill: "crew-trill-v2", vulcan: "crew-vulcan-m-v1",
+  human_m2: "crew-human-m2-v1", human_f2: "crew-human-f2-v1" };
+export const SPECIES_VARIANTS = { human: ["human_m2", "human_f2"] };
+export const CREW_SHEET_PICK = { hale: "human_m2", seo: "human_f2", diallo: null, kovac: null, natarajan: null, delgado: null };
 // Sheets packed from hi-res masters by tools/pack-masters.py use a larger cell (no clipped weld sparks), same draw scale
 // (standing ~252 cell px -> FIG_H): img -> { w, h, ax, ay }. Anything not listed uses LT2_CELL (160x384, feet 80,376).
 // crewmates with their OWN sheet, by roster id (checked before species / tint-base / uniform fallbacks; works for old saves too)
-export const OWN_SHEETS = { thelev: "andorian" };   // art batch 1: Ensign/Crewman Thelev sh'Zarath -> thelev-v1
+export const OWN_SHEETS = { thelev: "andorian", okafor: "okafor" };   // art batch 1: Thelev sh'Zarath -> thelev-v1; art batch 2: Cmdr Okafor -> okafor-v2
 export const SHEET_CELL = {
   "thelev-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "okafor-v2": { w: 240, h: 288, ax: 120, ay: 280 },
   "crew-male-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-female-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-betazoid-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-bolian-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-human-m2-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-human-f2-v1": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-trill-v2": { w: 240, h: 288, ax: 120, ay: 280 },
+  "crew-vulcan-m-v1": { w: 240, h: 288, ax: 120, ay: 280 },
 };
 // Per-character sheets: character -> { sheet asset (assets/<key>.webp) -> actions in row order (3 rows each: A, M, B) }.
 // Every v3-format set shares the grid above (160x384, feet 80,376, cols up/down/right/left, A,M,B,M playback) and
@@ -305,9 +372,12 @@ export const CHAR_SHEETS = {
   // cells, feet anchor (80,376), columns up/down/right/left, rows walk/talk/eat/computer/kneel/weld x A/M/B
   // (played A,M,B,M), standing height ~252 px in the cell (refH LT2_STAND_H). Fewer actions = shorten the list.
   andorian: { "thelev-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },   // art batch 1: Thelev's own sheet (thelev_v1 masters; gold, not tinted)
+  // art batch 2: Commander Okafor (Chief Engineer, she/her) - sprites/okafor_v2 masters packed by tools/pack-masters.py
+  // (replaces the old male okafor_topdown_v1 strips, which were never wired: she drew on the generic gold crew sheet)
+  okafor: { "okafor-v2": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
   // phase 3 roster fallbacks (own sheet -> species base sheet -> these): the generic crew sheet is T'Ren's for now, in
   // department uniform colours (tools/make-uniform-sheets.py recolours only the red shoulder panels).
-  // When a species gets real art, add it here and set SPECIES[id].sheet in js/roster.js (Thelev: "andorian" above).
+  // When a species gets real art, add its sheet here (or to TINT_BASES) and map it in SPECIES_SHEETS above.
   "crew-red": { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
   "crew-gold": { "crew-gold-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
   "crew-blue": { "crew-blue-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },
@@ -363,28 +433,41 @@ for (const [who, [body, img]] of Object.entries(V2_BODY)) {
 }
 
 // ---- Captain T'Ren on the Bridge (visual crew, not saved) ----
-// home = standing beside the Captain's Chair (starboard side, on the dais); stations = consoles she works.
-// All spots are on the bridge walk mask and clear of the Lt's stand spots (msd 0.425,0.3375 · chair 0.415,0.537).
+// art batch 2 (deck_bridge_v3): home = the first officer's seat beside the Captain's Chair - she walks to its stand spot
+// and sits (SEAT_ART.tren, facing the viewscreen at the bottom); stations = consoles she works, clear of the Lt's msd
+// (science) stand: tactical behind the rail, the aft engineering station, the aft science station.
 export const TREN = {
   deck: "bridge",
-  home: { x: 0.578, y: 0.42, face: "down" },
+  home: { x: 0.4625, y: 0.4813, face: "down", seat: "fo" },
   stations: [
-    { x: 0.215, y: 0.50, face: "left" },   // port console bank
-    { x: 0.785, y: 0.50, face: "right" },  // starboard console bank
-    { x: 0.658, y: 0.30, face: "left" },   // Master Systems Display, starboard end
+    { x: 0.499, y: 0.2672, face: "down" },    // tactical (479,171)
+    { x: 0.8625, y: 0.55, face: "right" },    // engineering, aft station (828,352)
+    { x: 0.1417, y: 0.55, face: "left" },     // science, aft station (136,352)
   ],
   homeT: [25, 50], stationT: [15, 30], speed: 0.062,   // s at home, s at a console, walk speed (deck fraction/s; option A: 0.10 x FIG_K)
 };
+
+// ---- bridge foreground occluders (art batch 2, sprites/deck_bridge_v3_hires/out/fg-bridge.json; 1920x1280 = 2 art px per design px like the other plates) ----
+// fg-bridge.webp is the plate-sized layer (drawn at 0,0,DW,DH) holding only the console fronts. After the cast, each item's
+// box (design px) is redrawn over the figures when someone sits in one of its seats, or when any figure with feet above its
+// baseline overlaps the box (render/deck.js drawBridgeFg). Walkers never need it: the mask keeps them off the props.
+export const BRIDGE_FG = { img: "fg-bridge", items: [
+  { id: "conn_console", box: [283, 438, 411, 505], baseline: 505, seats: ["conn"] },
+  { id: "arm_console_L", box: [389, 272, 426, 322], baseline: 322, seats: ["fo"] },
+  { id: "ops_console", box: [541, 438, 669, 505], baseline: 505, seats: ["ops"] },
+  { id: "arm_console_R", box: [532, 272, 569, 322], baseline: 322, seats: ["counsel"] },
+] };
 
 // ---- work spots: where a crewmember can actually type (pass 08, audit C11) ----
 // [x, y, face] in design px (960x640): feet position in front of a real console, bench or bed, facing it. An ambient
 // spot with action "computer" plays the typing loop only if it snaps within 20 px of one of these (it is then moved
 // exactly onto it); anywhere else the crewmember stands idle instead. Checked against the plates on 2026-10-18.
-// Spots left out on purpose (open floor): bridge msd-port / msd-aft, engineering pads (on the pad) / torpedo-racks.
+// Spots left out on purpose (open floor): engineering pads (on the pad) / torpedo-racks. Bridge: the 7 v3 stations
+// (bridge_spots.json consoles_for_ambient); the conn / ops pilots sit (SEAT_ART) instead of typing.
 export const CONSOLES = {
-  bridge: [[346, 275, "down"], [614, 275, "down"], [250, 198, "left"], [710, 198, "right"]],   // helm, ops, port + starboard banks
+  bridge: [[479, 171, "down"], [226, 341, "down"], [732, 341, "down"], [196, 262, "left"], [136, 352, "left"], [766, 262, "right"], [828, 352, "right"]],   // tactical, mission ops, environment, science x2, engineering x2
   engineering: [[344, 456, "up"], [536, 456, "up"], [178, 269, "right"], [682, 339, "left"], [288, 592, "up"]],   // core consoles, port/stbd banks, locker panel
-  medical: [[288, 192, "left"], [288, 384, "left"], [584, 168, "up"], [432, 467, "up"], [691, 339, "up"]],   // bedsides, office desk, surgery, lab bench
+  medical: [[288, 192, "left"], [288, 384, "left"], [584, 168, "up"], [362, 442, "up"], [691, 339, "up"]],   // bedsides, office desk, surgery-side wall terminal (pass 17 P1: was [432, 467] on the lift alcove wall, off walk-medical), lab bench
   lounge: [[288, 230, "up"], [552, 440, "down"], [696, 440, "down"], [588, 224, "up"]],   // galley pass, hydroponics x2, replicator
   berthing: [],
 };
@@ -457,11 +540,11 @@ export const SHIP_ART = {
   tenacity: { img: null }, freighter: { img: null }, klingon_bop: { img: null },
   jh_fighter: { img: null }, galor: { img: null }, jh_battlecruiser: { img: null },
 };
-export const IMAGES = [...new Set(["deck-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
+export const IMAGES = [...new Set(["deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security", "lt-walk-v2", "tren-walk-v2", "crew-gold-walk-v2", "crew-blue-walk-v2",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
   ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
   ...[LIE_ART, SEAT_ART].flatMap(o => Object.values(o).map(a => a.img)), ...Object.values(TINT_BASES).map(b => b.mask).filter(Boolean),
-  ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)
+  ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean), ...DECOR_ITEMS.filter(d => d.art).map(d => "decor-" + d.id)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)
 // walk masks (PNG, white = floor), loaded alongside the plates
 export const WALK_MASKS = [...CREW_DECKS.map(d => "walk-" + d), ...Object.values(CABIN_TIERS).map(t => t.mask).filter(Boolean)];

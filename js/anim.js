@@ -20,6 +20,22 @@ export const STEP = {
   // walk is drawn with a short visible stride, so its no-slide step is short (quicker cadence going up-screen).
   andorian: { side: 29, up: 8, down: 15 },   // Thelev (thelev-v1)
   "crew-male-v1": { side: 29, up: 8, down: 15 },   // male crew tint base
+  // art batch 2 (foot-slide on okafor-v2): side 76-77/90 -> 27.4, down 44/45 -> 14.7, up 29/28 -> 9.4
+  okafor: { side: 27, up: 9, down: 15 },   // Cmdr Okafor (okafor-v2)
+  // suite 20 (foot-slide on crew-female-v1; walkA's trailing foot is on its toes, measured in the 20% band): side 51/96 -> 24.2,
+  // down 49/29 -> 12.8, up 35/6 -> 6.8. The Betazoid sheet is the same body (hair-only composite), so it shares these.
+  "crew-female-v1": { side: 24, up: 7, down: 13 },   // female crew tint base
+  "crew-betazoid-v1": { side: 24, up: 7, down: 13 },   // Betazoid crewwoman (crew_female_v1 body)
+  // Bolian: the crew_male_v1 body below the head (bald scalp only), so the male steps. foot-slide down 15 / up 8.2 match; side reads
+  // 31 only because the bald head is 3 px shorter, so the 10% foot band misses the trailing toe and the 20% retry measures 82/106.
+  "crew-bolian-v1": { side: 29, up: 8, down: 15 },   // Bolian crewman
+  // wrap-up species set (foot-slide 'species' run): human m2 = crew_male_v1 body (side reads 30.8/31.1 for the same short-head
+  // band artifact as the Bolian; down/up identical to the male base) -> male steps; human f2 and Trill v2 = crew_female_v1 body
+  // (all four directions identical to the female base); Vulcan m = T'Ren's rig rescaled to male heights: 30.5 / 14.5 / 9.6.
+  "crew-human-m2-v1": { side: 29, up: 8, down: 15 },
+  "crew-human-f2-v1": { side: 24, up: 7, down: 13 },
+  "crew-trill-v2": { side: 24, up: 7, down: 13 },
+  "crew-vulcan-m-v1": { side: 30, up: 10, down: 15 },
 };
 export function stepLen(who, dir) {
   const s = STEP[who] || STEP.default, d = STEP.default;

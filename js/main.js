@@ -36,7 +36,11 @@ const landPhone = () => matchMedia("(orientation: landscape) and (max-height: 50
 // option A scale (FIG_H 83): phones start this much tighter than the plain framing so the figure is ~85-90 css px tall
 // (portrait 390x844: 71 -> 87 px; landscape 844x390: 69 -> 88 px). Desktop / tablet keep 1 (figure ~114 px at 1280x800).
 const PHONE_BOOST = 1.22, PHONE_BOOST_LAND = 1.28;
-const phoneBoost = () => landPhone() ? PHONE_BOOST_LAND : matchMedia("(max-width: 520px)").matches ? PHONE_BOOST : 1;
+// pass 17 P5: short landscape phones (667x375: viewport under 380 px tall, stage 325x317) start a further x1.26 tighter -
+// the figure was 57 css px there, now ~72 (844x390 and taller keep PHONE_BOOST_LAND: 88 px)
+const SHORT_LAND_BOOST = 1.26;
+const shortLand = () => landPhone() && innerHeight < 380;
+const phoneBoost = () => landPhone() ? PHONE_BOOST_LAND * (shortLand() ? SHORT_LAND_BOOST : 1) : matchMedia("(max-width: 520px)").matches ? PHONE_BOOST : 1;
 const modeZoom = () => app.mode === "play" ? (landPhone() ? LAND_ZOOM : PLAY_ZOOM) : INFO_ZOOM;
 // any real input counts as the player being present (the night crew stands down)
 for (const ev of ["pointerdown", "keydown", "wheel"]) window.addEventListener(ev, () => playerInput(), { passive: true, capture: true });
@@ -134,7 +138,7 @@ function frame(now) {
   let simDt = dt * app.timeScale;
   while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); simDt -= s; }
   // pass 16 B1: the catch-up that waited behind a live fight runs once the fight is over (report as usual)
-  if (G.sp.awayDefer > 0 && !G.sp.battle) { const s = G.sp.awayDefer; G.sp.awayDefer = 0; if (s > 30) { const r = catchUp(s); renderLog(); showReport(r); } }
+  if (G.sp.awayDefer > 0 && !G.sp.battle) { const s = G.sp.awayDefer, lf = G.sp.lastFight; G.sp.awayDefer = 0; if (s > 30) { const r = catchUp(s); r.afterFight = lf || null; renderLog(); showReport(r); } }   // pass 17 P4: the report names the fight it waited for
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }
   saveT += dt; if (saveT > 5) { saveT = 0; saveGame(); }

@@ -6,7 +6,7 @@
 // shots/art1-fit.json.   usage: node tools/lie-seat-fit.js [url]
 const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
-const CUSHION = { chair: [0.495, 0.4125] };   // deck-bridge.webp: captain's chair cushion centre (seat squares 0.400-0.425 in y)
+const CUSHION = { chair: [0.499, 0.4234] };   // art batch 2: deck_bridge_v3 captain's chair hip (bridge_spots.json hip_px 479,271; was the v2-era cushion 0.495,0.4125)
 (async () => {
   const b = await L.launch(); const rep = { lie: {}, seat: {}, shots: [] }; const errs = [];
   for (const [vp, w, h, m] of [['390x844', 390, 844, 1], ['1280x800', 1280, 800, 0]]) {

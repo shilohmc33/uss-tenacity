@@ -21,9 +21,9 @@
 //   (a) the clock starts only once the player has seen the alert (input after it appeared, or tapping it);
 //   (b) it counts present time only: paused while hidden / locked / backgrounded / idle >= 60 s (night mode too);
 //   (c) away or offline, the night crew + doctor ALWAYS stabilise the patient (no roll); if the system is still down
-//       when the player returns, the window restarts fresh (180 s, needs seeing again);
+//       when the player returns, the window restarts fresh (180 s x TRAVEL_SCALE since pass 17, needs seeing again);
 //   (d) red medical alert pill with a cross + live countdown, vibrate + a short tone where available;
-//   (e) window 180 s of present time.
+//   (e) window 180 s of present time (x pacing.js TRAVEL_SCALE = 1.55 since pass 17 P2: 279 s).
 //  Rate: when the system is restored live, Dr. Orvin operates (a short scene); a small chance she can't save them.
 import { G } from "./state.js";
 import { log, toast } from "./bus.js";

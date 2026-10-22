@@ -29,10 +29,12 @@ const [url, label = 'run', out] = process.argv.slice(2);
             if (o) { if (st < 0) st = x; gap = 0; } else if (st >= 0 && (++gap > merge || x === f.w)) { runs.push([st, x - gap]); st = -1; gap = 0; } }
           return runs.filter(r => r[1] - r[0] >= 4).sort((p, q) => p[0] - q[0]); };
         if (dir === 'left' || dir === 'right') {   // the two feet = the outermost runs in the bottom 10% band (toes/heels may lift)
-          const runs = runsAt(Math.round(low - 0.10 * H), low, 2);
+          let runs = runsAt(Math.round(low - 0.10 * H), low, 2), band = 0.10;
+          // suite 20: a trailing foot on its toes can sit above the 10% band (crew-female-v1 walkA) - retry once at 20%
+          if (runs.length < 2) { runs = runsAt(Math.round(low - 0.20 * H), low, 2); band = 0.20; }
           if (runs.length < 2) return { sep: null, runs: runs.length, H };
           const r0 = runs[0], r1 = runs[runs.length - 1], heel = dir === 'right' ? r1[0] - r0[0] : r1[1] - r0[1];
-          return { sep: Math.abs(heel), centre: Math.abs((r1[0] + r1[1]) / 2 - (r0[0] + r0[1]) / 2), runs: runs.length, H };
+          return { sep: Math.abs(heel), centre: Math.abs((r1[0] + r1[1]) / 2 - (r0[0] + r0[1]) / 2), runs: runs.length, band, H };
         }
         // up / down: bottom profile (lowest opaque row per column) over the leg columns; the feet are its two low lobes,
         // split at the highest point of the profile in the middle half of the leg span; sole y per lobe
@@ -43,7 +45,7 @@ const [url, label = 'run', out] = process.argv.slice(2);
         const yl = Math.max(...bot.slice(xa, split)), yr = Math.max(...bot.slice(split + 1, xb + 1));
         return { sep: Math.abs(yl - yr), yl, yr, split, H };
       };
-      const who2step = { lt: 'lt', tren: 'tren', 'crew-gold': 'crew-gold', andorian: 'andorian', 'crew-male-v1': 'crew-male-v1' };
+      const who2step = { lt: 'lt', tren: 'tren', 'crew-gold': 'crew-gold', andorian: 'andorian', 'crew-male-v1': 'crew-male-v1', 'crew-female-v1': 'crew-female-v1', 'crew-betazoid-v1': 'crew-betazoid-v1', 'crew-bolian-v1': 'crew-bolian-v1', 'crew-human-m2-v1': 'crew-human-m2-v1', 'crew-human-f2-v1': 'crew-human-f2-v1', 'crew-trill-v2': 'crew-trill-v2', 'crew-vulcan-m-v1': 'crew-vulcan-m-v1', okafor: 'okafor' };
       for (const who of Object.keys(who2step)) { const W = D.CHAR_FRAMES[who] && D.CHAR_FRAMES[who].walk; if (!W) continue;
         for (const dir of ['right', 'left', 'down', 'up']) { const fr = W[dir]; if (!fr || !A.IMG[fr[0].img]) continue;
           const a = meas(fr[0], dir), bb = meas(fr[2], dir), s = D.FIG_H / fr[0].refH, step = AN.stepLen(who2step[who], dir);

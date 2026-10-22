@@ -20,18 +20,13 @@ def E(cx, cy, rx, ry): return ('ell', (cx, cy, rx, ry))
 DECKS = {
   # Bridge: open floor ring between the side stations and the helm arc; a threshold strip in front of the
   # turbolift doors (between the doors and the MSD table). Back wall, table, chair dais, consoles and viewscreen are out.
+  # Bridge v3 (art batch 2): the artist's mask (sprites/deck_bridge_v3/out/walk-bridge.png, copied to assets/src) is the base;
+  # code edits go on top. Prop-collision audit #7: keep feet off the aft wall face behind tactical (y .14-.175, x .36-.62).
+  # On the v3 plate the wall base sits at ~y .165 and the artist's walkway already starts at row 7 (y .175), so this carve
+  # is a guard (no pixel changes today) that keeps a future artist mask from walking crew up the wall.
   'bridge': [
-    ('add', P((0.300, 0.230), (0.375, 0.230), (0.375, 0.330), (0.625, 0.330), (0.625, 0.230), (0.700, 0.230),
-              (0.760, 0.300), (0.770, 0.400), (0.800, 0.430), (0.790, 0.560), (0.735, 0.620), (0.700, 0.560),
-              (0.300, 0.560), (0.255, 0.620), (0.200, 0.560), (0.195, 0.430), (0.230, 0.400), (0.240, 0.300))),
-    ('add', R(0.350, 0.150, 0.650, 0.178)),       # threshold in front of the lift doors
-    ('add', R(0.350, 0.150, 0.385, 0.240)),       # gap between back wall and left MSD side console
-    ('add', R(0.615, 0.150, 0.650, 0.240)),       # ... and the right one
-    ('sub', R(0.455, 0.330, 0.540, 0.448)),       # captain's chair (the dais and its steps are walkable)
-    ('sub', P((0.255, 0.445), (0.335, 0.445), (0.395, 0.530), (0.500, 0.560), (0.605, 0.530), (0.665, 0.445),
-              (0.745, 0.445), (0.735, 0.640), (0.500, 0.680), (0.265, 0.640))),   # helm/ops arc
-    ('sub', P((0.100, 0.240), (0.240, 0.290), (0.215, 0.400), (0.160, 0.470), (0.150, 0.640), (0.050, 0.640), (0.050, 0.240))),  # port stations
-    ('sub', P((0.900, 0.240), (0.760, 0.290), (0.785, 0.400), (0.840, 0.470), (0.850, 0.640), (0.950, 0.640), (0.950, 0.240))),  # starboard stations
+    ('base', 'assets/src/deck_bridge_v3/walk-bridge-artist.png'),
+    ('sub', R(0.360, 0.140, 0.620, 0.1745)),
   ],
   # Engineering: west corridor + transporter room, the lower deck band, the core aisle, the inner platforms
   # (reached by the two stairs), the east floor by the torpedo racks, the locker corridor (through the
@@ -77,6 +72,9 @@ DECKS = {
     ('sub', R(0.700, 0.560, 0.800, 0.705)),       # lab island
     ('sub', R(0.760, 0.450, 0.880, 0.830)),       # lab side cabinets
     ('sub', R(0.390, 0.780, 0.415, 0.830)),       # cart by the lift
+    # prop-collision audit #4: bookshelf cabinet + wall end at the office entrance (cols 31-35, rows 8-9); the office is
+    # still reached along rows 10-11
+    ('sub', R(31 / 60, 8 / 40, 36 / 60, 10 / 40)),
     ('sub', P((0.440, 0.800), (0.460, 0.780), (0.560, 0.780), (0.580, 0.800), (0.580, 0.860), (0.440, 0.860))),  # lift housing
     ('sub', P((0.372, 0.860), (0.380, 0.760), (0.400, 0.725), (0.440, 0.702), (0.580, 0.702), (0.620, 0.725), (0.640, 0.760), (0.648, 0.860))),  # taller lift alcove (doorfix)
   ],
@@ -89,6 +87,10 @@ DECKS = {
     ('add', P((0.855, 0.405), (0.880, 0.430), (0.885, 0.505), (0.860, 0.505))),
     ('add', R(0.720, 0.505, 0.800, 0.690)),       # starboard corridor (west of the locker unit)
     ('add', R(0.690, 0.660, 0.900, 0.925)),       # starboard bay
+    # prop-collision audit #3: the turbolift alcove's angled east wall sat inside the bay rect; carve its polygon out of the bay
+    # only (the entry strip past the top of the bench is painted after this and stays as the way in until the artist reports
+    # the new bench gap, then the entry moves there)
+    ('sub', P((0.690, 0.660), (0.760, 0.660), (0.760, 0.850), (0.690, 0.850))),
     ('add', R(0.495, 0.840, 0.610, 0.945)),       # lift vestibule between the benches
     ('add', R(0.600, 0.825, 0.700, 0.852)),       # past the top of the starboard bench
     ('sub', R(0.700, 0.840, 0.745, 0.905)),       # crate
@@ -104,6 +106,8 @@ DECKS = {
     ('add', R(0.433, 0.322, 0.452, 0.345)),       # bar spot (gap between two stools)
     ('add', R(0.040, 0.625, 0.240, 0.740)),       # turbolift lobby
     ('add', R(0.235, 0.630, 0.260, 0.705)),       # lobby doorway
+    # prop-collision audit #5: the lift-lobby east pillar / door frame (col 15, rows 15-24); the lobby doorway below (rows 25+) stays
+    ('sub', R(15 / 60, 15 / 40, 16 / 60, 25 / 40)),
   ],
 }
 # six standing tables (px centres on the 1920x1280 art, from the artist): tabletop ellipse + pedestal/base footprint.
@@ -116,7 +120,9 @@ for (px, py, rx, ry) in TABLES:
 def to_px(x, y): return (x * W, y * H)
 def render(deck):
     im = Image.new('L', (W, H), 0); d = ImageDraw.Draw(im)
-    for op, (kind, c) in DECKS[deck]:
+    for op, sh in DECKS[deck]:
+        if op == 'base': im.paste(Image.open(os.path.join(ROOT, sh)).convert('L').resize((W, H)), (0, 0)); d = ImageDraw.Draw(im); continue
+        kind, c = sh
         col = 255 if op == 'add' else 0
         if kind == 'rect': d.rectangle([to_px(c[0], c[1]), to_px(c[2], c[3])], fill=col)
         elif kind == 'poly': d.polygon([to_px(*p) for p in c], fill=col)

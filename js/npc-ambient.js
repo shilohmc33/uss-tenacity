@@ -7,10 +7,11 @@
 // comes over and both play "talk" (PROG.roster cooldowns). A newcomer (intro pending) crosses the deck to introduce
 // themself the first time the Lt is on their deck. Slot "mess-regular-1" keeps Thelev's hand-made config (AMBIENT_NPCS).
 import { G } from "./state.js";
-import { AMBIENT_NPCS, NODEMAP, CHAR_SHEETS, DECKS, TREN, CONSOLES, HEAD_Y, OWN_SHEETS } from "./data.js";
+import { AMBIENT_NPCS, NODEMAP, CHAR_SHEETS, DECKS, TREN, CONSOLES, HEAD_Y, OWN_SHEETS, SPECIES_SHEETS, SPECIES_VARIANTS, CREW_SHEET_PICK, TINT_BASES } from "./data.js";
 import { walkStep, walkSettle, keepPace, animSeed, pathNear, blockedAhead, faceDir as faceTo, AVOID } from "./anim.js";
 import { tren, trenHooks } from "./npc.js";
-import { tintBaseFor } from "./art-hooks.js";
+import { tintBaseFor, seatArt } from "./art-hooks.js";
+import { IMG } from "./assets.js";
 import { CREW_ROSTER, SLOTMAP, SPECIES, DEPTS, TAGS, prFill } from "./roster.js";
 import { findPath, isWalkable, nearestWalkable, cellCenter } from "./path.js";
 import { clamp, dDist } from "./util.js";
@@ -27,6 +28,7 @@ const NEAR = [{ dx: 0.075, dy: 0 }, { dx: -0.075, dy: 0 }, { dx: 0, dy: 0.11 }, 
 // crewmember will stand idle there instead of typing in mid-air
 const CON = Object.fromEntries(Object.entries(CONSOLES).map(([d, l]) => [d, l.map(([x, y, face]) => ({ x: x / 960, y: y / 640, face }))]));
 export function consoleNear(deck, x, y, face, r = 20) { return (CON[deck] || []).find(c => (!face || c.face === face) && dDist(c.x, c.y, x, y) <= r) || null; }
+export function resolveSpot(deck, s) { return resolve(deck, s); }   // tools (p17-surgery-spot.js)
 function resolve(deck, s) {
   let x = s.x, y = s.y;
   if (s.near && NODEMAP[s.near]) { x = NODEMAP[s.near].x + (s.dx || 0); y = NODEMAP[s.near].y + (s.dy || 0); }
@@ -76,11 +78,26 @@ function pickSpot(cfg, notId, n = null) {
   for (const s of pool) { r -= s.w || 1; if (r <= 0) return s; }
   return pool[0];
 }
+// species sheet usable by this crewmate: loaded, and the sheet's pronoun matches (any pronoun for "they" crew)
+function sheetOk(key, o) {
+  const sp = SPECIES_SHEETS[key], spb = sp && TINT_BASES[sp];
+  return sp && CHAR_SHEETS[sp] && (!spb || !spb.pronoun || o.pronoun === "they" || spb.pronoun === o.pronoun) && (!spb || IMG[spb.img]) ? sp : null;
+}
+function idHash(id) { let h = 2166136261; for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+export function speciesSheet(o) {
+  const vars = SPECIES_VARIANTS[o.species];
+  if (!vars) return sheetOk(o.species, o);
+  if (o.id in CREW_SHEET_PICK) return CREW_SHEET_PICK[o.id] ? sheetOk(CREW_SHEET_PICK[o.id], o) : null;
+  const ok = vars.map(v => sheetOk(v, o)).filter(Boolean);
+  if (!ok.length) return null;
+  const i = idHash(o.id) % (ok.length + 1);   // + 1: the plain gender base is one of the looks
+  return i < ok.length ? ok[i] : null;
+}
 // sprite: own sheet -> species base sheet -> generic crew sheet in the department's uniform colour
 export function sheetFor(o, sl) {
   if (o.sheet && CHAR_SHEETS[o.sheet]) return o.sheet;
   if (OWN_SHEETS[o.id] && CHAR_SHEETS[OWN_SHEETS[o.id]]) return OWN_SHEETS[o.id];
-  const sp = SPECIES[o.species]; if (sp && sp.sheet && CHAR_SHEETS[sp.sheet]) return sp.sheet;
+  const sp = speciesSheet(o); if (sp) return sp;   // data.js SPECIES_SHEETS / SPECIES_VARIANTS (data-driven)
   const base = tintBaseFor(o.pronoun); if (base) return base;   // art hook: tint-ready grey crew base (data.js TINT_BASES)
   return "crew-" + ((DEPTS[sl.dept] && DEPTS[sl.dept].tint) || "red");
 }
@@ -290,6 +307,15 @@ export function visibleOn(deck) {
   return CREW_ROSTER.map(s => ambient.find(a => a.slot === s.slot && a.deck === deck)).filter(Boolean).slice(0, cap);
 }
 export function tickAmbient(dt) { syncRoster(); for (const n of visibleOn(G.lt.deck)) tickOne(n, dt); }
+// art batch 2 NPC seat hook: a crewmember dwelling on a spot with seat: <node id> (bridge conn / ops) sits in it - drawn
+// with SEAT_ART for their sheet at the seat's hip, facing the seat's way (down: the viewscreen is at the bottom) - once
+// they stand on its stand spot, unless the Lt is using that seat. No seat art for the sheet = they stand there instead.
+export function seatedOn(n) {
+  const sp = n.spot, nd = sp && sp.seat && NODEMAP[sp.seat];
+  if (!nd || !nd.seat || n.mode !== "dwell" || n.deck !== nd.deck || !seatArt(n.who)) return null;
+  const L = G.lt; if (L.deck === nd.deck && L.node === sp.seat && (L.mode === "use" || L.mode === "walk")) return null;
+  const st = nd.seat.stand; return dDist(n.x, n.y, st[0], st[1]) <= 6 ? nd : null;
+}
 // renderer helpers
 export const ambientOnDeck = deck => visibleOn(deck).filter(n => n.x !== null);
 export const ltChatPartner = () => ambient.find(n => n.mode === "chat" && n.chatWith === G.lt && n.deck === G.lt.deck) || null;

@@ -20,7 +20,7 @@ export function seatArt(who) {
 export const SEAT_COLS = { up: 0, down: 1 };
 // the tint-ready base sheet for a crewmember with this pronoun, if its art is loaded: the CHAR_SHEETS key, else null
 export function tintBaseFor(pronoun) {
-  for (const [k, b] of Object.entries(TINT_BASES)) if ((!b.pronoun || b.pronoun === pronoun) && IMG[b.img]) return k;
+  for (const [k, b] of Object.entries(TINT_BASES)) if (!b.species && (!b.pronoun || b.pronoun === pronoun) && IMG[b.img]) return k;   // species-only bases are picked via SPECIES_SHEETS
   return null;
 }
 export const isTintBase = who => !!TINT_BASES[who];

@@ -1,11 +1,11 @@
 // Deck renderer: plate + camera (follow, pinch/wheel zoom, drag pan), Lt sprites, rings, fx, turbolift overlay.
 import { G } from "../state.js";
-import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT } from "../data.js";
+import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT, BRIDGE_FG } from "../data.js";
 import { actionFrame, animSeed, walkPose } from "../anim.js";
 import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
 import { SLOTMAP, DEPTS } from "../roster.js";
-import { tren } from "../npc.js";
-import { ambientOnDeck, ltChatPartner } from "../npc-ambient.js";
+import { tren, trenSeat } from "../npc.js";
+import { ambientOnDeck, ltChatPartner, seatedOn } from "../npc-ambient.js";
 import { IMG } from "../assets.js";
 import { clamp, dDist } from "../util.js";
 import { ZONE, LIFT_T, HEAD_Y } from "../crew.js";
@@ -247,10 +247,11 @@ function lieNode() { const n = lieFx.node && NODEMAP[lieFx.node]; return posed(n
 const poseY = n => n.lie ? n.lie[1] : n.seat.at[1];
 // seated Lt (art hook): SEAT_ART.lt cell, column by the seat's facing, idle A/B (talk A/B with T'Ren when provided),
 // anchored at the hip on node.seat.at + node.seat.hip[face]
-function drawSeated(ctx, t, n) {
-  const art = seatArt("lt"); if (!art) return false;
+// art batch 2: also the NPC seat hook (T'Ren in the first officer's seat, crew at conn / ops): who = their sheet key
+function drawSeated(ctx, t, n, who = "lt", as = LT_AS, talking = null) {
+  const art = seatArt(who); if (!art) return false;
   const st = n.seat, face = st.face === "up" ? "up" : "down", off = (st.hip && st.hip[face]) || [0, 0];
-  const talk = art.talk && L_talking(), row = (talk ? 2 : 0) + actionFrame("seated", t, LT_AS);
+  const talk = art.talk && (talking == null ? L_talking() : talking), row = (talk ? 2 : 0) + actionFrame("seated", t, as);
   const x = st.at[0] * DW + off[0], y = st.at[1] * DH + off[1];
   drawFrameLit(ctx, art.im, { x: SEAT_COLS[face] * 160, y: row * 384, w: 160, h: 384, ax: art.ax, ay: art.ay }, x, y, ART_SCALE);
   return true;
@@ -274,6 +275,21 @@ function drawLt(ctx, t) {
   const c = chat ? { ...L, dir: Math.abs((chat.x - L.x) * 960) > Math.abs((chat.y - L.y) * 640) ? (chat.x > L.x ? "right" : "left") : (chat.y > L.y ? "down" : "up") } : L;
   drawWalker(ctx, "lt", c, posed(nd) ? null : ltAction(L, nd), t);
   ctx.globalAlpha = 1;
+}
+// art batch 2: bridge foreground occluders (data.js BRIDGE_FG, fg-bridge.webp drawn like the plate, clipped to each item's
+// box). An item is drawn when a figure sits in one of its seats, or a figure with feet above its baseline overlaps its box
+// (standing sprite ~38 x FIG_H design px). Returns the ids drawn (tools).
+export const fgDrawn = [];
+function drawBridgeFg(ctx, cast) {
+  fgDrawn.length = 0; const im = IMG[BRIDGE_FG.img]; if (!im) return;
+  for (const it of BRIDGE_FG.items) {
+    const [x0, y0, x1, y1] = it.box;
+    const hit = cast.some(c => (c.seat && it.seats.includes(c.seat)) ||
+      (!c.seat && c.y * DH < it.baseline && c.x * DW + 19 > x0 && c.x * DW - 19 < x1 && c.y * DH > y0 && c.y * DH - FIG_H < y1));
+    if (!hit) continue;
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip(); ctx.drawImage(im, 0, 0, DW, DH); ctx.restore();
+    fgDrawn.push(it.id);
+  }
 }
 // Captain T'Ren (bridge only; js/npc.js drives her)
 function drawTren(ctx, t) { drawWalker(ctx, "tren", tren, tren.action, t, TREN_AS); }
@@ -360,14 +376,17 @@ export function drawDeck(ctx, t, dt) {
   // characters, back to front by feet y: the Lt, T'Ren (bridge) and any ambient crew on this deck
   tickLie(dt);
   const ln = lieNode(), ltY = ln && lieFx.a >= 0.5 ? poseY(ln) : L.y;
-  const cast = [{ y: ltY, x: L.x, id: "lt", draw: () => drawLt(ctx, t) }];
+  const cast = [{ y: ltY, x: L.x, id: "lt", seat: ln && ln.seat && lieFx.a >= 0.5 ? ln.id : null, draw: () => drawLt(ctx, t) }];
   if (!L.lift) {
-    if (L.deck === "bridge") cast.push({ y: tren.y, x: tren.x, id: "tren", draw: () => drawTren(ctx, t) });
-    for (const n of ambientOnDeck(L.deck)) cast.push({ y: n.y, x: n.x, id: n.occId, draw: () => drawWalker(ctx, n.who, n, n.action, t, n.anim) });
+    if (L.deck === "bridge") { const ts = trenSeat();   // art batch 2: seated at home (first officer's seat), sorted by the hip
+      cast.push(ts ? { y: ts.seat.at[1], x: tren.x, id: "tren", seat: ts.id, draw: () => drawSeated(ctx, t, ts, "tren", TREN_AS, tren.action === "talk") } : { y: tren.y, x: tren.x, id: "tren", draw: () => drawTren(ctx, t) }); }
+    for (const n of ambientOnDeck(L.deck)) { const sn = seatedOn(n);
+      cast.push(sn ? { y: sn.seat.at[1], x: n.x, id: n.occId, seat: sn.id, draw: () => drawSeated(ctx, t, sn, n.who, n.anim, n.action === "talk") } : { y: n.y, x: n.x, id: n.occId, draw: () => drawWalker(ctx, n.who, n, n.action, t, n.anim) }); }
     if (L.deck === "medical") patients().forEach((_, i) => cast.push({ y: PATIENT_BEDS[i][1], x: PATIENT_BEDS[i][0], id: "patient" + i, draw: () => drawPatient(ctx, t, i) }));   // phase 6: patients on the biobeds
   }
   // back to front by feet y; equal y breaks by x, then id, so the order never flickers (audit C5)
   cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
+  if (L.deck === "bridge" && !L.lift) drawBridgeFg(ctx, cast);   // art batch 2: console fronts over seated figures
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck
   lighting(ctx, t);
   if (L.deck === "medical" && !L.lift) drawPatientTags(ctx, t);   // phase 6

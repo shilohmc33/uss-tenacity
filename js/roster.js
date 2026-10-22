@@ -26,11 +26,14 @@ export const LADDERS = {
 };
 // ---- shared wander spots per deck (absolute deck fractions; clear of the Lt's node stand spots and the lifts) ----
 const S = (id, x, y, face, action, t, w = 1) => ({ id, x, y, face, action, t, w });
+// art batch 2 (deck_bridge_v3): the pilots SIT at conn / ops (seat: node id -> npc-ambient sits them with SEAT_ART when
+// their sheet has seat art, else they stand at the seat's stand spot); the rest work the v3 stations (data.js CONSOLES).
+// Ids kept from the old plate (helm / msd-aft / msd-port ...) so saved spots and tools still resolve.
 const BR = {
-  helm: S("helm", 0.36, 0.43, "down", "computer", [30, 60], 3), ops: S("ops", 0.64, 0.43, "down", "computer", [30, 60], 3),
-  portUp: S("port-upper", 0.26, 0.31, "left", "computer", [20, 40], 2), stbdUp: S("stbd-upper", 0.74, 0.31, "right", "computer", [20, 40], 2),
-  msdAft: S("msd-aft", 0.60, 0.235, "up", "computer", [15, 30], 1), msdPort: S("msd-port", 0.37, 0.235, "up", "computer", [15, 30], 1),
-  floorP: S("floor-port", 0.31, 0.37, "down", null, [8, 16], 1), floorS: S("floor-stbd", 0.69, 0.37, "down", null, [8, 16], 1),
+  helm: { ...S("helm", 0.376, 0.6219, "down", null, [30, 60], 3), seat: "conn" }, ops: { ...S("ops", 0.6156, 0.6219, "down", null, [30, 60], 3), seat: "ops" },
+  portUp: S("port-upper", 0.1417, 0.55, "left", "computer", [20, 40], 2), stbdUp: S("stbd-upper", 0.7979, 0.4094, "right", "computer", [20, 40], 2),   // science aft / engineering fwd
+  msdAft: S("msd-aft", 0.7625, 0.5328, "down", "computer", [15, 30], 1), msdPort: S("msd-port", 0.2354, 0.5328, "down", "computer", [15, 30], 1),   // environment / mission ops
+  floorP: S("floor-port", 0.27, 0.34, "down", null, [8, 16], 1), floorS: S("floor-stbd", 0.73, 0.34, "down", null, [8, 16], 1),
 };
 const EN = {
   portCon: S("port-console", 0.17, 0.42, "right", "computer", [25, 50], 3), stbdCon: S("stbd-console", 0.71, 0.53, "left", "computer", [25, 50], 3),
@@ -41,7 +44,7 @@ const EN = {
 };
 const MD = {
   bedN: S("bedside-north", 0.30, 0.30, "left", "computer", [25, 50], 3), bedS: S("bedside-south", 0.30, 0.60, "left", "computer", [25, 50], 3),
-  surgery: S("surgery", 0.45, 0.73, "up", "computer", [20, 40], 2), office: S("office", 0.62, 0.24, "up", "computer", [25, 50], 2),
+  surgery: S("surgery", 0.3771, 0.6906, "up", "computer", [20, 40], 2), office: S("office", 0.62, 0.24, "up", "computer", [25, 50], 2),
   lab: S("lab-bench", 0.72, 0.53, "up", "computer", [25, 50], 3), labIdle: S("lab-floor", 0.66, 0.70, "down", null, [8, 16], 1),
   hall: S("hall", 0.50, 0.25, "down", null, [8, 16], 1),
 };
@@ -99,22 +102,21 @@ export const CREW_ROSTER = [
 ];
 export const SLOTMAP = Object.fromEntries(CREW_ROSTER.map(s => [s.slot, s]));
 
-// ---- species: rarity weight for the transfer-in generator, name pools, badge colour, optional base sprite sheet ----
-// sheet: a CHAR_SHEETS key with real art for this species (null = none yet; falls back to the department uniform sheet).
+// ---- species: rarity weight for the transfer-in generator, name pools, badge colour (sprite sheets: data.js SPECIES_SHEETS) ----
 // names: "given family" pools (Bajoran: family first; Vulcan / Andorian / Benzite / Caitian use single names).
 export const SPECIES = {
-  human: { name: "Human", weight: 30, color: "#d9a27a", sheet: null, given: ["Maren", "Priya", "Tomas", "Rosa", "Kofi", "Ines", "Dmitri", "Aiyana", "Liang", "Noor", "Callum", "Sanna", "Mateo", "Hiroko"], family: ["Kovac", "Natarajan", "Delgado", "Abernathy", "Mensah", "Lindqvist", "Oduya", "Raskin", "Halvorsen", "Quispe", "Brennan", "Iwu"] },
-  vulcan: { name: "Vulcan", weight: 9, color: "#b9a37a", sheet: null, single: ["Sorvan", "T'Vessa", "Strell", "T'Mira", "Sopek", "T'Lani", "Vossik", "Senna"] },
-  andorian: { name: "Andorian", weight: 7, color: "#6fb7ff", sheet: null, single: ["Thelev sh'Zarath", "Ravhis th'Elen", "Shiara ch'Voss", "Tavrel zh'Iren", "Keshra sh'Onel"] },
-  bajoran: { name: "Bajoran", weight: 8, color: "#d7a46b", sheet: null, familyFirst: true, given: ["Kalen", "Essa", "Rion", "Taya", "Mevi", "Torel"], family: ["Doru", "Pell", "Varo", "Anyr", "Sela", "Hesh"] },
-  betazoid: { name: "Betazoid", weight: 7, color: "#9a7fd1", sheet: null, given: ["Ianna", "Davin", "Mirel", "Tessaly", "Orin"], family: ["Rhovan", "Kestari", "Lenthe", "Vasari"] },
-  trill: { name: "Trill", weight: 6, color: "#c99b6f", sheet: null, given: ["Jessa", "Halen", "Corin", "Ysel"], family: ["Orvin", "Tarash", "Belan", "Ketheri"] },
-  bolian: { name: "Bolian", weight: 6, color: "#5d8fd6", sheet: null, given: ["Brennik", "Hosa", "Marl", "Tesk"], family: ["Tull", "Garvo", "Pemm", "Obrel"] },
-  tellarite: { name: "Tellarite", weight: 5, color: "#b07a5a", sheet: null, given: ["Skarn", "Brega", "Grosh", "Velka"], family: ["Grevv", "Thrass", "Mork", "Delg"] },
-  benzite: { name: "Benzite", weight: 4, color: "#5fb3a6", sheet: null, single: ["Vardock", "Zenock", "Merrick", "Tallock", "Ressock"] },
-  denobulan: { name: "Denobulan", weight: 5, color: "#c4956b", sheet: null, given: ["Drezz", "Ollo", "Fennix", "Zhara"], family: ["Mollo", "Ruzz", "Pellix", "Avvo"] },
-  klingon: { name: "Klingon", weight: 1.5, color: "#a5543a", sheet: null, single: ["Morgath", "K'Valla", "Torvak", "B'Ressa", "Kurrag"] },   // rare
-  caitian: { name: "Caitian", weight: 1.5, color: "#d6a650", sheet: null, single: ["R'Mira", "M'Shaal", "Rrenn", "T'Purra", "Shirrah"] },     // rare
+  human: { name: "Human", weight: 30, color: "#d9a27a", given: ["Maren", "Priya", "Tomas", "Rosa", "Kofi", "Ines", "Dmitri", "Aiyana", "Liang", "Noor", "Callum", "Sanna", "Mateo", "Hiroko"], family: ["Kovac", "Natarajan", "Delgado", "Abernathy", "Mensah", "Lindqvist", "Oduya", "Raskin", "Halvorsen", "Quispe", "Brennan", "Iwu"] },
+  vulcan: { name: "Vulcan", weight: 9, color: "#b9a37a", single: ["Sorvan", "T'Vessa", "Strell", "T'Mira", "Sopek", "T'Lani", "Vossik", "Senna"] },
+  andorian: { name: "Andorian", weight: 7, color: "#6fb7ff", single: ["Thelev sh'Zarath", "Ravhis th'Elen", "Shiara ch'Voss", "Tavrel zh'Iren", "Keshra sh'Onel"] },
+  bajoran: { name: "Bajoran", weight: 8, color: "#d7a46b", familyFirst: true, given: ["Kalen", "Essa", "Rion", "Taya", "Mevi", "Torel"], family: ["Doru", "Pell", "Varo", "Anyr", "Sela", "Hesh"] },
+  betazoid: { name: "Betazoid", weight: 7, color: "#9a7fd1", given: ["Ianna", "Davin", "Mirel", "Tessaly", "Orin"], family: ["Rhovan", "Kestari", "Lenthe", "Vasari"] },
+  trill: { name: "Trill", weight: 6, color: "#c99b6f", given: ["Jessa", "Halen", "Corin", "Ysel"], family: ["Orvin", "Tarash", "Belan", "Ketheri"] },
+  bolian: { name: "Bolian", weight: 6, color: "#5d8fd6", given: ["Brennik", "Hosa", "Marl", "Tesk"], family: ["Tull", "Garvo", "Pemm", "Obrel"] },
+  tellarite: { name: "Tellarite", weight: 5, color: "#b07a5a", given: ["Skarn", "Brega", "Grosh", "Velka"], family: ["Grevv", "Thrass", "Mork", "Delg"] },
+  benzite: { name: "Benzite", weight: 4, color: "#5fb3a6", single: ["Vardock", "Zenock", "Merrick", "Tallock", "Ressock"] },
+  denobulan: { name: "Denobulan", weight: 5, color: "#c4956b", given: ["Drezz", "Ollo", "Fennix", "Zhara"], family: ["Mollo", "Ruzz", "Pellix", "Avvo"] },
+  klingon: { name: "Klingon", weight: 1.5, color: "#a5543a", single: ["Morgath", "K'Valla", "Torvak", "B'Ressa", "Kurrag"] },   // rare
+  caitian: { name: "Caitian", weight: 1.5, color: "#d6a650", single: ["R'Mira", "M'Shaal", "Rrenn", "T'Purra", "Shirrah"] },     // rare
 };
 // personality tags: flavour chat lines and crew-event lines ({short} = their name, {lt} = how they address the Lt)
 export const TAGS = {

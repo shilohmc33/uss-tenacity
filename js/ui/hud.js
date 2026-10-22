@@ -142,6 +142,9 @@ function liftAlertCard(up) {
   else { const box = $("#toasts"); if (box && el.parentElement !== box.parentElement) box.after(el); if (lay) lay.hidden = true; }
 }
 function holdPromptsForAlert() {
+  // pass 17 P3: the spec picker counted itself 'offered' when it opened (specOffered), so a picker hidden here never came back;
+  // un-count it so autoModals re-shows it once after the card / fight (board, safety and disclosure re-derive from their own state)
+  if (!$("#specPanel").hidden) G.prog.specOffered = 0;
   for (const id of ["specPanel", "safetyPanel"]) if (!$("#" + id).hidden) $("#" + id).hidden = true;
   if (!$("#boardPanel").hidden && !boardResult) $("#boardPanel").hidden = true;   // a board RESULT already on screen stays (the card covers it)
   if (!$("#romPanel").hidden && romView && romView.mode === "disc") { $("#romPanel").hidden = true; romView = null; }
@@ -261,7 +264,8 @@ export function updateHud() {
   if (ck !== lastChips) {
     lastChips = ck;
     // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
-    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).map(([id, n], i) => {
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
+     
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;
     }).join("");
@@ -339,7 +343,11 @@ export function showReport(r) {
   const vv = voyageView(), SP = G.sp;
   const where = SP.battle ? "at red alert — the bridge has the fight" : SP.travel ? `at warp for ${DESTS[SP.travel.dest].name}` : SP.location ? `at ${DESTS[SP.location].name}` : "holding position in deep space";
   const nB = r.battles + (r.battleWasOn ? 1 : 0);   // pass 13: a fight already on when you left counts (the headline names it too)
-  const fights = nB === 0 ? "No contact with the Jem'Hadar." : `${nB} engagement${nB === 1 ? "" : "s"} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}.`;
+  // pass 17 P4: a report deferred behind a live fight names that fight (enemy + outcome) instead of "No contact with the Jem'Hadar"
+  const LFO = { won: (a, h) => `${a} — beaten off, hull ${h}%`, disengaged: (a, h) => `${a} — T'Ren broke off and ran, hull ${h}%`, towed: a => `${a} — she crippled us; towed to Deep Space Nine` };
+  const lf = r.afterFight, lfTxt = lf ? (LFO[lf.out] || LFO.won)(lf.a.charAt(0).toUpperCase() + lf.a.slice(1), lf.hull) : "";
+  const fights = nB === 0 ? (lf ? `The fight that held the report: ${lfTxt}. No further contact while you were off watch.` : "No contact with the Jem'Hadar.")
+    : `${nB} engagement${nB === 1 ? "" : "s"} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}.`;
   // pass 13: a battlecruiser fought while away is the night's headline - first thing in the report
   const BCO = { won: h => `beaten off — hull ${h}%`, towed: () => "she crippled us; the Tenacity was towed to Deep Space Nine", disengaged: h => `T'Ren broke off and ran — hull ${h}%`, ongoing: h => `still fighting her now — hull ${h}%` };
   const bcHead = (r.bcFights || []).length ? `<div class="bcHead" role="alert"><b>⚠ While you were off watch: ${r.bcFights.length === 1 ? "a Jem'Hadar battlecruiser" : `${r.bcFights.length} Jem'Hadar battlecruisers`}</b> — ${r.bcFights.map(f => `${(BCO[f.out] || BCO.won)(f.hull)}${f.lost && f.out !== "towed" ? ` (−${f.lost}% in the fight)` : ""}`).join(" · ")}.</div>` : "";
@@ -440,10 +448,12 @@ export function renderCareer(force = false) {
 
 // ---- phase 4: the Lt's Quarters (CREW sheet box) + decor chooser (tap a slot on the deck, or a slot button here) ----
 const pct = v => Math.round(v * 100);
+// art batch 2: decor with cabin_v4 art shows its sprite; the rest keep the emoji placeholder
+const decorIcon = d => d.art ? `<img class="dart" src="assets/decor-${d.id}.webp" alt="">` : d.icon;
 function renderQuarters(force) {
   if (!$("#quarters")) return;
   const T = CB.tier(), tt = CB.totals(), c = G.prog.cabin, cur = PROG.currency;
-  const rows = T.slots.map(sl => { const id = c.placed[sl.id], d = id && CB.DECOR[id]; return `<button class="slotb${d ? " full" : ""}" data-slot="${sl.id}">${d ? `<i>${d.icon}</i>${d.name}` : `<i>＋</i>${CB.SLOT_NAMES[sl.type]}`}</button>`; }).join("");
+  const rows = CB.slots().map(sl => { const id = c.placed[sl.id], d = id && CB.DECOR[id]; return `<button class="slotb${d ? " full" : ""}" data-slot="${sl.id}">${d ? `<i>${decorIcon(d)}</i>${d.name}` : `<i>＋</i>${CB.SLOT_NAMES[sl.type]}`}</button>`; }).join("");
   const st = CB.storage();
   setHtml("quarters", `<h4>LT'S QUARTERS <small>${T.name}</small></h4>
     <p class="cnote">Rest on your rack: <b>${CB.rackRest().toFixed(1)}</b> energy/s (comfort +${pct(tt.comfort)}%) · social +${pct(tt.social)}% · readiness +${tt.readiness} · catalogue ${pct(CB.completion())}% · ${cur.name} <b>${G.prog.rations}</b>${st.length ? ` · ${st.length} in storage` : ""}</p>
@@ -555,7 +565,7 @@ function renderDecor() {
     else if (!s.gate.ok) btn = `<button disabled>${s.gate.drop ? "FIND" : "LOCKED"}</button>`;
     else btn = `<button data-dbuy="${d.id}" ${s.canBuy ? "" : "disabled"}>${costText(d.cost)}</button>`;
     const note = s.owned ? (s.placed ? (curId === d.id ? "here now" : "placed elsewhere") : "in storage") : !s.gate.ok ? s.gate.why : "";
-    return `<div class="req dec${!s.owned && !s.gate.ok ? " off" : ""}"><i class="ico">${d.icon}</i><div>${d.name}<small>${bon(d)}${note ? ` · ${note}` : ""}</small></div>${btn}</div>`;
+    return `<div class="req dec${!s.owned && !s.gate.ok ? " off" : ""}"><i class="ico">${decorIcon(d)}</i><div>${d.name}<small>${bon(d)}${note ? ` · ${note}` : ""}</small></div>${btn}</div>`;
   }).join("");
   $("#decorList").innerHTML = `<p class="cnote">${cur ? `Here now: <b>${cur.name}</b>.` : "Empty."} ${PROG.currency.name} <b>${G.prog.rations}</b> · Reputation <b>${G.sp.rep}</b></p>${items}`;
 }

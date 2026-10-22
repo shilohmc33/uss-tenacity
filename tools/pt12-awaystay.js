@@ -9,7 +9,7 @@
 // the margin); FAR=1 = the old bridge start (100% death below ~13 s). Battles ON by default (BATTLES=0 off): no session calm, and
 //   battle_stay / battle_away120 - a Galor attacks as the clock hits LEFT with Okafor's Miracle Worker ready; then stay / away 120 s
 // mwLinked counts trials where Miracle Worker repaired the patient's own system (must be 0, present or away). MODES=a,b to pick arms.
-// Death % per cell, away vs stay z (positive z = away better). BASE=... N=2000 LEFTS=6,8 TAG=x node tools/pt12-awaystay.js
+// Death % per cell, away vs stay z (positive z = away better). BASE=... N=2000 LEFTS=6,8 TAG=x [SCALED=1] [FAR=1] node tools/pt12-awaystay.js
 // Pass 08: surgery rates, free-save attacks, resume-clock, expiry, play-day clock (in-page, deterministic module calls)
 process.env.BASE = process.env.BASE || 'http://127.0.0.1:8765/';   // the tester's lib defaults to their own (stopped) server
 const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
@@ -42,6 +42,10 @@ const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'
   });
   const NEAR = !process.env.FAR, BATTLES = process.env.BATTLES !== '0', N = +(process.env.N || 2000), LEFTS = (process.env.LEFTS || '6,8,10,12,14').split(',').map(Number), MODES = (process.env.MODES || 'stay,away120,send_stay,send_away120,battle_stay,battle_away120').split(',');
   const res = {}; const t0 = Date.now();
+  // pass 17 P2: SCALED=1 stages LEFT in pass-16 seconds, i.e. LEFT x pacing.js TRAVEL_SCALE (the same share of the injury window
+  // now that walks take ~1.55x as long); default = raw seconds left (comparable with suites 14-19)
+  const LSCALE = process.env.SCALED ? await p.evaluate(async () => (await import('/js/pacing.js')).TRAVEL_SCALE || 1) : 1;
+  await p.evaluate(s => { window.__LSCALE = s; }, LSCALE); if (LSCALE !== 1) console.log(`SCALED: LEFT x ${LSCALE}`);
   for (const left of LEFTS) for (const mode of MODES) {
     const chunks = [];
     for (let done = 0; done < N; done += 250) chunks.push(await p.evaluate(async ({ n, left, mode: fullMode, near, battles }) => { const await_data = await import('/js/data.js'), BT = await import('/js/battle.js'); const G = __T.G, r = { n, death: 0, surg: 0, sx: 0, fixedInAway: 0, ltMovedHeld: 0, mwLinked: 0, battles: 0 };
@@ -51,7 +55,7 @@ const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'
       const fight = fullMode.startsWith('battle_'), mode = fullMode.replace('battle_', '');
       for (let k = 0; k < n; k++) { M.stage(30, 2); const i = M.hurt('hazard', 'kovac', { sys: 'coolant' }); const sys = i.sys; let t = 0; while (!i.ack && t < 5) { M.live(0.1); t += 0.1; }
         if (near) { const D = await_data.DECKS, SY = await_data.SYSTEMS, dk = SY[sys].deck; G.lt.deck = dk; G.lt.x = D[dk].lift.x; G.lt.y = D[dk].lift.y; G.lt.mode = 'idle'; G.lt.node = null; G.lt.path = null; G.lt.intent = null; }   // NEAR=1: the Lt starts at the lift on the system's deck
-        i.left = left; const n0 = { ...M.MD.M().n }, Rr = M.P.PACE_RT;
+        i.left = left * (window.__LSCALE || 1); const n0 = { ...M.MD.M().n }, Rr = M.P.PACE_RT;
         if (battles) { Rr.sessionT = 3600; G.sp.lastBattleT = -1e9; }   // battles on: no session calm, so live / catch-up battles can start
         window.__mwViol = false; const b0 = G.stats.battles;
         if (fight) { G.ab.miracle.cd = 0; G.ab.miracle.active = 0; BT.startBattle('enroute', { enemy: 'galor' }); }   // a battle starts as the clock hits LEFT, Miracle Worker ready

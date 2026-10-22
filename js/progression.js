@@ -5,7 +5,7 @@ import { hardenBattle } from "./ships.js";
 import { G } from "./state.js";
 import { log, toast, fx, cheerful, cheer, cheerToast } from "./bus.js";
 import { clamp } from "./util.js";
-import { PACE_RT, nightActive } from "./pacing.js";
+import { PACE_RT, nightActive, TRAVEL_SCALE } from "./pacing.js";
 import { NODEMAP, HEAD_Y } from "./data.js";
 import { CREW_ROSTER, SLOTMAP, START_CREW, LADDERS, DEPTS, SPECIES, POSTINGS, PRONOUNS, pr } from "./roster.js";
 import { GIFT } from "./gift-data.js";
@@ -250,8 +250,8 @@ export const PROG = {
     },
     serious: { battleCrit: 0.9, battle: 0.45, hazard: 0.85 },   // pass 07 tune (was 0.8 / 0.3 / 0.65);   // serious share (retune v2: 0.6 / 0.15 / 0.45 -> 0.8 / 0.3 / 0.65; phase 6 final was 0.45 / 0 / 0.30 -> 1.2 serious/month and no deaths in 120 days); only serious can end in a death, and battle deaths still need a CRITICAL fault open (memo)
     linkSystems: ["coolant", "eps"],         // a serious injury needs this system (or the fault the hit opened) stable
-    window: 180,                             // pass 06: warning window = 180 s of PRESENT time (was 120 s of 'seen' time)
-    returnFloor: 30,                         // pass 08 (3) + pass 10 (1): back from AWAY with the system still down: the clock is at least min(clock at leave, 30 s), once per injury - never more than you left with; re-tap still needed
+    window: 180 * TRAVEL_SCALE,              // pass 06: warning window = 180 s of PRESENT time (was 120 s of 'seen' time); pass 17 P2: x TRAVEL_SCALE (279 s) for the slower walk
+    returnFloor: 30 * TRAVEL_SCALE,   // pass 17 P2: x TRAVEL_SCALE (46.5 s);                       // pass 08 (3) + pass 10 (1): back from AWAY with the system still down: the clock is at least min(clock at leave, 30 s), once per injury - never more than you left with; re-tap still needed
     presentIdle: 60,                         // pass 06: 'present' = app visible, not offline, and input within the last 60 s; the clock only runs then
     offlineMinSeen: 60,                      // (legacy, unused since pass 06: nothing about an injury ever runs while away)
     heal: { minor: [7200, 14400], serious: [21600, 36000], pulled: [36000, 57600] },
@@ -266,7 +266,7 @@ export const PROG = {
     // pass 08 (4): the fast-fix bonus is smooth, not one step at 60 s: the full x0.4 up to fastFullS (20 s: the 12-16 s
     // walk + lift + repair plus a reaction, so a prompt fix still lands at the 12% target), then easing linearly to x1.0 at
     // fastEndS (90 s). fastS (60) only labels a fix as 'fast' in the text.
-    surgery: { scene: 8, chance: 0.30, fastS: 60, fastMult: 0.4, fastFullS: 20, fastEndS: 90, excellentMult: 0.7, excellentMax: 2, visitMult: 0.7, epsOpenMult: 1.25, max: 0.55, assistMult: 0.75, bands: { good: 0.15, touch: 0.35 } },   // v3 sim (21 runs each): 0.2 -> regular p50 0 mean 0.57; 0.35 -> p50 0 mean 0.67 (11/21 zero); 0.5 -> regular p50 1 mean 1.05, casual p50 0 mean 0.48 (shipped)
+    surgery: { scene: 8, chance: 0.30, fastS: 60 * TRAVEL_SCALE, fastMult: 0.4, fastFullS: 20 * TRAVEL_SCALE, fastEndS: 90 * TRAVEL_SCALE,   /* pass 17 P2: the fast-fix bands x TRAVEL_SCALE (93 / 31 / 139.5 s) */ excellentMult: 0.7, excellentMax: 2, visitMult: 0.7, epsOpenMult: 1.25, max: 0.55, assistMult: 0.75, bands: { good: 0.15, touch: 0.35 } },   // v3 sim (21 runs each): 0.2 -> regular p50 0 mean 0.57; 0.35 -> p50 0 mean 0.67 (11/21 zero); 0.5 -> regular p50 1 mean 1.05, casual p50 0 mean 0.48 (shipped)
     hush: 600,                               // pass 06 m1: ~10 min of ship time after a death: no cheerful ambient lines, no floaters
     memorialDelay: 600,                      // ... and the Mess & Bar service waits at least this long after the death
     gentlePromptAt: 12,                      // pass 06 m5: one-time Crew safety prompt from play day 12 (deaths are possible from day 14)

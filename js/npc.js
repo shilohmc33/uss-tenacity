@@ -3,7 +3,8 @@
 // then returns. Talks (talk loop, facing them) while the Lt reports at the chair or stands next to her, and
 // holds at the chair talking (issuing orders) during battle. Walk/idle use the same rules as the Lt.
 import { G } from "./state.js";
-import { TREN, DECKS, COLS, ROWS } from "./data.js";
+import { TREN, DECKS, COLS, ROWS, NODEMAP } from "./data.js";
+import { seatArt } from "./art-hooks.js";
 import { walkStep, walkSettle, keepPace, pathNear, blockedAhead, AVOID } from "./anim.js";
 import { findPath, isWalkable, cellOf, cellCenter } from "./path.js";
 import { clamp, dDist } from "./util.js";
@@ -156,5 +157,13 @@ export function tickTren(dt) {
 export function trenTo(kind, i = 0) {
   if (kind === "home") goTo(TREN.home, "home");
   else goTo(TREN.stations[i % TREN.stations.length], "station");
+}
+// art batch 2: at home she sits in the first officer's seat (TREN.home.seat) with SEAT_ART.tren, facing the viewscreen;
+// she talks from the seat (seated talk rows). Off the spot, walking, stepped aside or the Lt in that seat: standing.
+export function trenSeat() {
+  const nd = TREN.home.seat && NODEMAP[TREN.home.seat], L = G.lt;
+  if (!nd || !nd.seat || tren.mode !== "home" || !seatArt("tren")) return null;
+  if (L.deck === TREN.deck && L.node === TREN.home.seat && (L.mode === "use" || L.mode === "walk")) return null;
+  return dDist(tren.x, tren.y, TREN.home.x, TREN.home.y) <= 4 ? nd : null;
 }
 export const trenOnFloor = () => isWalkable(TREN.deck, tren.x, tren.y);

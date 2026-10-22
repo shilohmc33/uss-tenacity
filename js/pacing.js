@@ -1,6 +1,11 @@
 // ============================================================================================
 //  PACING CONFIG: every knob that sets the game's tempo lives here. Times are real seconds at x1.
 // ============================================================================================
+// pass 17 P2: scale A slowed the walk x0.62 (option A: 0.10 x FIG_K), so a deck-to-deck repair trip takes ~1.55x as long (pass 17
+// route17: Bridge -> coolant 11.2 s -> 17.4 s, Medical -> coolant 11.7 -> 18.0, Lounge -> coolant 8.4 -> 12.9). Every injury / rescue
+// window that a trip has to fit inside is multiplied by this, so travel takes the same share of the window as in pass 16
+// (progression.js PROG.deaths: window, returnFloor, surgery fastS / fastFullS / fastEndS). 1 = the pass 16 seconds.
+export const TRAVEL_SCALE = 1.55;
 export const PACE = {
   // --- voyage ---
   legTime: {                       // [min, max] seconds per warp leg (5-20 real minutes)

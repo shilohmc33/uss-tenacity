@@ -12,7 +12,7 @@ import { CABIN_TIERS, CABIN_ORDER, DECOR_ITEMS, DECOR, SLOT_NAMES } from "./cabi
 const P = () => G.prog, C = () => G.prog.cabin;
 export const tierIdFor = rank => CABIN_ORDER[Math.max(0, Math.min(CABIN_ORDER.length - 1, rank | 0))];
 export const tier = () => CABIN_TIERS[C().tier] || CABIN_TIERS.ltjg;
-export const slots = () => tier().slots;
+export const slots = () => tier().slots.filter(s => !s.hidden);   // hidden = no decor art for that slot yet (cabin_v4)
 export const slotById = id => slots().find(s => s.id === id);
 const RANK_SHORT = ["Lt jg", "Lt", "Lt Cmdr", "Cmdr"];
 
@@ -36,13 +36,28 @@ export function applyTier() {
   if (T.mask && IMG[T.mask]) { dk.walk = sampleMask(IMG[T.mask]); dk.walkSrc = "mask"; } else { dk.walk = rectGrid(T.floor, T.blocks); dk.walkSrc = "rects"; }
   const rack = dk.nodes.rack;
   Object.assign(rack, T.bed); rack.rest = rackRest();
+  if (dk.nodes.desk && T.desk) Object.assign(dk.nodes.desk, T.desk);
+  reseatDecor();
   rack.name = id === "ltjg" ? "Your Rack (shared room)" : id === "cmdr" ? "Sleeping Alcove" : "Your Rack";
   dk.name = `Lt's Quarters`; dk._tier = id;
   if (G.lt && G.lt.deck === "quarters" && !G.lt.lift && G.lt.mode !== "use") snapToFloor(G.lt);
 }
+// art batch 2: slot ids/types changed with cabin_v4 and some slots are hidden. Anything placed in a slot that no longer
+// takes it moves to a free matching slot, or into storage (still owned; placeable again later).
+function reseatDecor() {
+  const c = C(); if (!c || !c.placed) return;
+  const vis = slots(), placed = {};
+  const ok = (sid, d) => vis.some(s => s.id === sid && s.type === d.slot);
+  for (const [sid, id] of Object.entries(c.placed)) { const d = DECOR[id]; if (d && ok(sid, d) && !placed[sid]) placed[sid] = id; }
+  for (const [sid, id] of Object.entries(c.placed)) {
+    const d = DECOR[id]; if (!d || placed[sid] === id) continue;
+    const free = vis.find(s => s.type === d.slot && !placed[s.id]); if (free) placed[free.id] = id;
+  }
+  c.placed = placed;
+}
 export const refreshRest = () => { DECKS.quarters.nodes.rack.rest = rackRest(); };
 
-// placeholder plate: a simple drawn room per tier until the artist's 960x640 plates arrive
+// placeholder plate: a simple drawn room per tier, used only if the cabin_v4 plate fails to load
 export function placeholderPlate(id) {
   const key = "cabin-ph-" + id;
   if (IMG[key]) return key;
@@ -133,8 +148,9 @@ export function moveQuarters(toId = tierIdFor(P().rank)) {
   const old = c.placed, T = CABIN_TIERS[toId], placed = {}, stored = [];
   for (const [sid, id] of Object.entries(old)) {
     const d = DECOR[id]; if (!d) continue;
-    const same = T.slots.find(s => s.id === sid && s.type === d.slot && !placed[s.id]);
-    const any = same || T.slots.find(s => s.type === d.slot && !placed[s.id]);
+    const vis = T.slots.filter(s => !s.hidden);
+    const same = vis.find(s => s.id === sid && s.type === d.slot && !placed[s.id]);
+    const any = same || vis.find(s => s.type === d.slot && !placed[s.id]);
     if (any) placed[any.id] = id; else stored.push(id);
   }
   c.placed = placed; c.tier = toId; c.log.push({ day: P().day, from, to: toId, stored });
@@ -222,7 +238,10 @@ export function drawCabin(ctx, t, showEmpty) {
     const w = sl.w * DW, h = sl.h * DH, x = sl.x * DW - w / 2, y = sl.y * DH - h / 2;
     if (d) {
       const art = IMG["decor-" + d.id];
-      if (art) { ctx.drawImage(art, x, y, w, h); continue; }
+      if (art && d.art) {   // art batch 2: true size (cabin_v4 decor_sizes), centred in the slot, never stretched
+        const k = decorScale(d, sl), aw = d.art[0] * k, ah = d.art[1] * k;
+        ctx.drawImage(art, sl.x * DW - aw / 2, sl.y * DH - ah / 2, aw, ah); continue;
+      }
       ctx.fillStyle = sl.type === "floor" ? "rgba(120,80,50,0.55)" : "rgba(14,20,34,0.82)";
       rr(ctx, x, y, w, h, 6); ctx.fill();
       ctx.strokeStyle = "rgba(255,210,150,0.7)"; ctx.lineWidth = 2; ctx.stroke();
@@ -235,6 +254,12 @@ export function drawCabin(ctx, t, showEmpty) {
     }
   }
   ctx.restore();
+}
+// Own size (1.0) whenever the art is within 1.5x the slot box (e.g. the 20 px chess set on the 14 px desk slot, as the
+// artist's previews show it); a far-too-big item (a 46 px painting on the Cmdr's 22 px diploma wall) shrinks to the box.
+export function decorScale(d, sl) {
+  const w = sl.w * DW, h = sl.h * DH;
+  return d.art[0] <= w * 1.5 && d.art[1] <= h * 1.5 ? 1 : Math.min(w / d.art[0], h / d.art[1]);
 }
 function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 export { CABIN_TIERS, CABIN_ORDER, DECOR_ITEMS, DECOR, SLOT_NAMES };

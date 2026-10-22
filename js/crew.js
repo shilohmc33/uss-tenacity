@@ -53,6 +53,7 @@ function intentTarget(it) {
   if (!it) return null;
   if (it.kind === "use") { const n = NODEMAP[it.node]; return [n.x, n.y]; }
   if (it.kind === "repair") return [SYSTEMS[it.sys].x, SYSTEMS[it.sys].y];
+  if (it.at) return it.at;   // art batch 2: boarding at a second lift door
   if (it.kind === "liftPanel" || it.kind === "liftRide") return [DECKS[G.lt.deck].lift.x, DECKS[G.lt.deck].lift.y];
   return null;
 }
@@ -70,12 +71,15 @@ export function sendRepair(sysId) {
   sendTo(s.x, s.y, { kind: "repair", sys: sysId });
 }
 export function sendLiftPanel() { const lf = DECKS[lt().deck].lift; sendTo(lf.x, lf.y, { kind: "liftPanel" }); }
+// art batch 2: a deck may have a second turbolift door (bridge lift2). Standing at it, the Lt boards there instead of
+// walking across to the main lift; he always arrives at the destination's main lift.
+const boardAt = L => { const l2 = DECKS[L.deck].lift2; return l2 && dDist(L.x, L.y, l2.x, l2.y) <= 24 ? l2 : DECKS[L.deck].lift; };
 export function rideLiftTo(deckId, then) {
   const L = lt();
   if (deckId === L.deck) { if (then) dispatchIntent(then); return; }
-  const lf = DECKS[L.deck].lift;
+  const lf = boardAt(L);
   if (then) then.manual = ORDER.manual;
-  sendTo(lf.x, lf.y, { kind: "liftRide", dest: deckId, then: then || null });
+  sendTo(lf.x, lf.y, { kind: "liftRide", dest: deckId, then: then || null, at: [lf.x, lf.y] });
 }
 function dispatchIntent(it) {
   const go = () => { if (it.kind === "use") sendUse(it.node, { force: true }); else if (it.kind === "repair") sendRepair(it.sys); };
@@ -174,6 +178,7 @@ function arrive() {
   if (it.kind === "liftRide") { beginLift(it.dest, it.then); return; }
   if (it.kind === "use") {
     const n = NODEMAP[it.node];
+    if (n.liftDoor) { L.mode = "idle"; settleAt(n.x, n.y); setFacing("up"); fx("openLift"); return; }   // art batch 2: second turbolift door -> the lift panel
     if (n.system && G.ship.faults[n.system]) { beginRepair(n.system, it.manual); return; }
     L.mode = "use"; L.node = it.node; L.useManual = !!it.manual;
     settleAt(n.x, n.y);
