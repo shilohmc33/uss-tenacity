@@ -2,6 +2,7 @@
 import { G } from "../state.js";
 import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT } from "../data.js";
 import { occluderCast, occlDrawn } from "./occluders.js";
+import { updateDoors, drawDoors } from "./doors.js";
 import { actionFrame, animSeed, walkPose } from "../anim.js";
 import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
 import { SLOTMAP, DEPTS } from "../roster.js";
@@ -318,7 +319,7 @@ export function drawDeck(ctx, t, dt) {
   const dpr = ctx.canvas.width / cam.w;
   ctx.setTransform(cam.scale * dpr, 0, 0, cam.scale * dpr, (cam.w / 2 - cam.x * cam.scale) * dpr, (cam.h / 2 - cam.y * cam.scale) * dpr);
   const plate = IMG[dk.plate];
-  if (plate) { drawEdges(ctx, plate, dk); ctx.drawImage(plate, 0, 0, DW, DH); } else { ctx.fillStyle = "#1b2233"; ctx.fillRect(0, 0, DW, DH); ctx.fillStyle = "#8af"; ctx.fillText(dk.name + " (plate missing)", 20, 30); }
+  if (plate) { drawEdges(ctx, plate, dk); ctx.drawImage(plate, 0, 0, DW, DH); drawDoors(ctx, L.deck); } else { ctx.fillStyle = "#1b2233"; ctx.fillRect(0, 0, DW, DH); ctx.fillStyle = "#8af"; ctx.fillText(dk.name + " (plate missing)", 20, 30); }
   if (dk.cabin) drawCabin(ctx, t, !L.lift);   // phase 4: decor in the Lt's quarters (placeholder boxes until the art lands)
   // node rings
   for (const [id, n] of Object.entries(dk.nodes)) {
@@ -373,6 +374,7 @@ export function drawDeck(ctx, t, dt) {
   }
   // back to front by feet y; equal y breaks by x, then id, so the order never flickers (audit C5)
   // pass 18: foreground props (data.js DECK_OCCL) join the sort at their footprint line (render/occluders.js)
+  updateDoors(L.deck, dt, cast);   // sliding doors: every figure's feet (x, y fractions) so far; drawn next frame under the cast
   if (!L.lift && !dk.cabin) cast.push(...occluderCast(ctx, L.deck, cast));
   cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck

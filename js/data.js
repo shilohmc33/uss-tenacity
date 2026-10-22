@@ -12,6 +12,8 @@ export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "quar
 export const CREW_DECKS = ["bridge", "engineering", "medical", "berthing", "lounge"];   // decks with painted plates + walk masks
 export const DECKS = {
   bridge: {
+    // Bridge v4b (sprites/deck_bridge_v4b, assets/src/deck_bridge_v4b): the v4 plate with the lift interiors painted behind open
+    // doorways; the door leaves are separate panels (js/doors-data.js DECK_DOORS, render/doors.js). Geometry / mask / spots / fg = v4.
     // Bridge v4 (sprites/deck_bridge_v4, assets/src/deck_bridge_v4): LCARS screens + sliding lift doors on the v3 geometry; plate and
     // fg-bridge ship together (fg RGB refreshed from v4, alpha identical; fg re-encoded webp q92 from the artist PNG, alpha exact).
     // art batch 2: sprites/deck_bridge_v3 layout, plate + fg from sprites/deck_bridge_v3_hires (same geometry, 1920x1280 = 2 art
@@ -611,10 +613,19 @@ export const SHIP_ART = {
   tenacity: { img: null }, freighter: { img: null }, klingon_bop: { img: null },
   jh_fighter: { img: null }, galor: { img: null }, jh_battlecruiser: { img: null },
 };
-export const IMAGES = [...new Set(["deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
+// SHIP_PAINTED[sprite key] = { img, facing }: the legacy single painted image per class (pre-groundwork art), used by
+// render/ships.js when the class has no SHIP_ART sheet loaded, before the vector placeholder. img: asset key (preloaded
+// via IMAGES below); facing: the image's native nose direction ("right" or "left"), so enemies mirror to face the player.
+// The image keeps its own aspect, fitted (contain, centred) into the class's drawn box. Classes not listed stay vector.
+export const SHIP_PAINTED = {
+  tenacity: { img: "ship-tenacity", facing: "right" },     // 1400x400, saucer forward on the right
+  jh_fighter: { img: "ship-jemhadar", facing: "left" },    // 1400x715, prongs forward on the left (the old enemy, drawn unmirrored)
+};
+import { DOOR_IMAGES } from "./doors-data.js";
+export const IMAGES = [...new Set([...DOOR_IMAGES, "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security", "lt-walk-v2", "tren-walk-v2", "crew-gold-walk-v2", "crew-blue-walk-v2",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
-  ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
+  ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(SHIP_PAINTED).map(a => a.img), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
   ...[LIE_ART, SEAT_ART].flatMap(o => Object.values(o).map(a => a.img)), ...Object.values(TINT_BASES).map(b => b.mask).filter(Boolean),
   ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean), ...DECOR_ITEMS.filter(d => d.art).map(d => "decor-" + d.id),
   ...Object.values(DECK_OCCL).flatMap(T => T.items.map(it => it.src)).filter(Boolean)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)

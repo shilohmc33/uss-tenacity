@@ -1,11 +1,14 @@
 // Battle groundwork: ship drawing. drawShip() uses the artist's sheet when SHIP_ART[sprite].img is loaded (format: data.js
-// SHIP_SHEET, notes/ship-sprite-spec.md) and otherwise a clean vector placeholder per class in faction colours.
+// SHIP_SHEET, notes/ship-sprite-spec.md), else the legacy painted image (data.js SHIP_PAINTED) when loaded, and otherwise a
+// clean vector placeholder per class in faction colours.
 // Every ship is authored FACING RIGHT inside its box (x, y, w, h); mirror = true flips it to face left (the enemy side).
-import { SHIP_ART, SHIP_SHEET } from "../data.js";
+import { SHIP_ART, SHIP_SHEET, SHIP_PAINTED } from "../data.js";
 import { IMG } from "../assets.js";
 import { SHIPS, FACTIONS } from "../ships.js";
 
 export const shipArt = sprite => { const a = SHIP_ART[sprite], im = a && a.img ? IMG[a.img] : null; return im ? { a, im } : null; };
+// the legacy painted image for a class (SHIP_PAINTED), if loaded
+export const shipPainted = sprite => { const p = SHIP_PAINTED[sprite], im = p && p.img ? IMG[p.img] : null; return im && im.width > 0 ? { p, im } : null; };
 // the sheet's rows with any per-ship overrides; index = row on the sheet
 export function sheetRows(a) { return SHIP_SHEET.rows.map(r => ({ ...r, ...((a && a.rows && a.rows[r.state]) || {}) })); }
 // which state / frame a ship shows: anim = { state, t } (a one-shot started t seconds ago) from battle.js SFX.anim
@@ -126,6 +129,23 @@ function drawVectorRim(ctx, d, w, h, t, pct) {
   ctx.save(); ctx.shadowColor = hexA(F.glow, 0.85); ctx.shadowBlur = Math.max(4, Math.min(12, h * sc * 0.1));
   ctx.drawImage(VC, 0, 0, cw, ch, -px, -py, w + 2 * px, h + 2 * py); ctx.restore();
 }
+// Painted image: its own aspect, contain-fitted and centred in the box (the vector's footprint); a left-facing image is
+// flipped so it faces right like everything else here (the caller's mirror then turns enemies toward the player).
+// Below 35% hull the same scorch as the vector is laid over the hull only (source-atop on an offscreen copy).
+let PC = null;
+function drawPainted(ctx, pa, w, h, pct) {
+  const { p, im } = pa, ar = im.width / im.height, dw = Math.min(w, h * ar), dh = dw / ar, dx = (w - dw) / 2, dy = (h - dh) / 2;
+  ctx.save(); if (p.facing === "left") { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  const m = ctx.getTransform(), sc = Math.max(1, Math.min(4, Math.hypot(m.a, m.b) || 1)), cw = Math.ceil(dw * sc), ch = Math.ceil(dh * sc);
+  if (pct >= 35 || typeof document === "undefined" || cw > 4096 || ch > 4096) { ctx.drawImage(im, dx, dy, dw, dh); ctx.restore(); return; }
+  if (!PC) PC = document.createElement("canvas");
+  if (PC.width < cw || PC.height < ch) { PC.width = Math.max(PC.width, cw); PC.height = Math.max(PC.height, ch); }
+  const o = PC.getContext("2d"); o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, cw, ch); o.globalCompositeOperation = "source-over";
+  o.drawImage(im, 0, 0, cw, ch); o.globalCompositeOperation = "source-atop";
+  for (const [x, y, r] of [[0.35, 0.45, 0.22], [0.62, 0.38, 0.18], [0.5, 0.6, 0.15]]) { const g = o.createRadialGradient(x * cw, y * ch, 0, x * cw, y * ch, r * ch * 1.6); g.addColorStop(0, "rgba(20,12,8,0.75)"); g.addColorStop(1, "rgba(20,12,8,0)"); o.fillStyle = g; o.fillRect(0, 0, cw, ch); }
+  o.globalCompositeOperation = "source-over";
+  ctx.drawImage(PC, 0, 0, cw, ch, dx, dy, dw, dh); ctx.restore();
+}
 // Draw one ship into its box. opts: { mirror, t (seconds, for loops), pct (hull %), anim ({ state, t }), dying, alpha }.
 // Returns what was drawn ({ art: true, state, frame } or { art: false }) for tests.
 export function drawShip(ctx, shipId, x, y, w, h, opts = {}) {
@@ -134,7 +154,9 @@ export function drawShip(ctx, shipId, x, y, w, h, opts = {}) {
   ctx.save(); ctx.translate(x, y); if (opts.mirror) { ctx.translate(w, 0); ctx.scale(-1, 1); }
   if (opts.alpha != null) ctx.globalAlpha = opts.alpha;
   let res;
+  const painted = art ? null : shipPainted(d.sprite);
   if (art) res = { art: true, ...drawSheet(ctx, art, shipState(opts.anim, pct, opts.dying), opts.t || 0, w, h) };
+  else if (painted) { drawPainted(ctx, painted, w, h, pct); res = { art: false, painted: painted.p.img, state: shipState(opts.anim, pct, opts.dying).state }; }
   else { ctx.beginPath(); ctx.rect(-w * 0.1, -h * 0.2, w * 1.2, h * 1.4); ctx.clip(); drawVectorRim(ctx, d, w, h, opts.t || 0, pct); res = { art: false, state: shipState(opts.anim, pct, opts.dying).state }; }
   ctx.restore();
   return res;

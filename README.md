@@ -40,7 +40,8 @@ Static ES-module build. There's no build step.
 - js/sim.js: the fixed-order step and offline catch-up.
 - js/render/deck.js: the camera (follow, zoom, pan), plates, sprites, rings, and the turbolift overlay.
 - js/render/space.js: backdrop crossfade, ships, beams, torpedoes, shields, and explosions.
-- js/render/ships.js: drawShip (the SHIP_ART sheet when loaded, else a vector placeholder per class in faction colours) and name labels.
+- js/doors-data.js + js/render/doors.js: per-deck sliding doors (DECK_DOORS; Bridge lifts): panels under the cast, open while crew feet are in the trigger radius, close after a delay.
+- js/render/ships.js: drawShip (the SHIP_ART sheet when loaded, else the legacy painted image from data.js SHIP_PAINTED, else a vector placeholder per class in faction colours) and name labels.
 - js/ui/hud.js: the DOM HUD. Landscape phones (orientation landscape, height <= 500px) get their own layout in css/style.css:
   stats column | deck | side column (alert, modes, stations, sheet buttons), one merged LT/SHIP line, sheets as a right drawer.
 - js/main.js: loop, input, modes, visibility, and boot.
