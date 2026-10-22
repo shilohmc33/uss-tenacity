@@ -170,7 +170,7 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
       aw.mc = { watchedFast: roll(aw.watchedFast.sx), hiddenCrewFix: roll(aw.hiddenCrewFix.sx), idle70Fix: roll(aw.idle70Fix.sx) };
       out.away = aw; G.prog.med.inj = []; G.prog.med.scene = null;
       // (4) bands + assist
-      { const xs = [0, 10, 20, 30, 45, 59, 61, 75, 90, 120]; out.fastCurve = xs.map(x => +(0.3 * MD.fastMult(x)).toFixed(4)); }   // pass 08 (4)
+      { const k = __T.PROG.deaths.surgery.fastFullS / 20, xs = [0, 10, 20, 30, 45, 59, 61, 75, 90, 120].map(x => x * k); out.fastK = k; out.fastCurve = xs.map(x => +(0.3 * MD.fastMult(x)).toFixed(4)); }   // pass 08 (4); pass 18: sample points x TRAVEL_SCALE (P2 bands 31 / 93 / 139.5 s)
       out.bands = { fast: MD.oddsBand(0.3 * 0.4), assisted: MD.oddsBand(0.3 * 0.4 * 0.75), slow: MD.oddsBand(0.3), epsOpen: MD.oddsBand(0.3 * 1.25), max: MD.oddsBand(0.55) };
       // minors
       const m = {};
@@ -281,7 +281,7 @@ const small = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].
     windowNeverGrows: A.windowAfterAway.state === 'warning' && A.windowAfterAway.after <= A.windowAfterAway.before && A.windowAfterAway.ack === false,
     // (4)
     retune: Math.abs(A.watchedFast.sx - 0.12) < 0.001,
-    fastSmooth: T.fastCurve[0] === 0.12 && T.fastCurve[2] === 0.12 && Math.abs(T.fastCurve[8] - 0.3) < 1e-9 && T.fastCurve.every((v, i, a) => i === 0 || v >= a[i - 1]) && T.fastCurve[6] - T.fastCurve[5] < 0.01,   // pass 08 (4): no 60 s cliff
+    fastSmooth: Math.abs(T.fastK - 1.55) < 1e-9 && T.fastCurve[0] === 0.12 && T.fastCurve[2] === 0.12 && Math.abs(T.fastCurve[8] - 0.3) < 1e-9 && T.fastCurve.every((v, i, a) => i === 0 || v >= a[i - 1]) && T.fastCurve[6] - T.fastCurve[5] < 0.01,   // pass 08 (4): no 60 s cliff
     bands: T.bands.fast === 'good chance' && T.bands.assisted === 'good chance' && T.bands.slow === 'touch and go' && T.bands.epsOpen === 'grim',
     oddsShown: sz.every(s => s.odds.phase === 'surgery' && /good chance|touch and go|grim/i.test(s.odds.band) && s.odds.assistBtn && !/only runs while you're here/.test(s.odds.text)),
     assistLowers: sz.every(s => s.assisted.assist && s.assisted.btnGone && s.assisted.sx < s.odds.sx),

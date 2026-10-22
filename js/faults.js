@@ -76,7 +76,7 @@ export function tickFaults(dt) {
     f.t += dt;
     if (f.sev === "crit") {
       f.escT += dt;
-      if (f.escT >= 150) {
+      if (f.escT >= PACE.critKnockOnS) {
         f.escT = 0;
         const lows = Object.keys(S.faults).filter(o => o !== k && S.faults[o].sev === "low");
         if (lows.length) {

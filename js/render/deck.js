@@ -1,6 +1,7 @@
 // Deck renderer: plate + camera (follow, pinch/wheel zoom, drag pan), Lt sprites, rings, fx, turbolift overlay.
 import { G } from "../state.js";
-import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT, BRIDGE_FG } from "../data.js";
+import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K, LIE_LEN, CHAR_SCALE, LT2_LOOP, LT2_IDLE, CHAR_FRAMES, DECK_LIGHT } from "../data.js";
+import { occluderCast, occlDrawn } from "./occluders.js";
 import { actionFrame, animSeed, walkPose } from "../anim.js";
 import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
 import { SLOTMAP, DEPTS } from "../roster.js";
@@ -186,7 +187,7 @@ function drawWalker(ctx, who, c, act, t, as = LT_AS) {
 }
 // phase 6: crew in sickbay lie on the biobeds either side of the Lt's (Medical deck). Name tag + medical cross;
 // a serious injury still in its warning window pulses red with the system that needs fixing.
-export const PATIENT_BEDS = [[0.205, 0.556], [0.205, 0.345], [0.205, 0.70]];
+export const PATIENT_BEDS = [[0.1969, 0.5813], [0.2281, 0.3641], [0.1823, 0.7125]];   // Medical v2: beds 4, 2, 5 mattress centres (192,372) (222,233) (178,456), nudged 3 px west so the head sits on the pillow (189 / 219 / 175); bed 3 = the Lt's biobed
 const patients = () => ((G.prog.med && G.prog.med.inj) || []).slice(0, PATIENT_BEDS.length);
 function patientTint(id) { try { const o = G.prog.crew.occ[id], sl = o && SLOTMAP[o.slot]; return (sl && DEPTS[sl.dept] && DEPTS[sl.dept].tint) || "red"; } catch (e) { return "red"; } }
 const PAT_AS = [0, 1, 2].map(i => animSeed("patient" + i));
@@ -203,19 +204,19 @@ export const lieFit = bedLen => Math.min(1, (bedLen > 0 ? bedLen : LIE_FIG) / LI
 // Art hook: a LIE_ART sprite for `who` (384x160 cell, head at the left, hip-centre anchor, breathing A/B) replaces the
 // legacy frame when present; it is drawn at the standing sheets' scale, turned with the bed (rot + 90 degrees, since
 // the legacy frame is upright).
+// No floor shadow under a lying figure (pass 18 G): the body-length ellipse read as a dark blob on the mattress; the bed's own
+// painted shading grounds him. (Seated figures, drawSeated, never had one; standing / walking keep the feet ring.)
 function drawLying(ctx, t, x, y, rot, who = "lt", tint = null, as = LT_AS, bedLen = 0) {
   const art = lieArt(who, tint), fit = lieFit(bedLen), L = LIE_FIG * fit;
   if (art) {
     const fr = art.frames > 1 ? actionFrame("lying", t, as) : 0, s = ART_SCALE * fit;
     ctx.save(); ctx.translate(x, y); ctx.rotate((rot || 0) + Math.PI / 2);
-    ctx.fillStyle = "rgba(20,10,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 3, L * 0.52, L * 0.17, 0, 0, 6.29); ctx.fill();
     drawFrameLit(ctx, art.im, { x: fr * art.w, y: 0, w: art.w, h: art.h, ax: art.ax, ay: art.ay }, 0, 0, s); ctx.restore();
     return true;
   }
   if (!IMG["crew-atlas"]) return false;
   const len = L, f = CREW_FRAMES.lying, s = len / f.refH;
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot || 0);
-  ctx.fillStyle = "rgba(20,10,0,0.3)"; ctx.beginPath(); ctx.ellipse(0, 2, len * 0.17, len * 0.52, 0, 0, 6.29); ctx.fill();
   const b = 1 + Math.sin(t * 1.4) * 0.006; ctx.scale(b, 1);   // breathing widens the chest only, so the length stays inside the bed
   drawFrameLit(ctx, IMG["crew-atlas"], f, 0, 0, s); ctx.restore();
   return true;
@@ -276,21 +277,7 @@ function drawLt(ctx, t) {
   drawWalker(ctx, "lt", c, posed(nd) ? null : ltAction(L, nd), t);
   ctx.globalAlpha = 1;
 }
-// art batch 2: bridge foreground occluders (data.js BRIDGE_FG, fg-bridge.webp drawn like the plate, clipped to each item's
-// box). An item is drawn when a figure sits in one of its seats, or a figure with feet above its baseline overlaps its box
-// (standing sprite ~38 x FIG_H design px). Returns the ids drawn (tools).
-export const fgDrawn = [];
-function drawBridgeFg(ctx, cast) {
-  fgDrawn.length = 0; const im = IMG[BRIDGE_FG.img]; if (!im) return;
-  for (const it of BRIDGE_FG.items) {
-    const [x0, y0, x1, y1] = it.box;
-    const hit = cast.some(c => (c.seat && it.seats.includes(c.seat)) ||
-      (!c.seat && c.y * DH < it.baseline && c.x * DW + 19 > x0 && c.x * DW - 19 < x1 && c.y * DH > y0 && c.y * DH - FIG_H < y1));
-    if (!hit) continue;
-    ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip(); ctx.drawImage(im, 0, 0, DW, DH); ctx.restore();
-    fgDrawn.push(it.id);
-  }
-}
+export const fgDrawn = occlDrawn;   // art batch 2 name (tools/art2-bridge.js): ids of the occluders drawn last frame
 // Captain T'Ren (bridge only; js/npc.js drives her)
 function drawTren(ctx, t) { drawWalker(ctx, "tren", tren, tren.action, t, TREN_AS); }
 function zzz(ctx, x, y, t) { ctx.fillStyle = "rgba(200,220,255,0.8)"; ctx.font = `bold ${11 * K}px Antonio, sans-serif`; for (let i = 0; i < 3; i++) { const p = (t * 0.5 + i / 3) % 1; ctx.globalAlpha = 1 - p; ctx.fillText("z", x + p * 10 * K, y - p * 26 * K); } ctx.globalAlpha = 1; }
@@ -385,8 +372,9 @@ export function drawDeck(ctx, t, dt) {
     if (L.deck === "medical") patients().forEach((_, i) => cast.push({ y: PATIENT_BEDS[i][1], x: PATIENT_BEDS[i][0], id: "patient" + i, draw: () => drawPatient(ctx, t, i) }));   // phase 6: patients on the biobeds
   }
   // back to front by feet y; equal y breaks by x, then id, so the order never flickers (audit C5)
+  // pass 18: foreground props (data.js DECK_OCCL) join the sort at their footprint line (render/occluders.js)
+  if (!L.lift && !dk.cabin) cast.push(...occluderCast(ctx, L.deck, cast));
   cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
-  if (L.deck === "bridge" && !L.lift) drawBridgeFg(ctx, cast);   // art batch 2: console fronts over seated figures
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck
   lighting(ctx, t);
   if (L.deck === "medical" && !L.lift) drawPatientTags(ctx, t);   // phase 6

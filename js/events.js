@@ -7,7 +7,7 @@ import { log, toast, shipNews, fx, cheerful, cheer } from "./bus.js";
 import { spawnFault } from "./faults.js";
 import { ZONE } from "./crew.js";
 import { startBattle as _sb, battleAllowed } from "./battle.js";
-import { PACE, PACE_RT, rr } from "./pacing.js";
+import { PACE, PACE_RT, rr, travelS } from "./pacing.js";
 
 // pass 09 (4): light events skipped in the quiet period after a death (bus.js cheerful gate)
 const LIGHT_EVENTS = ["crewmoment", "ferengi"];
@@ -28,7 +28,7 @@ function pickEvent() {
   return cheerful() ? "crewmoment" : "warnews";
 }
 function evTask(nodeId, need, dur, label) {
-  const n = NODEMAP[nodeId];
+  const n = NODEMAP[nodeId]; dur = travelS(dur);   // pass 18: the window includes the walk there (x TRAVEL_SCALE); need = console s, unscaled
   return { x: n.x, y: n.y, deck: n.deck, node: nodeId, need, acc: 0, t: dur, dur, label, done: false, warned: false };
 }
 function evBegin(id, task) {

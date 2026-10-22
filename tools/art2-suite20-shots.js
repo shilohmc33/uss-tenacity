@@ -30,7 +30,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/', LABEL = process.argv[3]
     }
     // 2) female crew base (Ens. Maren Kovac) and 3) the Betazoid (Ianna Rhovan) beside the Lt in Main Engineering
     for (const [key, id] of [['female', 'kovac'], ['betazoid', 'rhovan'], ['bolian', 'tull']].filter(c => !process.env.CASES || process.env.CASES.split(',').includes(c[0]))) {
-      await ltAt('engineering', 0.45, 0.66, 'left');
+      await ltAt('engineering', 0.44, 0.70, 'left');   // final Engineering art: (0.45, 0.66) is on the MSD table now
       const info = await p.evaluate(id => { const n = __T.npcOf(id); for (const a of __T.ambient) if (a !== n) a.deck = 'nowhere'; if (!n) return null;
         n.deck = 'engineering'; n.x = 0.39; n.y = 0.66; n.mode = 'dwell'; n.path = null; n.spot = { id: 'linger', face: 'down', action: null }; n.dir = 'down'; n.t = 60;
         const o = __T.G.prog.crew.occ[id]; return { id, name: o.name, pronoun: o.pronoun, species: o.species, sheet: n.who }; }, id);

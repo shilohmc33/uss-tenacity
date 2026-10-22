@@ -91,7 +91,7 @@ const regular = p => p.evaluate(() => { const s = __T.G.prog.crew.slots; return 
       const mk = () => { G.prog.med.inj = []; G.prog.med.day = { pd: -1, n: 0 }; const i = MD.injure('hazard', { id: c.id, sev: 'serious' }); PA.playerInput(); return i; };
       // (a) the clock doesn't start until the alert is seen (no input since it appeared)
       let i = mk(); PA.PACE_RT.idleT = 0.6; for (let t = 0; t < 30; t++) { PA.PACE_RT.idleT = Math.max(PA.PACE_RT.idleT, 0.6); SIM.stepSim(0.1); }
-      out.unseenNoClock = { ack: i.ack, left: +i.left.toFixed(1) };
+      out.unseenNoClock = { ack: i.ack, left: +i.left.toFixed(1), window: +__T.PROG.deaths.window.toFixed(1) };   // pass 18: the window is 180 x TRAVEL_SCALE since pass 17 P2
       PA.playerInput(); SIM.stepSim(0.1); SIM.stepSim(0.1); out.seenAfterInput = { ack: i.ack };
       // (b) hidden: document.hidden + visibilitychange -> paused, no matter how long
       const l0 = i.left; Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange'));
@@ -138,7 +138,7 @@ const regular = p => p.evaluate(() => { const s = __T.G.prog.crew.slots; return 
     lostLive: Object.values(R.sizes).every(s => s.lost.phase === 'lost' && s.lost.gone && s.lost.audit.present === true && s.lost.audit.how === 'surgery'),
     memorialDelayed: Object.values(R.sizes).every(s => s.hush.memNotBefore >= 590 && s.hush.hushFor >= 590),
     evacGoodbye: Object.values(R.sizes).every(s => s.evac.line && !s.evac.handshake),
-    unseenNoClock: T.unseenNoClock.ack === false && T.unseenNoClock.left === 180 && T.seenAfterInput.ack === true,
+    unseenNoClock: T.unseenNoClock.ack === false && T.unseenNoClock.left === T.unseenNoClock.window && T.unseenNoClock.window === 279 && T.seenAfterInput.ack === true,
     hiddenPaused: T.hiddenPaused.drop === 0 && T.hiddenPaused.present === false,
     idlePaused: T.idlePaused.drop <= 61 && T.idlePaused.alive,
     freshAfterNight: T.freshAfterNight.left <= T.freshAfterNight.before && T.freshAfterNight.ack === false,   // pass 07: resumes, not fresh

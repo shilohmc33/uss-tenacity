@@ -12,9 +12,11 @@ export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "quar
 export const CREW_DECKS = ["bridge", "engineering", "medical", "berthing", "lounge"];   // decks with painted plates + walk masks
 export const DECKS = {
   bridge: {
+    // Bridge v4 (sprites/deck_bridge_v4, assets/src/deck_bridge_v4): LCARS screens + sliding lift doors on the v3 geometry; plate and
+    // fg-bridge ship together (fg RGB refreshed from v4, alpha identical; fg re-encoded webp q92 from the artist PNG, alpha exact).
     // art batch 2: sprites/deck_bridge_v3 layout, plate + fg from sprites/deck_bridge_v3_hires (same geometry, 1920x1280 = 2 art
     // px per design px like the other plates; v3 was 1080x720) drawn at DW x DH; walk-bridge.png; seats / stations / lift from out/bridge_spots.json. Viewscreen at the BOTTOM:
-    // every seat faces down. fg-bridge.webp = the console fronts drawn over seated figures (render/deck.js drawBridgeFg).
+    // every seat faces down. fg-bridge.webp = the console fronts drawn over seated figures (DECK_OCCL.bridge, render/occluders.js).
     name: "Bridge", plate: "deck-bridge", glow: [0.50, 0.86, "150,180,255"],
     lift: { x: 0.2104, y: 0.275, mx: 0.2094, my: 0.1484 },
     // starboard aft turbolift (clear opening 712-795 x 44-142 px): a second boarding point for the same lift system
@@ -50,49 +52,60 @@ export const DECKS = {
       science2: { name: "Science Station (aft)", x: 0.1417, y: 0.55, mx: 0.09, my: 0.55, face: "left" },
       engineering: { name: "Engineering Station", x: 0.7979, y: 0.4094, mx: 0.85, my: 0.4094, face: "right" },
       engineering2: { name: "Engineering Station (aft)", x: 0.8625, y: 0.55, mx: 0.915, my: 0.55, face: "right" },
-      mission_ops: { name: "Mission Ops", x: 0.2354, y: 0.5328, mx: 0.235, my: 0.585, face: "down" },
-      environment: { name: "Environment", x: 0.7625, y: 0.5328, mx: 0.763, my: 0.585, face: "down" },
+      mission_ops: { name: "Mission Ops", x: 0.2354, y: 0.5219, mx: 0.235, my: 0.585, face: "down" },
+      environment: { name: "Environment", x: 0.7625, y: 0.5219, mx: 0.763, my: 0.585, face: "down" },
       lift2: { name: "Starboard Turbolift", x: 0.7854, y: 0.2625, mx: 0.7854, my: 0.1453, face: "up", liftDoor: true },
     },
   },
   engineering: {
-    name: "Engineering", plate: "deck-engineering", glow: [0.45, 0.30, "120,200,255"],
-    lift: { x: 0.86, y: 0.875, mx: 0.855, my: 0.79 },
-    base: [R(0.06, 0.03, 0.275, 0.30), R(0.095, 0.255, 0.79, 0.775), R(0.03, 0.775, 0.755, 0.975), R(0.755, 0.725, 0.98, 0.975)],
-    blocks: [R(0.265, 0.115, 0.64, 0.44), R(0.315, 0.44, 0.615, 0.585), R(0.19, 0.31, 0.295, 0.60), R(0.615, 0.31, 0.715, 0.595),
-      R(0.775, 0.055, 0.95, 0.725), R(0.695, 0.125, 0.765, 0.275), R(0.10, 0.11, 0.25, 0.20), R(0.06, 0.03, 0.275, 0.085),
-      R(0.04, 0.79, 0.28, 0.92), R(0.40, 0.79, 0.75, 0.92), R(0.77, 0.755, 0.815, 0.905), R(0.115, 0.715, 0.27, 0.78),
-      R(0.69, 0.64, 0.78, 0.765), R(0.05, 0.38, 0.125, 0.76), R(0.06, 0.235, 0.115, 0.275), R(0.205, 0.235, 0.275, 0.275),
-      R(0.03, 0.755, 0.29, 0.79), R(0.37, 0.755, 0.755, 0.79)],
-    // option A re-tune (2026-10-18): the smaller figure left gaps at the consoles, so core (0.59 -> 0.575), shield
-    // (x 0.335 -> 0.325) and torpbay (x 0.755 -> 0.775) moved toward what they face (SYSTEMS spots follow). Mask-checked.
+    name: "Engineering", plate: "deck-engineering", glow: [0.479, 0.32, "120,200,255"],
+    // FINAL art (sprites/deck_engineering_v1/out, copied to assets/src/deck_engineering_v1): every spot below is the
+    // artist's engineering_spots.json new_frac/marker_frac (old names kept). The walk mask is the artist's (plus the
+    // no-standing-in-the-beam block north of the core, tools/make-walk-masks.py); base/blocks are the matching fallback
+    // from solid_props.json (floor rects; footprints dilated +-12 x, +-4 y; the core ellipse as an inscribed rect).
+    lift: { x: 0.8646, y: 0.925, mx: 0.8646, my: 0.8406 },
+    base: [R(0.104, 0.133, 0.255, 0.203), R(0.13, 0.2, 0.196, 0.391), R(0.115, 0.383, 0.214, 0.766), R(0.279, 0.152, 0.753, 0.261),
+      R(0.276, 0.234, 0.76, 0.383), R(0.208, 0.383, 0.76, 0.762), R(0.729, 0.148, 0.911, 0.277), R(0.729, 0.148, 0.794, 0.692),
+      R(0.794, 0.148, 0.911, 0.692), R(0.719, 0.688, 0.797, 0.984), R(0.047, 0.886, 0.729, 0.98), R(0.783, 0.88, 0.943, 0.97)],
+    blocks: [R(0.06, 0.087, 0.158, 0.155), R(0.201, 0.087, 0.273, 0.155), R(0.092, 0.431, 0.14, 0.483), R(0.045, 0.416, 0.135, 0.767),
+      R(0.273, 0.147, 0.325, 0.194), R(0.304, 0.138, 0.377, 0.178), R(0.357, 0.138, 0.414, 0.17), R(0.699, 0.131, 0.745, 0.18),
+      R(0.209, 0.381, 0.286, 0.473), R(0.627, 0.306, 0.731, 0.416), R(0.194, 0.498, 0.328, 0.672), R(0.619, 0.503, 0.744, 0.68),
+      R(0.407, 0.588, 0.552, 0.675), R(0.805, 0.142, 0.911, 0.281), R(0.781, 0.275, 0.933, 0.569), R(0.392, 0.311, 0.567, 0.47),
+      R(410 / 960, 90 / 640, 512 / 960, 200 / 640)],   // last: north of the core column (nobody stands inside the beam)
     nodes: {
-      core: { name: "Warp Core Console", chip: "Warp Core", x: 0.455, y: 0.575, mx: 0.455, my: 0.505, system: "warpcore" },
-      shield: { name: "Shield Console", chip: "Shields", x: 0.325, y: 0.50, mx: 0.29, my: 0.50, system: "shields" },
-      torpbay: { name: "Torpedo Bay", chip: "Torpedo Bay", x: 0.775, y: 0.42, mx: 0.86, my: 0.42, system: "phasers" },
-      locker: { name: "Parts Locker", chip: "Parts Locker", x: 0.58, y: 0.92, mx: 0.58, my: 0.85 },
-      pads: { name: "Transporter Pads", chip: "Transporter", x: 0.16, y: 0.27, mx: 0.16, my: 0.20 },
+      core: { name: "Warp Core Console", chip: "Warp Core", x: 0.4792, y: 0.6969, mx: 0.4792, my: 0.5156, system: "warpcore" },   // south of the MSD, facing the core
+      shield: { name: "Shield Console", chip: "Shields", x: 0.3354, y: 0.5625, mx: 0.3021, my: 0.5625, system: "shields" },
+      torpbay: { name: "Torpedo Bay", chip: "Torpedo Bay", x: 0.7615, y: 0.4203, mx: 0.8333, my: 0.4203, system: "phasers" },
+      locker: { name: "Parts Locker", chip: "Parts Locker", x: 0.5802, y: 0.9203, mx: 0.5802, my: 0.85 },
+      pads: { name: "Transporter Pads", chip: "Transporter", x: 0.1771, y: 0.1719, mx: 0.1771, my: 0.1437 },
     },
   },
   medical: {
-    name: "Medical", plate: "deck-medical", glow: [0.185, 0.475, "120,255,215"],
-    lift: { x: 0.51, y: 0.6875, mx: 0.51, my: 0.755 },   // art batch 1: up .075 for the taller doorfix lift (feet on the alcove rim, like before)
-    base: [R(0.105, 0.23, 0.35, 0.845), R(0.35, 0.44, 0.665, 0.775), R(0.665, 0.44, 0.875, 0.815), R(0.55, 0.23, 0.79, 0.315),
-      R(0.595, 0.295, 0.67, 0.445), R(0.105, 0.76, 0.875, 0.865)],
-    blocks: [R(0.115, 0.235, 0.295, 0.315), R(0.115, 0.335, 0.29, 0.41), R(0.11, 0.435, 0.28, 0.515), R(0.105, 0.55, 0.27, 0.64),
-      R(0.10, 0.685, 0.255, 0.775), R(0.345, 0.29, 0.605, 0.695), R(0.685, 0.315, 0.875, 0.51), R(0.69, 0.575, 0.805, 0.695),
-      R(0.86, 0.46, 0.96, 0.815), R(0.535, 0.03, 0.815, 0.225)],
+    name: "Medical", plate: "deck-medical", glow: [0.2, 0.46, "255,236,210"],   // v2: warm white over the biobeds (the old mint glow greened the cream walls)
+    // Medical v2 FINAL (sprites/deck_medical_v2/out, copied to assets/src/deck_medical_v2; datajs_changes.json applied). The
+    // walk mask is the artist's U layout as is (tools/make-walk-masks.py); base below is that mask's grid as rects (fallback).
+    lift: { x: 0.51, y: 0.6875, mx: 0.51, my: 0.755 },   // unchanged in v2
+    base: [R(0.3, 0.225, 0.4667, 0.275), R(0.5833, 0.25, 0.7333, 0.275), R(0.3, 0.275, 0.3333, 0.325),
+      R(0.5833, 0.275, 0.7167, 0.3), R(0.6333, 0.3, 0.6667, 0.375), R(0.2833, 0.325, 0.3333, 0.675),
+      R(0.6167, 0.375, 0.6667, 0.5), R(0.6167, 0.5, 0.6833, 0.525), R(0.6167, 0.525, 0.7667, 0.55),
+      R(0.6167, 0.55, 0.75, 0.575), R(0.6167, 0.575, 0.6667, 0.675), R(0.2833, 0.675, 0.6667, 0.7),
+      R(0.2833, 0.7, 0.7667, 0.725), R(0.2833, 0.725, 0.3667, 0.75), R(0.6, 0.725, 0.7667, 0.75), R(0.3, 0.75, 0.35, 0.775),
+      R(0.6167, 0.75, 0.7667, 0.8)],
+    blocks: [],
     nodes: {
-      // option A re-tune: x 0.308 -> 0.295 so the smaller figure stands at the bed rail, not a stride off it
-      biobed: { name: "Biobed", chip: "Biobed", x: 0.295, y: 0.4375, mx: 0.205, my: 0.435, lie: [0.205, 0.433], lieRot: -Math.PI / 2, lieLen: 150, rest: 10 },
+      // v2: stand unchanged; mx/my + lie on bed 3's mattress centre in the final art (205,293), nudged 3 px west so the head sits on the pillow
+      biobed: { name: "Biobed", chip: "Biobed", x: 0.295, y: 0.4375, mx: 0.2104, my: 0.4578, lie: [0.2104, 0.4578], lieRot: -Math.PI / 2, lieLen: 150, rest: 10 },
     },
   },
   berthing: {
     name: "Berthing", plate: "deck-berthing", glow: [0.80, 0.16, "255,196,110"],
     lift: { x: 0.555, y: 0.89, mx: 0.555, my: 0.79 },
-    base: [R(0.045, 0.385, 0.96, 0.515), R(0.735, 0.045, 0.955, 0.29), R(0.79, 0.29, 0.965, 0.905), R(0.44, 0.83, 0.80, 0.97)],
+    // cleaned plate (decks_berthing_fix_v1): the starboard bench + alcove wall end now sit at y .665-.837 (block) and the floor
+    // under them, with the opening (744,534,42,61) into the starboard bay, is walkable (base)
+    base: [R(0.045, 0.385, 0.96, 0.515), R(0.735, 0.045, 0.955, 0.29), R(0.79, 0.29, 0.965, 0.905), R(0.44, 0.83, 0.80, 0.97),
+      R(0.704, 0.84, 0.87, 0.93)],
     blocks: [R(0.775, 0.095, 0.825, 0.235), R(0.835, 0.095, 0.925, 0.185), R(0.855, 0.315, 0.935, 0.405), R(0.875, 0.535, 0.94, 0.64),
-      R(0.445, 0.82, 0.51, 0.94), R(0.705, 0.82, 0.775, 0.94)],
+      R(0.445, 0.82, 0.51, 0.94), R(0.705, 0.665, 0.81, 0.837)],
     nodes: {
       bunk: { name: "Bunk", chip: "Bunk", x: 0.80, y: 0.2625, mx: 0.80, my: 0.16, lie: [0.80, 0.162], lieLen: 96, rest: 6.5 },   // lie: bed centre; the figure is scaled to the 96 px bunk (pass 09)
     },
@@ -128,7 +141,7 @@ export const DECKS = {
 export const DECK_LIGHT = {
   bridge:      { tint: "255,220,175", a: 0.07 },   // art batch 2: warm amber plate (deck_bridge_v2/v3 light notes)
   engineering: { tint: "120,200,255", a: 0.12 },   // warp-core blue
-  medical:     { tint: "120,255,215", a: 0.13 },   // dim sickbay teal
+  medical:     { tint: "255,244,228", a: 0.08 },   // Medical v2: bright TNG sickbay, warm white (the teal wash greyed the cream plate)
   berthing:    { tint: "255,196,110", a: 0.14 },   // warm amber cabin light
   lounge:      { tint: "255,190,110", a: 0.15 },   // warm bar amber
   quarters:    { tint: "255,214,160", a: 0.10 },   // warm cabin lamp
@@ -138,13 +151,13 @@ for (const d of DECK_ORDER) for (const [id, n] of Object.entries(DECKS[d].nodes)
 
 // Optional per-system repairPose: "kneel" (floor-level work) — default repair animation is "weld".
 export const SYSTEMS = {
-  warpcore: { name: "Warp Core", fault: "Warp core instability", deck: "engineering", x: 0.455, y: 0.575, mx: 0.45, my: 0.30, node: "core", dur: 6 },
-  shields: { name: "Shield Generator", fault: "Shield emitter failure", deck: "engineering", x: 0.325, y: 0.50, mx: 0.29, my: 0.47, node: "shield", dur: 5 },
-  phasers: { name: "Torpedo Launcher", fault: "Launcher misalignment", deck: "engineering", x: 0.775, y: 0.42, mx: 0.86, my: 0.20, node: "torpbay", dur: 5 },
-  eps: { name: "EPS Conduit", fault: "EPS fault — locker conduit", deck: "engineering", x: 0.47, y: 0.92, mx: 0.47, my: 0.83, node: null, dur: 5 },
-  coolant: { name: "Coolant Line", fault: "Coolant leak", deck: "engineering", x: 0.455, y: 0.575, mx: 0.565, my: 0.28, node: null, dur: 6 },
-  transporter: { name: "Transporter", fault: "Transporter buffer fault", deck: "engineering", x: 0.16, y: 0.27, mx: 0.175, my: 0.19, node: null, dur: 4 },
-  loader: { name: "Torpedo Loader", fault: "Torpedo loader jam", deck: "engineering", x: 0.755, y: 0.55, mx: 0.815, my: 0.575, node: null, dur: 4 },
+  warpcore: { name: "Warp Core", fault: "Warp core instability", deck: "engineering", x: 0.4792, y: 0.6969, mx: 0.4792, my: 0.5156, node: "core", dur: 6 },
+  shields: { name: "Shield Generator", fault: "Shield emitter failure", deck: "engineering", x: 0.3354, y: 0.5625, mx: 0.3021, my: 0.5625, node: "shield", dur: 5 },
+  phasers: { name: "Torpedo Launcher", fault: "Launcher misalignment", deck: "engineering", x: 0.7615, y: 0.4203, mx: 0.8333, my: 0.4203, node: "torpbay", dur: 5 },
+  eps: { name: "EPS Conduit", fault: "EPS fault — locker conduit", deck: "engineering", x: 0.4698, y: 0.9203, mx: 0.4698, my: 0.83, node: null, dur: 5 },
+  coolant: { name: "Coolant Line", fault: "Coolant leak", deck: "engineering", x: 0.4792, y: 0.6969, mx: 0.5208, my: 0.5156, node: null, dur: 6 },
+  transporter: { name: "Transporter", fault: "Transporter buffer fault", deck: "engineering", x: 0.1771, y: 0.1719, mx: 0.1771, my: 0.1437, node: null, dur: 4 },
+  loader: { name: "Torpedo Loader", fault: "Torpedo loader jam", deck: "engineering", x: 0.776, y: 0.2188, mx: 0.83, my: 0.2188, node: null, dur: 4 },   // final art: the loader / launcher hatch at the north end of the bay (745,140)
 };
 export const OKAFOR_SHORT = { warpcore: "core", shields: "shield generator", phasers: "launcher", eps: "EPS conduit",
   coolant: "coolant line", transporter: "transporter", loader: "loader" };
@@ -447,16 +460,74 @@ export const TREN = {
   homeT: [25, 50], stationT: [15, 30], speed: 0.062,   // s at home, s at a console, walk speed (deck fraction/s; option A: 0.10 x FIG_K)
 };
 
-// ---- bridge foreground occluders (art batch 2, sprites/deck_bridge_v3_hires/out/fg-bridge.json; 1920x1280 = 2 art px per design px like the other plates) ----
-// fg-bridge.webp is the plate-sized layer (drawn at 0,0,DW,DH) holding only the console fronts. After the cast, each item's
-// box (design px) is redrawn over the figures when someone sits in one of its seats, or when any figure with feet above its
-// baseline overlaps the box (render/deck.js drawBridgeFg). Walkers never need it: the mask keeps them off the props.
-export const BRIDGE_FG = { img: "fg-bridge", items: [
-  { id: "conn_console", box: [283, 438, 411, 505], baseline: 505, seats: ["conn"] },
-  { id: "arm_console_L", box: [389, 272, 426, 322], baseline: 322, seats: ["fo"] },
-  { id: "ops_console", box: [541, 438, 669, 505], baseline: 505, seats: ["ops"] },
-  { id: "arm_console_R", box: [532, 272, 569, 322], baseline: 322, seats: ["counsel"] },
-] };
+// ---- foreground occluders (pass 18: render/occluders.js) ----
+// DECK_OCCL[deck] = { src?, items: [{ id, box: [x0, y0, x1, y1] | poly: [[x, y], ...], baseY, seats?, src?, crop?, alpha? }] }, design px (960x640).
+// crop: src is the prop's own cutout for exactly box (not plate-aligned). alpha: draw opacity (default 1).
+// src: a plate-aligned image to cut from (default the deck plate itself, "deck-<deck>"). baseY: the prop's footprint line on the
+// floor; the item sorts with the characters at that y, so a figure whose feet are above it is drawn under the prop. seats: the
+// item is also drawn whenever someone sits in one of these seats. Long diagonal props are split into pieces, each with its own baseY.
+// Bridge: art batch 2 console fronts (sprites/deck_bridge_v3_hires/out/fg-bridge.json; fg-bridge.webp 1920x1280, plate-aligned).
+export const DECK_OCCL = {
+  bridge: { src: "fg-bridge", items: [
+    { id: "conn_console", box: [283, 438, 411, 505], baseY: 505, seats: ["conn"] },
+    { id: "arm_console_L", box: [389, 272, 426, 322], baseY: 322, seats: ["fo"] },
+    { id: "ops_console", box: [541, 438, 669, 505], baseY: 505, seats: ["ops"] },
+    { id: "arm_console_R", box: [532, 272, 569, 322], baseY: 322, seats: ["counsel"] },
+    // pass 18 3b: cut from the plate (src on the item): the tactical console and the dais rail, split along its curve into three
+    // pieces a side (each piece sorts at its own base line, so crew on the dais in front of the rail draw over it)
+    { id: "tactical", src: "deck-bridge", poly: [[447, 174], [512, 174], [512, 200], [502, 224], [455, 224], [447, 200]], baseY: 224 },
+    { id: "rail_L1", src: "deck-bridge", poly: [[294, 237], [310, 228], [330, 218], [338, 236], [338, 270], [298, 270], [292, 248]], baseY: 270 },
+    { id: "rail_L2", src: "deck-bridge", poly: [[330, 218], [345, 211], [360, 205], [375, 201], [390, 197], [390, 241], [338, 256]], baseY: 250 },
+    { id: "rail_L3", src: "deck-bridge", poly: [[390, 197], [405, 193], [420, 190], [435, 188], [450, 187], [450, 228], [390, 241]], baseY: 236 },
+    { id: "rail_R3", src: "deck-bridge", poly: [[508, 187], [523, 188], [538, 190], [553, 193], [568, 197], [568, 241], [508, 228]], baseY: 236 },
+    { id: "rail_R2", src: "deck-bridge", poly: [[568, 197], [583, 201], [598, 205], [613, 211], [628, 218], [620, 256], [568, 241]], baseY: 250 },
+    { id: "rail_R1", src: "deck-bridge", poly: [[628, 218], [648, 228], [664, 237], [666, 248], [660, 270], [620, 270], [620, 236]], baseY: 270 },
+  ] },
+  // Berthing: no items. Checked on the plate with the walk grid: corridor feet stop at y ~320 (row 19 centres 312), north of the
+  // washroom wall caps (~315-322 + face); the vestibule and the starboard corridor only run BESIDE the benches and the shower wall
+  // (a y-sorted prop beside a walker must not cover him); the bunk-room rug lies south of the bed, chair and desk. Nothing on this
+  // deck is ever between a walker and the camera, so an occluder here would never draw. Re-checked on the cleaned plate
+  // (decks_berthing_fix_v1): the squashed starboard bench sits in the alcove with only wall north of it, and the new alcove wall
+  // end (y 533) has the opening below it (walkers in front) and the starboard corridor / bay beside it, so it stays uncut too.
+  berthing: { items: [] },
+  // Lounge (cut from deck-lounge): the south jamb of the lobby doorway. Lobby feet reach y ~472, past the jamb's top (~465), so it
+  // hides the feet of a walker behind it. Elsewhere the masks keep feet north of (or beside) the props: the six tables' carve
+  // keeps feet off the tabletops (row 16 centres 4 px short of the top edge), the planters' leaves start ~12 px below the floor's
+  // south edge, the bar stools and the lift-lobby pillar / door leaf are only ever beside a walker.
+  lounge: { items: [
+    { id: "lobby_jamb", poly: [[204, 466], [212, 463], [238, 463], [242, 470], [242, 500], [204, 500]], baseY: 495 },
+  ] },
+  // Medical v2 (sprites/deck_medical_v2/out/fg-medical.json): the artist's cutouts (hires, lossless webp assets/fg-med-*.webp). The
+  // office glass panes carry their glass at alpha 0.5 in the pixels (frames opaque), so the items draw at alpha 1: an item alpha
+  // (occluders.js) would also fade the frames and halve the glass again. Replaces the v1 arch_W/C/E plate cuts.
+  medical: { items: [
+    { id: "lift_cap", src: "fg-med-lift_cap", crop: true, box: [376, 436, 586, 476], baseY: 470 },
+    { id: "office_glass_W", src: "fg-med-office_glass_W", crop: true, box: [500, 150, 607, 251], baseY: 248 },
+    { id: "office_glass_E", src: "fg-med-office_glass_E", crop: true, box: [633, 156, 750, 251], baseY: 248 },
+  ] },
+  // Engineering FINAL (sprites/deck_engineering_v1/out/fg-engineering.json): the artist's per-prop cutouts (hires crops of the
+  // plate, converted to lossless webp as assets/fg-eng-*.webp), pasted at rect with the artist's base lines. core-column is the
+  // translucent light column (baseline 250); the floor north of it is off the walk mask so nobody stands inside the beam.
+  engineering: { items: [
+    { id: "console-w", src: "fg-eng-console-w", crop: true, box: [212, 213, 264, 300], baseY: 299 },
+    { id: "console-ne", src: "fg-eng-console-ne", crop: true, box: [613, 165, 691, 261], baseY: 262 },
+    { id: "console-bank-sw", src: "fg-eng-console-bank-sw", crop: true, box: [197, 292, 304, 427], baseY: 426 },
+    { id: "console-bank-se", src: "fg-eng-console-bank-se", crop: true, box: [607, 300, 703, 432], baseY: 431 },
+    { id: "msd", src: "fg-eng-msd", crop: true, box: [404, 369, 517, 427], baseY: 428 },
+    { id: "torpedo-loader", src: "fg-eng-torpedo-loader", crop: true, box: [765, 31, 865, 179], baseY: 176 },
+    { id: "torpedo-racks", src: "fg-eng-torpedo-racks", crop: true, box: [761, 175, 885, 362], baseY: 360 },
+    // P19: the front railing curves (its bottom edge runs y 263 at the ends -> 309 mid), so one base line at 305 drew it over crew
+    // on the ring floor at the SW / SE corners. Split code-only into vertical strips of the same cutout (same src + box, each
+    // clipped to its x range) with the strip's own base line = the rail's bottom edge at the strip's HIGHER end (so crew
+    // standing in front of any part of a strip win; capped at the artist's 305). Nothing walkable sits behind the corner strips.
+    ...[[371, 377, 243], [377, 383, 263], [383, 389, 273], [389, 395, 280], [395, 401, 286], [401, 407, 290], [407, 413, 295],
+      [413, 419, 298], [419, 425, 301], [425, 431, 303], [431, 437, 305], [437, 443, 305], [443, 479, 305], [479, 485, 305],
+      [485, 491, 304], [491, 497, 302], [497, 503, 300], [503, 509, 297], [509, 515, 294], [515, 521, 290], [521, 527, 284],
+      [527, 533, 278], [533, 539, 270], [539, 545, 258], [545, 550, 243]].map(([a, b, y]) =>
+      ({ id: "railing-front-" + a, src: "fg-eng-railing-front", crop: true, box: [371, 235, 550, 310], polys: [[[a, 235], [b, 235], [b, 310], [a, 310]]], baseY: y })),
+    { id: "core-column", src: "fg-eng-core-column", crop: true, box: [415, 0, 506, 238], baseY: 250 },
+  ] },
+};
 
 // ---- work spots: where a crewmember can actually type (pass 08, audit C11) ----
 // [x, y, face] in design px (960x640): feet position in front of a real console, bench or bed, facing it. An ambient
@@ -465,9 +536,9 @@ export const BRIDGE_FG = { img: "fg-bridge", items: [
 // Spots left out on purpose (open floor): engineering pads (on the pad) / torpedo-racks. Bridge: the 7 v3 stations
 // (bridge_spots.json consoles_for_ambient); the conn / ops pilots sit (SEAT_ART) instead of typing.
 export const CONSOLES = {
-  bridge: [[479, 171, "down"], [226, 341, "down"], [732, 341, "down"], [196, 262, "left"], [136, 352, "left"], [766, 262, "right"], [828, 352, "right"]],   // tactical, mission ops, environment, science x2, engineering x2
-  engineering: [[344, 456, "up"], [536, 456, "up"], [178, 269, "right"], [682, 339, "left"], [288, 592, "up"]],   // core consoles, port/stbd banks, locker panel
-  medical: [[288, 192, "left"], [288, 384, "left"], [584, 168, "up"], [362, 442, "up"], [691, 339, "up"]],   // bedsides, office desk, surgery-side wall terminal (pass 17 P1: was [432, 467] on the lift alcove wall, off walk-medical), lab bench
+  bridge: [[479, 171, "down"], [226, 334, "down"], [732, 334, "down"], [196, 262, "left"], [136, 352, "left"], [766, 262, "right"], [828, 352, "right"]],   // tactical, mission ops, environment, science x2, engineering x2 (pass 18 A: mission ops / environment 341 -> 334: the artist's y 341 sits in grid row 21, a blocked cell; row 20 is floor)
+  engineering: [[420, 446, "up"], [500, 446, "up"], [196, 275, "right"], [722, 360, "left"], [288, 592, "up"], [652, 282, "up"]],   // final art: core W/E (facing the MSD), port console, stbd bank (artist 718 -> 722: the 718 grid cell is blocked), storage panel, NE console (new optional neCon)
+  medical: [[288, 192, "left"], [288, 384, "left"], [576, 165, "up"], [404, 446, "up"], [691, 339, "up"]],   // bedsides, office desk, surgery terminal (Medical v2: the LCARS panel on the bay front, x 388-420), lab bench
   lounge: [[288, 230, "up"], [552, 440, "down"], [696, 440, "down"], [588, 224, "up"]],   // galley pass, hydroponics x2, replicator
   berthing: [],
 };
@@ -545,6 +616,7 @@ export const IMAGES = [...new Set(["deck-bridge", "fg-bridge", "deck-engineering
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
   ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),
   ...[LIE_ART, SEAT_ART].flatMap(o => Object.values(o).map(a => a.img)), ...Object.values(TINT_BASES).map(b => b.mask).filter(Boolean),
-  ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean), ...DECOR_ITEMS.filter(d => d.art).map(d => "decor-" + d.id)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)
+  ...Object.values(CABIN_TIERS).map(t => t.plate).filter(Boolean), ...DECOR_ITEMS.filter(d => d.art).map(d => "decor-" + d.id),
+  ...Object.values(DECK_OCCL).flatMap(T => T.items.map(it => it.src)).filter(Boolean)])];   // cabin plates join once the artist delivers them   // deduped (stand-in sheets share keys)
 // walk masks (PNG, white = floor), loaded alongside the plates
 export const WALK_MASKS = [...CREW_DECKS.map(d => "walk-" + d), ...Object.values(CABIN_TIERS).map(t => t.mask).filter(Boolean)];

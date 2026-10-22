@@ -24,7 +24,7 @@ const CASES = [['human-m2', 'hale', 'crew-human-m2-v1'], ['human-f2', 'seo', 'cr
       return { x, y, width: Math.min(ww * s, innerWidth - x), height: Math.min(hh * s, innerHeight - y) }; }, [cx, cy, ww, hh]);
     const shot = async (name, cl) => { const f = `shots/art2-species-${name}-${vp}.png`; await p.screenshot({ path: f, clip: cl }); rep.shots.push(f); return f; };
     for (const [key, id, want] of CASES) {
-      await p.evaluate(() => { const Lt = __T.G.lt; Lt.deck = 'engineering'; Lt.lift = null; Lt.x = 0.45; Lt.y = 0.66; Lt.mode = 'idle'; Lt.path = null; Lt.face = 'left'; __T.cam.snap = true; __T.cam.manualT = 0; });
+      await p.evaluate(() => { const Lt = __T.G.lt; Lt.deck = 'engineering'; Lt.lift = null; Lt.x = 0.44; Lt.y = 0.70; Lt.mode = 'idle'; Lt.path = null; Lt.face = 'left'; __T.cam.snap = true; __T.cam.manualT = 0; });
       const info = await p.evaluate(id => { const n = __T.npcOf(id); for (const a of __T.ambient) if (a !== n) a.deck = 'nowhere'; if (!n) return null;
         n.deck = 'engineering'; n.x = 0.39; n.y = 0.66; n.mode = 'dwell'; n.path = null; n.spot = { id: 'linger', face: 'down', action: null }; n.dir = 'down'; n.t = 60;
         const o = __T.G.prog.crew.occ[id]; return { id, name: o.name, pronoun: o.pronoun, species: o.species, sheet: n.who }; }, id);

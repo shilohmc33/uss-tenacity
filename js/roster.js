@@ -32,21 +32,22 @@ const S = (id, x, y, face, action, t, w = 1) => ({ id, x, y, face, action, t, w 
 const BR = {
   helm: { ...S("helm", 0.376, 0.6219, "down", null, [30, 60], 3), seat: "conn" }, ops: { ...S("ops", 0.6156, 0.6219, "down", null, [30, 60], 3), seat: "ops" },
   portUp: S("port-upper", 0.1417, 0.55, "left", "computer", [20, 40], 2), stbdUp: S("stbd-upper", 0.7979, 0.4094, "right", "computer", [20, 40], 2),   // science aft / engineering fwd
-  msdAft: S("msd-aft", 0.7625, 0.5328, "down", "computer", [15, 30], 1), msdPort: S("msd-port", 0.2354, 0.5328, "down", "computer", [15, 30], 1),   // environment / mission ops
+  msdAft: S("msd-aft", 0.7625, 0.5219, "down", "computer", [15, 30], 1), msdPort: S("msd-port", 0.2354, 0.5219, "down", "computer", [15, 30], 1),   // environment / mission ops
   floorP: S("floor-port", 0.27, 0.34, "down", null, [8, 16], 1), floorS: S("floor-stbd", 0.73, 0.34, "down", null, [8, 16], 1),
 };
-const EN = {
-  portCon: S("port-console", 0.17, 0.42, "right", "computer", [25, 50], 3), stbdCon: S("stbd-console", 0.71, 0.53, "left", "computer", [25, 50], 3),
-  southW: S("south-west", 0.36, 0.67, "up", "computer", [20, 40], 2), southE: S("south-east", 0.56, 0.67, "up", "computer", [20, 40], 2),
-  lockerW: S("locker-west", 0.30, 0.925, "up", "computer", [15, 30], 2), lockerE: S("locker-east", 0.44, 0.925, "up", null, [10, 20], 1),
-  pads: S("pads", 0.16, 0.20, "up", "computer", [25, 50], 3), padsDoor: S("pads-door", 0.22, 0.31, "down", null, [10, 20], 1),
-  racks: S("torpedo-racks", 0.72, 0.30, "right", "computer", [25, 50], 3), corridor: S("corridor-west", 0.12, 0.58, "down", null, [8, 16], 1),
+const EN = {   // final art: engineering_spots.json new_frac (old names kept) + the new optional neCon
+  portCon: S("port-console", 0.2042, 0.4297, "right", "computer", [25, 50], 3), stbdCon: S("stbd-console", 0.7521, 0.5625, "left", "computer", [25, 50], 3),
+  southW: S("south-west", 0.4375, 0.6969, "up", "computer", [20, 40], 2), southE: S("south-east", 0.5208, 0.6969, "up", "computer", [20, 40], 2),
+  lockerW: S("locker-west", 0.30, 0.925, "up", "computer", [15, 30], 2), lockerE: S("locker-east", 0.4396, 0.925, "up", null, [10, 20], 1),
+  pads: S("pads", 0.1604, 0.1938, "up", "computer", [25, 50], 3), padsDoor: S("pads-door", 0.1625, 0.4094, "down", null, [10, 20], 1),
+  racks: S("torpedo-racks", 0.7615, 0.3125, "right", "computer", [25, 50], 3), corridor: S("corridor-west", 0.1646, 0.5797, "down", null, [8, 16], 1),
+  neCon: S("ne-console", 0.6792, 0.4406, "up", "computer", [25, 50], 3),
 };
 const MD = {
   bedN: S("bedside-north", 0.30, 0.30, "left", "computer", [25, 50], 3), bedS: S("bedside-south", 0.30, 0.60, "left", "computer", [25, 50], 3),
-  surgery: S("surgery", 0.3771, 0.6906, "up", "computer", [20, 40], 2), office: S("office", 0.62, 0.24, "up", "computer", [25, 50], 2),
+  surgery: S("surgery", 0.4208, 0.6969, "up", "computer", [20, 40], 2), office: S("office", 0.60, 0.2578, "up", "computer", [25, 50], 2),
   lab: S("lab-bench", 0.72, 0.53, "up", "computer", [25, 50], 3), labIdle: S("lab-floor", 0.66, 0.70, "down", null, [8, 16], 1),
-  hall: S("hall", 0.50, 0.25, "down", null, [8, 16], 1),
+  hall: S("hall", 0.4583, 0.2531, "down", null, [8, 16], 1),
 };
 const BE = {
   doorW: S("cabin-west", 0.20, 0.44, "up", null, [20, 40], 2), doorM: S("cabin-mid", 0.45, 0.44, "up", null, [20, 40], 2),
@@ -77,7 +78,7 @@ export const CREW_ROSTER = [
   { slot: "engineer-1", role: "Warp Specialist · under Okafor", dept: "eng", deck: "engineering", ladder: "officer",
     areas: { nodes: ["core"], decks: ["engineering"], systems: ["warpcore", "coolant", "eps"] }, spots: [EN.southW, EN.portCon, EN.lockerW, EN.corridor], chat: ["core", "locker"] },
   { slot: "engineer-2", role: "Systems Engineer · under Okafor", dept: "eng", deck: "engineering", ladder: "officer",
-    areas: { nodes: ["shield", "locker"], decks: ["engineering"], systems: ["shields", "eps"] }, spots: [EN.stbdCon, EN.lockerW, EN.southE, EN.lockerE], chat: ["shield", "locker"] },
+    areas: { nodes: ["shield", "locker"], decks: ["engineering"], systems: ["shields", "eps"] }, spots: [EN.stbdCon, EN.lockerW, EN.southE, EN.lockerE, EN.neCon], chat: ["shield", "locker"] },
   { slot: "conn", role: "Conn Officer", dept: "command", deck: "bridge", ladder: "officer",
     areas: { nodes: ["chair"], decks: ["bridge"], systems: [] }, spots: [BR.helm, BR.floorP, BR.msdPort], chat: ["chair", "msd"] },
   { slot: "ops", role: "Operations Officer", dept: "ops", deck: "bridge", ladder: "officer",

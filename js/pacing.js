@@ -6,6 +6,12 @@
 // window that a trip has to fit inside is multiplied by this, so travel takes the same share of the window as in pass 16
 // (progression.js PROG.deaths: window, returnFloor, surgery fastS / fastFullS / fastEndS). 1 = the pass 16 seconds.
 export const TRAVEL_SCALE = 1.55;
+// pass 18: deck-task timers audited the same way. Scaled (a walk to a node is part of the window): the voyage-event deck tasks
+// (events.js evTask: 30 / 26 s -> 47 / 40 s), the odd-job expiry (progression.js PROG.jobs.expire 150 -> 233 s) and the CRIT
+// knock-on clock below (150 -> 233 s: fix the CRIT before it strains a LOW fault to MEDIUM). Left alone (no Lt travel inside):
+// the 10 s 'last call' warning, work seconds at the console (need / jobs.work), cadences and gaps (faultEvery, jobs.gap, events),
+// night-crew fix times, idleAfter, intro/beat expiry (days / unused), voyage and battle clocks.
+export const travelS = s => Math.round(s * TRAVEL_SCALE);
 export const PACE = {
   // --- voyage ---
   legTime: {                       // [min, max] seconds per warp leg (5-20 real minutes)
@@ -62,6 +68,7 @@ export const PACE = {
   },
   // --- faults ---
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)
+  critKnockOnS: travelS(150),      // pass 18: an open CRIT strains a random LOW fault to MEDIUM every this many s (was 150; x TRAVEL_SCALE)
   coolantHullDrain: 0.03,          // hull %/s lost to an impairing coolant leak out of battle (was 0.08; battle stays 0.45)
   // --- night-shift crew (runs while the player is away: offline catch-up, or no input for idleAfter s) ---
   idleAfter: 180,                  // seconds without input before the night crew takes the deck

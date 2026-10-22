@@ -16,7 +16,7 @@ export function freshState() {
       hullFloorWarned: false, powerWarned: false, energyWarned: false, tubeFlash: -9, alertT: 0,
     },
     lt: {
-      deck: "engineering", x: 0.45, y: 0.62, dir: "up", walkPhase: 0, moving: false, walkDist: 0, swingAmp: 0,
+      deck: "engineering", x: 0.4792, y: 0.6969, dir: "up", walkPhase: 0, moving: false, walkDist: 0, swingAmp: 0,
       path: null, pathI: 0, intent: null, mode: "idle", node: null, repairSys: null, repairT: 0, seatSide: null,
       resumeTorp: false, note: null,
     },

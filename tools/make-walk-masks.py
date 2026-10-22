@@ -28,55 +28,20 @@ DECKS = {
     ('base', 'assets/src/deck_bridge_v3/walk-bridge-artist.png'),
     ('sub', R(0.360, 0.140, 0.620, 0.1745)),
   ],
-  # Engineering: west corridor + transporter room, the lower deck band, the core aisle, the inner platforms
-  # (reached by the two stairs), the east floor by the torpedo racks, the locker corridor (through the
-  # green-lit service door between the lockers) and the turbolift vestibule.
+  # Engineering FINAL (sprites/deck_engineering_v1/out, copied to assets/src/deck_engineering_v1): the artist's mask is the base
+  # (floor rects minus prop footprints dilated +-12 x / +-4 y; the lift is reached through the new east passage, so the old
+  # col-22 locker slot and the cabinet / vestibule wall crossings, prop-collision #1/#2, are gone). Code edit on top: the floor
+  # directly north of the warp-core light column (the north aisle between x 410-512) is blocked so nobody stands "inside" the
+  # beam (previews/crew_87px_full.png); the aisle is still walked round the core's west and east ring bands.
   'engineering': [
-    ('add', R(0.095, 0.150, 0.250, 0.292)),       # transporter room floor (pads are walkable)
-    ('add', R(0.130, 0.280, 0.195, 0.345)),       # transporter room doorway
-    ('add', R(0.115, 0.330, 0.200, 0.735)),       # west corridor
-    ('add', R(0.115, 0.585, 0.250, 0.735)),       # lower floor west of the left stair
-    ('add', P((0.262, 0.545), (0.335, 0.545), (0.280, 0.735), (0.215, 0.735))),   # left stair treads
-    ('add', R(0.300, 0.440, 0.355, 0.590)),       # left inner platform (shield console)
-    ('add', R(0.215, 0.700, 0.420, 0.728)),       # strip along the bottom wall, under the lower-left console
-    ('add', R(0.415, 0.540, 0.500, 0.735)),       # core aisle
-    ('add', R(0.490, 0.700, 0.700, 0.735)),       # strip under the lower-right console / stair foot
-    ('add', P((0.540, 0.545), (0.620, 0.545), (0.700, 0.735), (0.635, 0.735))),   # right stair treads
-    ('add', R(0.505, 0.440, 0.555, 0.590)),       # right inner platform
-    ('add', R(0.680, 0.540, 0.735, 0.735)),       # floor between right stair and the deck machinery
-    ('add', P((0.700, 0.275), (0.785, 0.275), (0.785, 0.665), (0.735, 0.665), (0.715, 0.560), (0.700, 0.440))),  # east floor by the torpedo racks
-    ('add', R(0.600, 0.170, 0.700, 0.290)),       # floor between the core gantry and the crates
-    ('add', R(0.700, 0.255, 0.765, 0.300)),
-    ('add', R(0.367, 0.700, 0.384, 0.905)),       # service door between the lockers (green-lit slot)
-    ('add', R(0.060, 0.895, 0.745, 0.950)),       # locker corridor
-    ('add', R(0.740, 0.895, 0.800, 0.950)),       # corridor -> lift vestibule
-    ('add', R(0.795, 0.825, 0.935, 0.935)),       # turbolift vestibule
-    ('sub', R(0.270, 0.462, 0.312, 0.540)),       # shield console pedestal
-    ('sub', R(0.540, 0.470, 0.600, 0.535)),       # starboard pedestal console
+    ('base', 'assets/src/deck_engineering_v1/walk-engineering-artist.png'),
+    ('sub', R(410 / 960, 90 / 640, 512 / 960, 200 / 640)),
   ],
-  # Medical: ward aisle beside the biobeds, the top passage, the aisle east of surgery, the lab floor around the
-  # island, the lower corridor and the lift landing. Beds, surgery suite, counters and bottom wall are out.
+  # Medical v2 FINAL (sprites/deck_medical_v2/out, copied to assets/src/deck_medical_v2): the artist's U-layout mask as is
+  # (single-file aisles, minimum 28 px on every route from the lift; mask_checks.json). The old ward / surgery / lab rects
+  # and the prop-collision #4 office cabinet carve belonged to the v1 plate.
   'medical': [
-    ('add', R(0.290, 0.205, 0.362, 0.800)),       # ward aisle
-    ('add', R(0.290, 0.205, 0.600, 0.280)),       # passage north of the surgery suite
-    ('add', R(0.600, 0.270, 0.668, 0.290)),       # office threshold (desk chair stays out)
-    ('add', R(0.555, 0.235, 0.610, 0.290)),
-    ('add', R(0.610, 0.280, 0.668, 0.800)),       # aisle east of surgery
-    ('add', R(0.668, 0.520, 0.790, 0.800)),       # lab floor
-    # art batch 1 (decks_doorfix_v1, full raise): the taller front-wall turbolift alcove now reaches the surgery suite's
-    # front wall at the centre, so the lower corridor is only the strip under the OR (y .665-.700, feet on the alcove rim
-    # as before) and the alcove itself is carved out; the lift node moved up .075 to y .6875 (data.js)
-    ('add', R(0.362, 0.665, 0.668, 0.700)),       # strip under the OR, in front of the lift alcove
-    ('add', R(0.230, 0.290, 0.300, 0.305)),       # bed-foot gaps (between beds)
-    ('add', R(0.240, 0.375, 0.300, 0.392)),
-    ('sub', R(0.700, 0.560, 0.800, 0.705)),       # lab island
-    ('sub', R(0.760, 0.450, 0.880, 0.830)),       # lab side cabinets
-    ('sub', R(0.390, 0.780, 0.415, 0.830)),       # cart by the lift
-    # prop-collision audit #4: bookshelf cabinet + wall end at the office entrance (cols 31-35, rows 8-9); the office is
-    # still reached along rows 10-11
-    ('sub', R(31 / 60, 8 / 40, 36 / 60, 10 / 40)),
-    ('sub', P((0.440, 0.800), (0.460, 0.780), (0.560, 0.780), (0.580, 0.800), (0.580, 0.860), (0.440, 0.860))),  # lift housing
-    ('sub', P((0.372, 0.860), (0.380, 0.760), (0.400, 0.725), (0.440, 0.702), (0.580, 0.702), (0.620, 0.725), (0.640, 0.760), (0.648, 0.860))),  # taller lift alcove (doorfix)
+    ('base', 'assets/src/deck_medical_v2/walk-medical-artist.png'),
   ],
   # Berthing: the long corridor, the bunk room (foot of the bed), the starboard corridor around the lockers, and the
   # lift vestibule between its benches (entered past the top of the starboard bench).
@@ -88,13 +53,15 @@ DECKS = {
     ('add', R(0.720, 0.505, 0.800, 0.690)),       # starboard corridor (west of the locker unit)
     ('add', R(0.690, 0.660, 0.900, 0.925)),       # starboard bay
     # prop-collision audit #3: the turbolift alcove's angled east wall sat inside the bay rect; carve its polygon out of the bay
-    # only (the entry strip past the top of the bench is painted after this and stays as the way in until the artist reports
-    # the new bench gap, then the entry moves there)
     ('sub', P((0.690, 0.660), (0.760, 0.660), (0.760, 0.850), (0.690, 0.850))),
     ('add', R(0.495, 0.840, 0.610, 0.945)),       # lift vestibule between the benches
-    ('add', R(0.600, 0.825, 0.700, 0.852)),       # past the top of the starboard bench
-    ('sub', R(0.700, 0.840, 0.745, 0.905)),       # crate
     ('sub', R(0.835, 0.820, 0.900, 0.930)),       # cabinet + lamp
+    # cleaned plate (sprites/decks_berthing_fix_v1, walk-berthing_PROPOSED.png): the starboard bench and the alcove wall are
+    # squashed up into y 420-537, leaving an opening (744,534,42,61) from the vestibule into the starboard bay. The temporary
+    # entry strip past the bench top, the crate and the pass-18 wall-diagonal carve are gone.
+    ('sub', P((676 / 960, 420 / 640), (706 / 960, 420 / 640), (782 / 960, 500 / 640), (782 / 960, 537 / 640), (676 / 960, 537 / 640))),   # bench + wall end
+    ('add', R(0.600, 538 / 640, 791 / 960, 595 / 640)),   # the opening and the former bench floor, joined to the vestibule over the open carpet
+    ('add', R(776 / 960, 520 / 640, 836 / 960, 568 / 640)),   # lower bay floor where the removed cabinet stood
     ('sub', P((0.880, 0.660), (0.900, 0.660), (0.900, 0.760), (0.870, 0.760))),
   ],
   # Mess & Bar (v2 art: standing tables, no chairs): open floor between the bar stools, the window bulkhead and the
@@ -143,7 +110,9 @@ if __name__ == '__main__':
     os.makedirs(os.path.join(ROOT, 'shots'), exist_ok=True)
     for deck in DECKS:
         im = render(deck)
-        im.convert('1').save(os.path.join(ROOT, 'assets', f'walk-{deck}.png'), optimize=True)
+        out = os.path.join(ROOT, 'assets', f'walk-{deck}.png')
+        same = os.path.exists(out) and Image.open(out).convert('L').point(lambda v: 255 if v > 127 else 0).tobytes() == im.point(lambda v: 255 if v > 127 else 0).tobytes()
+        if not same: im.convert('1').save(out, optimize=True)   # pixel-identical masks are left alone (no byte churn)
         if '--preview' in sys.argv:
             plate = Image.open(os.path.join(ROOT, 'assets', f'deck-{deck}.webp')).convert('RGBA').resize((W * 2, H * 2))
             ov = Image.new('RGBA', plate.size, (0, 0, 0, 0)); d = ImageDraw.Draw(ov)

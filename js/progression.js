@@ -30,7 +30,7 @@ export const PROG = {
   auto: { xp: 0.7, rep: 1.0 },                 // pt04: live hands-off (app open, idle) raised 0.4 -> 0.7 so automated play lands ~6 XP/min
   autoOffline: { xp: 0.4, rep: 1.0 },          // the Lt's own auto-repairs during an offline catch-up keep the old rate (offline stays ~1 XP/min)
   // ---- pt04: odd jobs between repairs (js/oddjobs.js): only while the ship is quiet and the player is at the controls ----
-  jobs: { enabled: true, firstAt: 60, gap: [60, 100], work: [10, 16], expire: 150, xp: 17, rep: 1, opinion: 3, requestShare: 0.4 },   // gap: quiet seconds before the next job; work: s at the console; xp: manual XP (x0.7 if the Lt drifts there on his own)
+  jobs: { enabled: true, firstAt: 60, gap: [60, 100], work: [10, 16], expire: Math.round(150 * TRAVEL_SCALE) /* pass 18: 150 s x TRAVEL_SCALE (walk to the node is inside) */, xp: 17, rep: 1, opinion: 3, requestShare: 0.4 },   // gap: quiet seconds before the next job; work: s at the console; xp: manual XP (x0.7 if the Lt drifts there on his own)
   // ---- repair rewards (moved here from pacing.js) ----
   repairRep: { low: 1, med: 2, crit: 3 },      // x manual.rep / auto.rep
   repairParts: { low: 0, med: 1, crit: 1 },    // salvage after MED / CRIT; +1 on each of the first five repairs
