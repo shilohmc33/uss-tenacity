@@ -2,6 +2,7 @@
 // ship's day counter. ALL progression tuning lives in PROG below (one config). Phases 2-4 hang off the stubs at
 // the bottom (ranks / relationships / daily rolls / fleet rep / boards / specialisations).
 import { hardenBattle } from "./ships.js";
+import { hardenNeeds } from "./needs.js";
 import { G } from "./state.js";
 import { log, toast, fx, cheerful, cheer, cheerToast } from "./bus.js";
 import { clamp } from "./util.js";
@@ -394,6 +395,7 @@ export function freshProg() {
     stationAcc: 0, chatT: -1e9,
     milestones: {},                     // one-time session-1 milestones (firstRepair, firstTask, firstArrival)
     repLifetime: 0, repSeen: null,      // lifetime rep EARNED (spending never lowers it; feeds phase-2 readiness)
+    needs: {},                          // v15 crew needs (needs.js), keyed by occupant id
     day: 1, dayT: 0,                    // ship's day counter (phase 2-3 daily rolls hang off onNewDay)
     playDays: 0, lastPlayDate: null, lastPlayAt: null, dayPresent: 0, presentTotal: 0,   // pass 07: dayPresent = present s since the day became due    // real calendar days with play (memo: scale rolls / guarantees by days of play)
     rank: 0,                            // index into PROG.ranks
@@ -894,6 +896,7 @@ export const clampProg = () => {
   hardenGifts(p);  // v9
   hardenInsight(p);  // v11
   hardenRomance(p);  // v12
+  hardenNeeds(p);  // v15 crew needs
   p.med.inj = p.med.inj.filter(x => x && p.crew.occ[x.id] && (x.sev !== "serious" || typeof x.sys === "string"));
   hardenMed10(p);  // v10
 };

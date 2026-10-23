@@ -4,7 +4,8 @@ import { freshEnc, hardenEnc, seedEnc } from "./encounters.js";
 import { DECKS, NODEMAP, SYSTEMS, DESTS } from "./data.js";
 import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, migrateProg8, migrateProg9, migrateProg10, migrateProg11, migrateProg12, migrateProg13, clampProg, clampResources } from "./progression.js";
 export const SAVE_KEY = "tenacity.save.v1";   // key kept; the schema version lives in G.version
-export const SAVE_VERSION = 14;               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med); v8: Personal Log (G.prog.plog) + crew pronouns (memo 'v7'; memo v8/v9/v10 -> v9/v10/v11); v9: gifts + tastes known (G.prog.gifts / G.prog.know; memo 'v8'); v10: pass 06 presence-based injury clock, surgery outcome, play-day high-water mark (memo 'v9' Insight is now v11); v11: Insight (G.prog.insight, memo 'v9'), seeded second likes, avoid known; v12: romance (G.prog.romance, memo 'v10'); v13: pass 07 present-time play days (G.prog.dayPresent), paused surgery + assist; v14: battle combatants (G.sp.battle.allies[] / enemies[] / target, js/ships.js)
+export const SAVE_VERSION = 15;   // v15: crew needs (G.prog.needs, needs.js; additive)
+//               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med); v8: Personal Log (G.prog.plog) + crew pronouns (memo 'v7'; memo v8/v9/v10 -> v9/v10/v11); v9: gifts + tastes known (G.prog.gifts / G.prog.know; memo 'v8'); v10: pass 06 presence-based injury clock, surgery outcome, play-day high-water mark (memo 'v9' Insight is now v11); v11: Insight (G.prog.insight, memo 'v9'), seeded second likes, avoid known; v12: romance (G.prog.romance, memo 'v10'); v13: pass 07 present-time play days (G.prog.dayPresent), paused surgery + assist; v14: battle combatants (G.sp.battle.allies[] / enemies[] / target, js/ships.js)
 export const G = {};
 export function freshState() {
   return {
@@ -71,7 +72,8 @@ export function loadGame() {
     if (data.version < 11) { data.prog = migrateProg11(data.prog); data.version = 11; }
     if (data.version < 12) { data.prog = migrateProg12(data.prog); data.version = 12; }
     if (data.version < 13) { data.prog = migrateProg13(data.prog); data.version = 13; }
-    if (data.version < 14) { migrateBattle14(data.sp); data.version = 14; }   // battle groundwork: a saved battle's single enemy -> battle.enemies[] / allies[]
+    if (data.version < 14) { migrateBattle14(data.sp); data.version = 14; }
+    if (data.version < 15) { if (data.prog) data.prog.needs = {}; data.version = 15; }   // crew needs: filled lazily (everyone starts rested and fed)   // battle groundwork: a saved battle's single enemy -> battle.enemies[] / allies[]
     // pass 13: a save without encounter memory (pre-encounter builds, or a junk value) rebuilds it from its battle + ship log; a valid one is kept as-is
     if (data.sp && typeof data.sp === "object" && !Array.isArray(data.sp) && !(data.sp.enc && typeof data.sp.enc === "object" && !Array.isArray(data.sp.enc))) data.sp.enc = seedEnc(data.sp, data.prog, data.log);
     for (const k of Object.keys(G)) delete G[k];

@@ -18,6 +18,7 @@ import { clamp, dDist } from "./util.js";
 import { log, fx, cheerful } from "./bus.js";
 import { PROG, chatXP, addr, fullName } from "./progression.js";
 import { introDone } from "./crewlife.js";
+import { activityOf, chatNeed } from "./needs.js";
 
 const rnd = ([a, b]) => a + Math.random() * (b - a);
 const faceDir = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
@@ -69,6 +70,7 @@ function crowded(n) {
 // T'Ren picks only a console nobody stands at or is heading for (npc.js)
 trenHooks.standers = () => ambient.filter(a => a.deck === TREN.deck && a.x !== null && visibleOn(TREN.deck).includes(a)).map(a => a.mode === "walk" && a.target ? a.target : a);
 function pickSpot(cfg, notId, n = null) {
+  if (n && (n.visit || n.deck !== cfg.deck)) return n.spot;   // crew needs: visiting another deck (meal, bunk, bar) keeps its spot
   const busy = new Set(ambient.filter(a => a.deck === cfg.deck && a.spot && a !== n).map(a => a.spot.id));   // spread out: avoid spots others hold
   const free = s => !busy.has(s.id) && (!n || !claimed(n, ...Object.values(resolve(cfg.deck, s)).slice(0, 2)));   // pass 09: nor where anyone stands / is headed
   let pool = cfg.spots.filter(s => s.id !== notId && free(s)); if (!pool.length) pool = cfg.spots.filter(s => s.id !== notId && !busy.has(s.id)); if (!pool.length) pool = cfg.spots.filter(s => s.id !== notId);
@@ -201,7 +203,7 @@ function startChat(n, kind = "social") {
   const c = n.cfg, so = c.social, m = mem(c.id), now = G.ship.elapsed, S = G.ship;
   n.mode = "chat"; n.chatKind = kind; n.chatT = rnd(so.chatDur); n.lastChat = now; lastAnyChat = now;
   if (kind === "intro") { introDone(c.id); chatXP(c.id); return; }
-  chatXP(c.id);   // progression: 3 XP per chat (shared 2-min cooldown) + opinion
+  chatNeed(c.id); chatXP(c.id);   // needs N1: Social +; progression: 3 XP per chat (shared 2-min cooldown) + opinion
   if (!cheerful()) return;   // pass 06 m1: the ship goes quiet for a while after a death
   if (now - m.lineAt >= so.lineCooldown) {
     m.lineAt = now;
@@ -221,12 +223,12 @@ function startChat(n, kind = "social") {
 // the Lt is "socialising" when he's using one of this NPC's chat nodes on its deck
 function ltSocialNode(n) {
   const L = G.lt, so = n.cfg.social;
-  if (!so || L.deck !== n.deck || L.lift || L.mode !== "use" || !L.node || !so.nodes[L.node]) return null;
+  if (!so || L.deck !== n.deck || n.deck !== n.cfg.deck || L.lift || L.mode !== "use" || !L.node || !so.nodes[L.node]) return null;
   return L.node;
 }
-const introPending = n => { const o = G.prog.crew.occ[n.occId]; return !!(o && o.intro); };
+const introPending = n => { if (n.deck !== n.cfg.deck) return false; const o = G.prog.crew.occ[n.occId]; return !!(o && o.intro); };
 function tickOne(n, dt) {
-  if (n.x === null) home(n);
+  if (n.x === null) { if (n.arrive) { if (G.ship.elapsed - (liftAt[n.deck] || -1e9) < 1.8) return; liftAt[n.deck] = G.ship.elapsed; arriveAt(n); } else home(n); }   // needs N1: one arrival per turbolift trip
   const L = G.lt, so = n.cfg.social, node = ltSocialNode(n), now = G.ship.elapsed, R = PROG.roster;
   if (n.doneNode && node !== n.doneNode) n.doneNode = null;   // he left: may chat again next time
   n.moving = false; n.action = null; n.chatWith = null;
@@ -256,7 +258,8 @@ function tickOne(n, dt) {
       if (n.next === "intro") { if (L.deck === n.deck && !L.lift && dDist(n.x, n.y, L.x, L.y) <= 160) startChat(n, "intro"); else { n.mode = "dwell"; n.t = 1; n.spot = { id: "linger", face: n.dir, action: null }; } }
       else if (n.next === "aside") { n.mode = "aside"; n.t = 0.6; n.faceT = 0; const w = n.asideFrom && n.asideFrom.walker; if (w && w.x != null) n.dir = faceTo((w.x - n.x) * 960, (w.y - n.y) * 640); }   // face the walker once
       else if (n.next === "chat") { if (node) startChat(n); else { n.mode = "dwell"; n.t = rnd(so.lingerT); n.spot = { id: "linger", face: n.dir, action: null }; } }
-      else { n.mode = "dwell"; n.t = rnd(n.spot.t || [10, 20]); n.dir = n.spot.face || n.dir; }
+      else if (n.next === "leave") { shiftDeck(n); return; }
+      else { n.mode = "dwell"; n.t = rnd(n.spot.t || [10, 20]); n.dir = n.spot.face || n.dir; if (n.visit && n.visit.spot && n.visit.inside && n.spot === n.visit.spot) n.hidden = true; }
     }
   } else if (n.mode === "chat") {
     const gone = n.chatKind === "intro" ? (L.deck !== n.deck || L.lift || dDist(n.x, n.y, L.x, L.y) > so.chatRange * 2) : (!node || dDist(n.x, n.y, L.x, L.y) > so.chatRange * 1.4);
@@ -290,12 +293,12 @@ function tickOne(n, dt) {
     const post = n.cfg.spots[0];
     const cr = !G.sp.battle && crowded(n); if (!cr) n.crowdT = 0;
     if (stepAside(n)) { /* making room */ }
-    else if (cr && (n.crowdT = (n.crowdT || 0) + dt) > 0.4) { n.crowdT = 0; n.escapeT = 1.2; const s = pickSpot(n.cfg, n.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); }
-    else if (G.sp.battle && post && n.spot !== post) { goTo(n, resolve(n.deck, post), "dwell", post); }
+    else if (cr && !n.visit && (n.crowdT = (n.crowdT || 0) + dt) > 0.4) { n.crowdT = 0; n.escapeT = 1.2; const s = pickSpot(n.cfg, n.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); }
+    else if (G.sp.battle && post && n.spot !== post && n.deck === n.cfg.deck) { goTo(n, resolve(n.deck, post), "dwell", post); }
     else {
       n.action = workAction(n); if (n.spot.face) n.dir = n.spot.face;
       n.t -= dt;
-      if (n.t <= 0 && !(G.sp.battle && n.spot === post) && n.cfg.spots.length) { const s = pickSpot(n.cfg, n.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); }
+      if (n.t <= 0 && !n.visit && !(G.sp.battle && n.spot === post) && n.cfg.spots.length) { const s = pickSpot(n.cfg, n.spot.id, n); goTo(n, resolve(n.deck, s), "dwell", s); }
     }
   }
   n.swingAmp += clamp((n.moving ? 1 : 0) - n.swingAmp, -dt / 0.16, dt / 0.16);
@@ -304,9 +307,54 @@ function tickOne(n, dt) {
 // visible crew on a deck: roster order (seniors first), capped (T'Ren takes one bridge place)
 export function visibleOn(deck) {
   const cap = PROG.roster.maxVisible - (deck === "bridge" ? 1 : 0);
-  return CREW_ROSTER.map(s => ambient.find(a => a.slot === s.slot && a.deck === deck)).filter(Boolean).slice(0, cap);
+  return CREW_ROSTER.map(s => ambient.find(a => a.slot === s.slot && a.deck === deck && !a.hidden)).filter(Boolean).slice(0, cap);
 }
-export function tickAmbient(dt) { syncRoster(); for (const n of visibleOn(G.lt.deck)) tickOne(n, dt); }
+// ---- crew needs N1: the needs activity (needs.js) decides where each crewmember is: their own deck (duty / off duty),
+// a lounge table (eat), the bar or viewport (fun) or a berthing cabin (sleep; seniors sleep off-screen). Seen crew walk to
+// the turbolift and step out of it on the next deck; unseen crew are simply placed. Sleepers vanish into their cabin.
+const SPOT = (id, x, y, face, action, seat) => ({ id, x, y, face, action, t: [1e9, 1e9], ...(seat ? { seat } : {}) });
+const EAT = ["table1", "table3", "table5", "table6"].map(k => () => { const nd = NODEMAP[k]; return SPOT("eat-" + k, nd.seat.stand[0], nd.seat.stand[1], "down", "eat", k); });   // table 4 = the botanist's, mess = the Lt's
+const FUN = [SPOT("fun-bar", 0.37, 0.355, "up", "talk"), SPOT("fun-window", 0.70, 0.55, "right", null), SPOT("fun-bar2", 0.30, 0.40, "up", "talk"), SPOT("fun-window2", 0.72, 0.62, "right", null)];
+const BUNK = [SPOT("bunk-west", 0.20, 0.44, "up", null), SPOT("bunk-mid", 0.45, 0.44, "up", null), SPOT("bunk-east", 0.64, 0.44, "up", null)];
+function placeFor(n, act) {
+  const sl = SLOTMAP[n.slot], taken = id => ambient.some(a => a !== n && a.visit && a.visit.spot && a.visit.spot.id === id);
+  const pick = (list, deck, inside) => { const free = list.filter(s => !taken(s.id)); const s = (free.length ? free : list)[idHash(n.occId) % (free.length || list.length)]; return { deck, spot: s, inside }; };
+  if (act === "eat") return pick(EAT.map(f => f()), "lounge");
+  if (act === "fun") return pick(FUN, "lounge");
+  if (act === "sleep") return sl && sl.senior ? { deck: null } : pick(BUNK, "berthing", true);
+  return null;
+}
+function shiftDeck(n) {   // leave this deck for the visit's deck (or home); arrive at the lift if the Lt is watching there
+  const to = n.visit ? n.visit.deck : n.cfg.deck;
+  n.deck = to; n.x = n.y = null; n.hidden = false; n.visitGo = false; n.mode = "dwell"; n.path = null; n.next = null; n.t = 1;
+  n.spot = n.visit ? n.visit.spot || n.spot : pickSpot(n.cfg, null, null) || n.cfg.spots[0] || n.spot;   // asleep off-screen (seniors): no spot
+  n.arrive = !!to && to === G.lt.deck && !G.lt.lift;
+}
+const liftAt = {};
+function arriveAt(n) {
+  n.arrive = false; const lf = DECKS[n.deck].lift, p = resolve(n.deck, { x: lf.x, y: lf.y }); n.x = p.x; n.y = p.y;
+  goTo(n, resolve(n.deck, n.spot), "dwell", n.spot);
+}
+function homeVisit(n) { home(n); if (n.visit && n.visit.inside) n.hidden = true; }
+export function tickAmbient(dt) {
+  syncRoster();
+  const L = G.lt;
+  for (const n of ambient) {
+    const act = activityOf(n.occId);
+    if (act !== n.act) { n.act = act; n.visit = placeFor(n, act); n.visitGo = true; if (n.hidden && n.deck === L.deck) { n.hidden = false; n.mode = "dwell"; n.t = 0.5; } }
+    const want = n.visit ? n.visit.deck : n.cfg.deck;
+    const seen = n.deck && n.deck === L.deck && !L.lift && n.x !== null && !n.hidden && visibleOn(L.deck).includes(n);
+    if (n.deck === want) {   // same deck: walk (seen) or move (unseen) to the visit spot, or back to the usual spots
+      if (!n.visitGo || !n.deck) continue; n.visitGo = false;
+      if (n.visit) { if (seen) goTo(n, resolve(n.deck, n.visit.spot), "dwell", n.visit.spot); else { n.spot = n.visit.spot; n.mode = "dwell"; n.path = null; homeVisit(n); } }
+      else if (!seen) { n.hidden = false; n.spot = pickSpot(n.cfg, null, null); n.mode = "dwell"; n.path = null; home(n); }
+      continue;
+    }
+    if (!seen) { shiftDeck(n); if (n.deck && !n.arrive) { homeVisit(n); } continue; }
+    if (!(n.mode === "walk" && n.next === "leave")) { const lf = DECKS[n.deck].lift; n.visitT = 0; goTo(n, resolve(n.deck, { x: lf.x, y: lf.y }), "leave"); }
+  }
+  for (const n of visibleOn(L.deck)) tickOne(n, dt);
+}
 // art batch 2 NPC seat hook: a crewmember dwelling on a spot with seat: <node id> (bridge conn / ops) sits in it - drawn
 // with SEAT_ART for their sheet at the seat's hip, facing the seat's way (down: the viewscreen is at the bottom) - once
 // they stand on its stand spot, unless the Lt is using that seat. No seat art for the sheet = they stand there instead.

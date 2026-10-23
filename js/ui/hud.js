@@ -1,5 +1,9 @@
 // DOM HUD: stat bar, alert chip, orders, duty list, crew cards, chips, log, toasts, lift panel, report.
 import { G } from "../state.js";
+import { NEED_KEYS, NEED_LABEL, SHIFT_NAME, needsOf, statusOf } from "../needs.js";
+// P27: phones have no hover - tapping a crew row (or its bars) toggles the exact need values
+const openNeeds = new Set();
+document.addEventListener("click", e => { const row = e.target.closest && e.target.closest("#relations .rel"); if (!row || e.target.closest("button")) return; const nd = row.querySelector("[data-needs]"); if (!nd) return; const id = nd.dataset.needs; if (openNeeds.has(id)) openNeeds.delete(id); else openNeeds.add(id); nd.classList.toggle("open", openNeeds.has(id)); }, true);
 import { addr, xpToNext, rankName, rankShort, nextRank, rankEligible, computeReadiness, readinessVisible, readinessHint, crewList, opinionOf, opinionLabel, socialPoints, lockerOffer, buyLocker, PROG, costText, canAfford } from "../progression.js";
 import { CREW_ROSTER, DEPTS, DEPT_ORDER, POSTINGS, SPECIES, LADDERS, SLOTMAP, pr } from "../roster.js";
 const PRON = p => pr({ pronoun: p || "they" });   // pt07 m1: the patient's own pronoun
@@ -406,7 +410,8 @@ export function renderCareer(force = false) {
     const injTag = inj ? ` <em class="injb${inj.state === "warning" || inj.state === "surgery" ? " crit" : ""}">${inj.state === "warning" ? "INJURED · SERIOUS" : inj.state === "surgery" ? "IN SURGERY" : "INJURED"}</em>` : "";
     const injNote = inj ? (inj.state === "surgery" ? (inj.held ? `in surgery — held stable until you're back on watch` : `in surgery — ${MD.docName(inj.id).replace(/^The /, "the ")} operating`) : inj.state === "warning" ? `in sickbay — needs the ${SYSTEMS[inj.sys].name} fixed (${Math.max(0, Math.ceil(inj.left))}s${!inj.ack ? " · waiting for you — the clock starts when you respond" : MD.isPresentNow() ? " left · clock running" : " left · paused while you're away"})` : `in sickbay — recovering${inj.healAt ? `, back in ~${Math.max(1, Math.round((inj.healAt - G.ship.elapsed) / 3600))} h` : ""}`) : "";
     const pin = (c.senior || !PROG.deaths.enabled) ? `<span class="pin0"></span>` : `<button class="pin${pinned ? " on" : ""}${fav ? " fav" : ""}" data-pin="${c.id}" title="${pinned ? "Pinned favourite (protected)" : fav ? "Favourite — protected (tap to pin)" : "Pin as a protected favourite"}"><i>${pinned || fav ? "★" : "☆"}</i></button>`;
-    return `<div class="rel${inj ? " inj" : ""}">${face}<div class="nm">${c.rankShort} ${c.short}${c.intro ? ` <em class="newb">NEW</em>` : ""}${injTag}<small>${inj ? injNote : `${c.speciesName} · ${c.role}`}</small></div>${pin}<div class="opbar"><i class="${v >= 0 ? "pos" : "neg"}" style="width:${w}%"></i></div><small class="lab" title="7-day trend: ${st.trend.label}">${st.label}${IN.numbersShown() ? ` <b class="opn">${sgn(v)}</b>` : ""}<i class="tr t${st.trend.dir}">${st.trend.arrow}</i></small></div>`;   // plog1 follow-up: label + trend, number hidden (as in the Personal Log)
+    const nr = inj ? null : needsOf(c.id), needs = nr ? `<div class="needs${openNeeds.has(c.id) ? " open" : ""}" data-needs="${c.id}" title="${SHIFT_NAME[nr.shift]} shift · ${statusOf(c.id)}">${NEED_KEYS.map(k => { const v = Math.round(nr.n[k]); return `<i title="${NEED_LABEL[k]} ${v}"><b class="${v < 25 ? "lo" : v < 50 ? "mid" : ""}" style="width:${v}%"></b></i>`; }).join("")}<span>${statusOf(c.id)}</span><small class="nv">${SHIFT_NAME[nr.shift]} shift · ${NEED_KEYS.map(k => `${NEED_LABEL[k]} ${Math.round(nr.n[k])}`).join(" · ")}</small></div>` : "";
+    return `<div class="rel${inj ? " inj" : ""}">${face}<div class="nm">${c.rankShort} ${c.short}${c.intro ? ` <em class="newb">NEW</em>` : ""}${injTag}<small>${inj ? injNote : `${c.speciesName} · ${c.role}`}</small></div>${pin}<div class="opbar"><i class="${v >= 0 ? "pos" : "neg"}" style="width:${w}%"></i></div><small class="lab" title="7-day trend: ${st.trend.label}">${st.label}${IN.numbersShown() ? ` <b class="opn">${sgn(v)}</b>` : ""}<i class="tr t${st.trend.dir}">${st.trend.arrow}</i></small>${needs}</div>`;   // plog1 follow-up: label + trend, number hidden (as in the Personal Log)
   };
   const pend = G.prog.crew.pending;
   const groups = DEPT_ORDER.map(d => {
@@ -415,7 +420,7 @@ export function renderCareer(force = false) {
     return `<div class="dgrp"><div class="dh" style="--dc:${DEPTS[d].color}">${DEPTS[d].name.toUpperCase()}</div>${rows}</div>`;
   }).join("");
   const injN = G.prog.med.inj.length;
-  setHtml("relations", `<h4>CREW RELATIONS <small>${list.length} aboard${injN ? ` · ${injN} in sickbay` : ""} · social points ${socialPoints()}</small></h4>${groups}`, force);
+  setHtml("relations", `<h4>CREW RELATIONS <small>${list.length} aboard${injN ? ` · ${injN} in sickbay` : ""} · social points ${socialPoints()}</small></h4><div class="needsKey">Bars: rest · food · fun · social · comfort</div>${groups}`, force);
   // ---- phase 6: In Memoriam (only once someone has been lost) + crew safety settings ----
   const mem = G.prog.med.memorial;
   setHtml("memoriam", mem.length ? `<h4>IN MEMORIAM</h4>${mem.slice().reverse().map(e => `<div class="mem"><span class="mcross">✦</span><div><b>${e.name}</b><small>${e.species} · ${e.role} · lost on ship's day ${e.day} (SD ${e.sd})${e.plaque ? " · plaque by the lounge viewport" : ""}</small></div></div>`).join("")}<p class="cnote">Remembered by the crew of the Tenacity.</p>` : "", force);

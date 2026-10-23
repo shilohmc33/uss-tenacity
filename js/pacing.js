@@ -123,6 +123,16 @@ export const PACE = {
   // --- rewards for the Lt's own repairs (shown as floaters over his head) ---
   // repair rewards (repairRep / repairParts) moved to js/progression.js (PROG) with the quality roll
 };
+// Crew needs N1 (notes/2026-10-22-crew-needs-plan.md): per real hour; a ship's day is 16 h (PROG.dayLength), 3 shifts of ~5.3 h
+export const NEEDS = {
+  stepS: 10,                                   // sim seconds per needs update (cheap; offline catch-up too)
+  decay: { rest: 6, food: 9, fun: 4, social: 2 },
+  gain: { sleep: 22, eat: 600, fun: 40, socialGroup: 20, chat: 10 },   // eat: about 6 min from hungry to full
+  th: { sleep: 40, wake: 95, eat: 45, wakeToEat: 15, mealBreak: 20, fun: 35, funDone: 90 },
+  comfort: { base: 65, docked: 25, perFault: 5, faultMax: 20, lowHull: 15, lowHullAt: 50, alert: 10, rate: 10 },
+  offlineFloor: 30,                            // away: crew look after themselves (nobody below Strained)
+  start: { rest: 85, food: 80, fun: 75, social: 70, comfort: 70 },
+};
 // runtime-only pacing state (not saved)
 export const PACE_RT = { offline: false, idleT: 0, sessionT: 0, hidden: false, liveFight: false };
 export const rr = ([a, b]) => a + Math.random() * (b - a);

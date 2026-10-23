@@ -10,6 +10,7 @@ import { tickJobs } from "./oddjobs.js";
 import { tickVoyage } from "./voyage.js";
 import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
 import { tickDay, offlineXP, tickProg, rankShort } from "./progression.js";
+import { tickNeeds } from "./needs.js";
 import { tickCrew, endOffline } from "./crewlife.js";
 import { tickCabin } from "./cabin.js";
 import { tickMed } from "./injuries.js";
@@ -23,6 +24,7 @@ export function stepSim(dt) {
   tickCabin(dt); // phase 4: quarters tier sync, Refreshed buff, standing-order trade-in of a full locker while away
   tickMed(dt);   // phase 6: sickbay (injury warning windows, recoveries, memorial); offline rules inside
   tickCrew(dt);  // phase 3: replacement crew arriving (crewlife.js; the daily crew roll hangs off the ship's day)
+  tickNeeds(dt); // crew needs N1 (needs.js): whole roster, offline too
   tickProg(dt);  // relationships (ignored faults, station help), readiness, promotion checks (progression.js PROG.dayLength); offline catch-up advances it too
   PACE_RT.idleT += dt;
   PACE_RT.liveFight = !!(SP.battle && SP.battle.live);   // pass 16 B1
