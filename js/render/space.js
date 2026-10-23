@@ -15,6 +15,13 @@ function cover(ctx, img, w, h, alpha, drift) {
   const s = Math.max(w / img.width, h / img.height) * 1.06, iw = img.width * s, ih = img.height * s;
   ctx.globalAlpha = alpha; ctx.drawImage(img, (w - iw) / 2 + drift, (h - ih) / 2, iw, ih); ctx.globalAlpha = 1;
 }
+// multi-ship P2: one cached radial dark ellipse (no per-frame gradients or shadowBlur), stretched behind each wingman / ally
+let DIM = null;
+function dimSprite() {
+  if (DIM) return DIM; DIM = document.createElement("canvas"); DIM.width = 128; DIM.height = 128; const g = DIM.getContext("2d");
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, "rgba(0,0,0,0.55)"); r.addColorStop(0.6, "rgba(0,0,0,0.35)"); r.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128); return DIM;
+}
 export function drawSpace(ctx, t, dt) {
   const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, dpr = ctx.canvas.width / w;
   tickShipFx(dt || 0); const [shx, shy] = fxShake();   // death screen shake
@@ -48,7 +55,7 @@ export function drawSpace(ctx, t, dt) {
   ty += bob + dip;
   if (SFX.shakeT > 0) { tx += (Math.random() - 0.5) * 8; ty += (Math.random() - 0.5) * 6; }
   SFX.tenRect = { x: tx / w, y: ty / h, w: tw / w, h: th / h };
-  const E = foe(B), ed = E ? shipOf(E) : null;
+  const E = foe(B), E0 = (B && Array.isArray(B.enemies) && B.enemies.find(e => !(e.slot | 0))) || E, ed = E0 ? shipOf(E0) : null;   // slot 0 sets the lead box
   const enter = B ? 1 - Math.pow(1 - B.enterT, 3) : 0;
   // the enemy box keeps the old enemy's centre line; bigger classes grow around it and never run off the right edge
   const jw = ed ? L * ed.size * (portrait ? 1 : 0.9) : 0, jh = ed ? jw / ed.aspect : 0;
@@ -61,13 +68,14 @@ export function drawSpace(ctx, t, dt) {
     if (c.slot === 0 || !c.slot) return side === "ally" ? [tx, ty, tw, th] : [jx + SFX.jink.x * w, jy + SFX.jink.y * h, jw, jh];
     const f = FORMATION[portrait ? "portrait" : "landscape"][side][c.slot], d = shipOf(c); if (!f) return [-1e4, 0, 1, 1];
     const bw = L * d.size * f.s, bh = bw / d.aspect;
-    return [Math.min(w * 0.985 - bw, Math.max(w * 0.015, f.cx * w - bw / 2)), f.cy * h - bh / 2, bw, bh];
+    return [Math.min(w * 0.985 - bw, Math.max(w * 0.015, f.cx * w - bw / 2)) + (side === "enemy" ? (1 - enter) * w * 0.6 : 0), f.cy * h - bh / 2, bw, bh];
   };
   const allies = B && Array.isArray(B.allies) ? B.allies : [{ id: "tenacity", ship: "tenacity", slot: 0, ref: "ship" }];
   const drawSide = (list, side) => { for (const c of [...list].sort((a, b) => (b.slot | 0) - (a.slot | 0))) {
     const [x, y, bw, bh] = boxOf(c, side), self = c.ref === "ship", pct = self ? G.ship.hull : Math.round(c.hull / (c.max || 1) * 100);
-    const dying = !!(B && B.dying > 0 && ((side === "enemy" && c === E) || (self && B.allyDying))), key = (B ? B.startedAt : 0) + "|" + c.id, mirror = side === "enemy";
+    const dying = !!(B && !self && c.dead), key = (B ? B.startedAt : 0) + "|" + c.id, mirror = side === "enemy";
     if (dying) startShipDeath(key, c.ship, [x, y, bw, bh], w, h, mirror, (o, ox, oy, ow, oh) => drawShip(o, c.ship, ox, oy, ow, oh, { mirror, t, pct, anim: fx[c.id] }));
+    if (c.slot > 0 && !(dying && shipFxHidden(key))) ctx.drawImage(dimSprite(), x - bw * 0.2, y - bh * 0.25, bw * 1.4, bh * 1.5);   // P2: soft dark pool behind wingmen so they read over bright backdrops
     if (!(dying && shipFxHidden(key))) drawShip(ctx, c.ship, x, y, bw, bh, { mirror, t, pct, anim: fx[c.id], dying, alpha: 1, key });   // per-battle key: damaged crossfade resets for each new combatant (P21 #3)
     rects[c.id] = { x: x / w, y: y / h, w: bw / w, h: bh / h, side };
   } };
@@ -117,9 +125,9 @@ export function drawSpace(ctx, t, dt) {
     for (const [id, r] of Object.entries(rects)) {
       const c = [...(B.allies || []), ...(B.enemies || [])].find(x => x.id === id); if (!c) continue;
       const cx = (r.x + r.w / 2) * w, below = (r.y + r.h) * h + 4, lh = big * 1.8 + 9;
-      const dying = c === E && B.dying > 0;
+      const dying = !!c.dead;
       const sz = c.slot ? Math.round(big * 0.85) : big;   // wingmen (formation preview) get a smaller label
-      drawShipLabel(ctx, c.ship, cx, below + lh > hudTop ? r.y * h - 4 : below, { big: sz, above: below + lh > hudTop, alpha: dying ? clamp(B.dying / 1.3, 0, 1) : 1 });
+      drawShipLabel(ctx, c.ship, cx, below + lh > hudTop ? r.y * h - 4 : below, { big: sz, above: below + lh > hudTop, alpha: dying ? clamp((c.dying || 0) / 1.3, 0, 1) : 1 });
     }
   }
   if (B) { ctx.fillStyle = `rgba(255,0,0,${0.08 + 0.05 * Math.sin(t * 6)})`; ctx.fillRect(0, 0, w, h); }

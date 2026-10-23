@@ -66,7 +66,7 @@ const AWAY = process.env.AWAY === '1';   // full: a fresh ship; worn (default): 
           G.prog.med.inj = [{ id: pid, name: o.name, short: o.short, sev: 'serious', sys: 'shields', state: 'warning', at: S.elapsed, pd: G.prog.playDays, day: G.prog.day, left: 1e6, seen: true, seenT: 5, offline: false, ack: true, acked: true, pendT: 0, ackT: 0, away: false, cause: 'hazard' }]; }
         G.lt.mode = 'idle'; G.lt.repairSys = null; G.lt.intent = null; G.lt.path = null;
         if (AWAY) P.PACE_RT.idleT = 1e6;   // pass 16 B1: idle BEFORE the fight starts, so it is an away fight (live-started fights keep live rules now)
-        const st0 = { ...G.stats }, hull0 = S.hull; BT.startBattle('debug', { enemy: type });
+        const st0 = { ...G.stats }, hull0 = S.hull; const es = type.split('+'); BT.startBattle('debug', es.length > 1 ? { enemies: es } : { enemy: type });   // multi-ship P2: 'galor+jh_fighter' = a group
         const B0 = G.sp.battle, t0 = S.elapsed, ene = B0 && B0.enemies ? B0.enemies[0].ship : 'legacy';
         const seenLog = new WeakSet(G.log); let hits = 0;
         let prevHull = S.hull, part = false, denied = false, dis = false;   // tow diagnosis (N1 root cause)

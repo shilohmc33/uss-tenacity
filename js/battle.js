@@ -3,13 +3,13 @@ import { G } from "./state.js";
 import { DESTS, SYSTEMS } from "./data.js";
 import { clamp, rand } from "./util.js";
 import { log, toast, shipNews, redAlertCard } from "./bus.js";
-import { chooseEncounter, noteEncounter, noteBcEnd } from "./encounters.js";
+import { chooseEncounter, chooseWingmen, noteEncounter, noteBcEnd } from "./encounters.js";
 import { spawnFault, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
 import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
 import { hooks } from "./progression.js";
 import { fxTimeScale, deathTotal, clearShipFx } from "./render/shipfx.js";
-import { SHIPS, makeAlly, makeEnemy, foe, shipOf, gunOf, hullPct } from "./ships.js";
+import { SHIPS, makeAlly, makeEnemy, foe, liveOf, shipOf, gunOf, gunGap, hullPct, SLOTS } from "./ships.js";
 
 // Battle groundwork: G.sp.battle = { ctx, enterT, dying, cd, startedAt, inflight, injN, allies: [combatant], enemies: [combatant],
 // target } (js/ships.js). Still one-on-one: the officers fight foe(B) (enemies[target]) with the Tenacity, whose live
@@ -26,7 +26,25 @@ const tenPoint = (fx, fy) => { const r = SFX.tenRect; return [r.x + fx * r.w, r.
 const tenHp = k => tenPoint(...TEN.hp[k]);
 // points on the enemy's box; hardpoints are authored facing right and the enemy faces left, so x mirrors
 const jemPoint = (fx, fy) => { const r = SFX.jemRect; return [r.x + fx * r.w + SFX.jink.x, r.y + fy * r.h + SFX.jink.y]; };
-const jemHp = (E, k) => { const h = shipOf(E).hp[k] || [0.5, 0.5]; return jemPoint(1 - h[0], h[1]); };
+// multi-ship P1: a point on ANY combatant's drawn box (render/space.js SFX.rects, jink included); before the first frame the
+// slot-0 boxes stand in. hpOf mirrors x for enemies (authored facing right, drawn facing left).
+const ptOf = (c, fx, fy) => { if (!c || c.ref === "ship") return tenPoint(fx, fy); const r = SFX.rects[c.id]; if (!r) return c.side === "enemy" ? jemPoint(fx, fy) : tenPoint(fx, fy); return [r.x + fx * r.w, r.y + fy * r.h]; };
+const hpOf = (c, k) => { const h = (c && c.ref === "ship" ? TEN.hp[k] : shipOf(c).hp[k]) || [0.5, 0.5]; return ptOf(c, c && c.side === "enemy" ? 1 - h[0] : h[0], h[1]); };
+const jemHp = (E, k) => hpOf(E, k);
+// who a combatant shoots (multi-ship P1). Enemies: the Tenacity 40% (the player's ship stays in the fight), the weakest ally 40%,
+// any ally 20%. Allies: the Tenacity's target 60% (focus fire), the weakest enemy 25%, any 15%. One live foe = no roll.
+const pctOf = c => c.ref === "ship" ? G.ship.hull : hullPct(c);
+export function pickTarget(c, B = G.sp.battle, rnd = Math.random) {
+  if (!B || !c) return null; const pool = liveOf(c.side === "enemy" ? B.allies : B.enemies); if (pool.length < 2) return pool[0] || null;
+  const weakest = pool.reduce((a, x) => pctOf(x) < pctOf(a) ? x : a), r = rnd();
+  if (c.side === "enemy") return r < 0.4 ? (pool.find(x => x.ref === "ship") || weakest) : r < 0.8 ? weakest : pool[Math.floor(rnd() * pool.length)];
+  return r < 0.6 ? foe(B) : r < 0.85 ? weakest : pool[Math.floor(rnd() * pool.length)];
+}
+// P2: a wingman (slot 1-2) is a lighter escort: PACE.encounter.groups.wing scales her hull now, her damage and volley gap when she fires
+const WING = () => (PACE.encounter.groups && PACE.encounter.groups.wing) || { hull: 1, dmg: 1, gap: 1 };
+function wingOf(e, i) { if (i > 0) { e.wing = true; e.max = e.hull = Math.max(1, Math.round(e.hull * WING().hull)); } return e; }
+// the officers retarget the weakest live enemy when theirs goes down
+function retarget(B) { const live = liveOf(B.enemies); if (!live.length) return; const w = live.reduce((a, x) => hullPct(x) < hullPct(a) ? x : a); B.target = B.enemies.indexOf(w); }
 const the = d => "the " + d.name;
 
 // opening lines: {A} = "A Jem'Hadar fighter" etc., {a} lower-case, {short} = fighter / Galor / battlecruiser
@@ -63,9 +81,17 @@ export function startBattle(kind = "enroute", opts = {}) {
   SP.lastBattleT = G.ship.elapsed;
   const bt = (G.night.battleTimes || []).filter(t => G.ship.elapsed - t < 3600 && G.ship.elapsed >= t); bt.push(G.ship.elapsed); G.night.battleTimes = bt;
   const away = nightActive();   // pass 15 D2: the player isn't watching - the battlecruiser rolls at PACE.encounter.awayWeights
-  const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: opts && opts.enemy, away }), enemy = pick.id, d = SHIPS[enemy];
+  // multi-ship P1: opts.enemies / opts.allies (ship id lists, slot order, max SLOTS a side) force a group (debug drills, tests;
+  // real encounters stay one-on-one until P2's group table). P23: an ally id passed as opts.enemy used to become a Galor
+  // silently - it now joins the allies (with a console warning) and the enemy rolls as usual.
+  const isE = id => SHIPS[id] && SHIPS[id].side === "enemy", isA = id => SHIPS[id] && SHIPS[id].side === "ally" && id !== "tenacity";
+  const fE = (Array.isArray(opts.enemies) ? opts.enemies : []).filter(isE).slice(0, SLOTS), fA = (Array.isArray(opts.allies) ? opts.allies : []).filter(isA);
+  if (opts.enemy && !isE(opts.enemy)) { console.warn(`startBattle: '${opts.enemy}' is not an enemy ship${isA(opts.enemy) ? " - added as an ally" : ""}`); if (isA(opts.enemy)) fA.unshift(opts.enemy); }
+  const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: fE[0] || (isE(opts.enemy) ? opts.enemy : null), away }), enemy = pick.id, d = SHIPS[enemy];
+  const wings = fE.length ? fE.slice(1) : chooseWingmen(enemy, kind, { prog: G.prog, ship: G.ship, away });   // P2: the groups table (forced lists skip it)
+  const enemies = [enemy, ...wings].map((s, i) => wingOf(makeEnemy(s, i), i)), allies = [makeAlly("tenacity", 0), ...fA.slice(0, SLOTS - 1).map((s, i) => makeAlly(s, i + 1))];
   noteEncounter(SP, enemy, kind, G.prog.playDays, pick.held, away);
-  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, live: !away, allies: [makeAlly("tenacity", 0)], enemies: [makeEnemy(enemy, 0)], target: 0 };
+  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, live: !away, allies, enemies, target: 0, allyDying: 0 };
   PACE_RT.liveFight = !away;   // pass 16 B1: live-started = live rules to the end (saved with the battle)
   G.stats.battles++;
   if (SP.battle.bc && away) nightWatch();
@@ -84,6 +110,8 @@ export function startBattle(kind = "enroute", opts = {}) {
     }
   }
   log(openLine(kind, d), "fault");
+  if (enemies.length > 1) log(`Hale: '${enemies.length} contacts — ${enemies.slice(1).map(e => the(shipOf(e))).join(", ")} with her.'`, "fault");
+  for (const a of allies.slice(1)) log(`${shipOf(a).name} forms up on our flank.`, "comm");
   if (enemy === "jh_battlecruiser") {   // encounter weighting: the capital ship is an EVENT - a red-alert card, not just a toast.
     // Not quiet-gated: the pass 09 gate (bus.js cheerful) holds back light / cheerful lines only, and this is a danger
     // alert (a death-hush must never hide a battle warning). Offline catch-up (bus quiet) skips it like every toast.
@@ -95,25 +123,43 @@ export function startBattle(kind = "enroute", opts = {}) {
   shipNews("<b>Red alert.</b> The bridge officers have the fight; your post is the <b>deck</b>: keep her systems alive and her tubes loaded.");
   return true;
 }
-function damageEnemy(dmg, label) {
-  const B = G.sp.battle, E = foe(B);
-  if (!B || B.dying || !E) return;
+// E: who was hit (default the Tenacity's target; a dead one passes to the target). by: the ally that fired (null = the Tenacity,
+// whose weak-point scan applies)
+function damageEnemy(dmg, label, E = null, by = null) {
+  const B = G.sp.battle; if (!B || B.dying) return;
+  if (!E || E.dead || !B.enemies.includes(E)) E = foe(B);
+  if (!E || E.dead) return;
   const d = shipOf(E);
   if (d.evade && Math.random() < d.evade) {   // a fast ship jinks clear (no roll at all for ships without evade: the baseline's dice are untouched)
-    const jp = jemPoint(0.45, 0.2); SFX.floaters.push({ x: jp[0], y: jp[1], t: 0, text: "MISS", color: "#cfd8e6" }); SFX.jink.next = 0;
+    const jp = ptOf(E, 0.45, 0.2); SFX.floaters.push({ x: jp[0], y: jp[1], t: 0, text: "MISS", color: "#cfd8e6" }); SFX.jink.next = 0;
     log(`${label} — the ${d.short} jinks clear. Miss.`); return;
   }
-  if (G.ab.scan.active > 0) { dmg = Math.round(dmg * 1.5); label += " (weak-point scan: +50%)"; }
+  if (!by && G.ab.scan.active > 0) { dmg = Math.round(dmg * 1.5); label += " (weak-point scan: +50%)"; }
   E.hull = Math.max(0, E.hull - dmg);   // pass-03 N-3: never negative
   if (G.sp.battle) setAnim(E.id, "shieldsHit");
   SFX.jink.next = Math.min(SFX.jink.next, 0.4);
-  const jp = jemPoint(0.45, 0.2);
+  const jp = ptOf(E, 0.45, 0.2);
   SFX.floaters.push({ x: jp[0], y: jp[1], t: 0, text: "−" + dmg, color: "#ffb3ab" });
   log(`${label} — ${d.name} hull at ${hullPct(E)}%.`);
-  if (E.hull <= 0) {
-    B.dying = deathTotal(E.ship); setAnim(E.id, "explode");   // the death visual is render/shipfx.js (EXPLOSION in data.js)
+  if (E.hull <= 0) {   // multi-ship P1: each ship dies on its own clock; the battle's victory countdown (B.dying) starts with the LAST enemy
+    E.dead = true; E.dying = deathTotal(E.ship); setAnim(E.id, "explode");   // the death visual is render/shipfx.js (EXPLOSION in data.js)
     log(d.death || `The ${d.name} breaks apart — secondary explosions walking her spine. She's gone.`, "good");
+    const live = liveOf(B.enemies);
+    if (!live.length) B.dying = Math.max(0.1, ...B.enemies.map(e => e.dying || 0)) + (B.enemies.length > 1 ? 0.4 : 0);   // P2: room for the staggered detonations
+    else { retarget(B); log(`Hale: 'Target destroyed. Retargeting ${the(shipOf(foe(B)))} — ${live.length} contact${live.length > 1 ? "s" : ""} left.'`, "comm"); toast(`${d.short} destroyed — ${live.length} left`, "good"); }
   }
+}
+// an escort / ally ship takes a hit: shields (points) first, then the hull. At 0 she dies on her own clock (B.allyDying counts the
+// allies whose deaths are playing). The Tenacity is never routed here: she is not destroyable (a loss is the tow, towToDS9).
+function damageAlly(A, dmg, label) {
+  const B = G.sp.battle; if (!B || !A || A.dead || A.ref === "ship") return;
+  const d = shipOf(A), tp = ptOf(A, 0.5, 0.4);
+  if (A.shields >= dmg) { A.shields -= dmg; setAnim(A.id, "shieldsHit"); SFX.floaters.push({ x: tp[0], y: tp[1], t: 0, text: "SHIELDS −" + Math.round(dmg), color: "#9cd2ff" }); log(`${label} — ${d.short}'s shields hold at ${Math.round(A.shields)}.`); return; }
+  const through = dmg - A.shields; A.shields = 0; A.hull = Math.max(0, A.hull - through); setAnim(A.id, "shieldsHit");
+  SFX.booms.push({ x: tp[0], y: tp[1], t: 0, dur: 0.45, big: false }); SFX.floaters.push({ x: tp[0], y: tp[1], t: 0, text: "HULL −" + Math.round(through), color: "#ff8a7a" });
+  log(`${label} — ${d.name} hull at ${hullPct(A)}%.`, "fault");
+  if (A.hull <= 0) { A.dead = true; A.dying = deathTotal(A.ship); B.allyDying = (B.allyDying | 0) + 1; setAnim(A.id, "explode");
+    log(`${d.name} is gone — her warp core lets go and the wreck tumbles out of formation. T'Ren says nothing for a long moment.`, "fault"); toast(`${d.short} lost`, "crit"); }
 }
 // pass 15 D2: a battlecruiser fight's record (hull before / after, outcome, whether the player was away) -> G.sp.enc.bcRec
 function recBc(B, out, h1) {
@@ -122,19 +168,20 @@ function recBc(B, out, h1) {
   if (B) { const E = foe(B), d = E && shipOf(E); G.sp.lastFight = { a: d ? d.a : "the enemy", out, hull: Math.round(h1), live: !!B.live }; }
 }
 function endBattleVictory() {
-  const SP = G.sp, S = G.ship, kind = SP.battle ? SP.battle.ctx : null, d = shipOf(foe(SP.battle));
+  const SP = G.sp, S = G.ship, B0 = SP.battle, kind = B0 ? B0.ctx : null, d = shipOf(foe(B0)), killed = B0 ? B0.enemies.map(shipOf) : [d];
   recBc(SP.battle, "won", S.hull);
   SP.battle = null; SP.evasiveT = 0; G.stats.wins++; clearShipFx();   // P21 #2
-  const salvage = Math.max(0, Math.min(d.salvage ?? 3, S.partsCap - S.parts)); S.parts += salvage;
+  const salvage = Math.max(0, Math.min(killed.reduce((a, k) => a + (k.salvage ?? 3), 0), S.partsCap - S.parts)); S.parts += salvage;   // multi-ship P1: every kill's salvage
   log(`Victory. Tractor crews pull ${salvage} usable part(s) from the wreckage.`, "good");
-  toast(`Victory — ${d.short} destroyed`, "good");
+  toast(killed.length > 1 ? `Victory — ${killed.length} ships destroyed` : `Victory — ${d.short} destroyed`, "good");
+  for (const k of killed) if (k.rep && k !== d) SP.rep += k.rep;
   if (d.rep) { SP.rep += d.rep; log(`Starfleet Command notes the kill: ${d.a.replace(/^a /, "a ")} doesn't go down every day. Reputation +${d.rep}.`, "comm"); }
   if (kind === "convoy") { SP.rep++; SP.escortDone = true; log("The convoy is safe — every freighter accounted for. Reputation rising.", "comm"); }
   if (SP.travel && SP.travelPaused) { SP.travelPaused = false; log(`Course resumed — back to warp for ${DESTS[SP.travel.dest].name}.`, "comm"); }
   else { SP.cap.decideT = 30; SP.cap.dest = null; SP.cap.reason = `Action resolved at ${SP.location ? DESTS[SP.location].name : "deep space"} — the Captain is evaluating her next orders.`; }
   shipNews("Battle won. Check the <b>deck</b> for damage the fight left behind.");
 }
-export function damageShip(dmg, label, pierce = 0) {
+export function damageShip(dmg, label, pierce = 0, src = null) {
   const S = G.ship, SP = G.sp;
   if (G.ab.pattern.active > 0) { dmg *= 0.5; label += " (attack pattern analysis: halved)"; }
   if (SP.evasiveT > 0) { dmg *= 0.35; label += " (evasive pattern sheds most of it)"; }
@@ -166,21 +213,35 @@ export function damageShip(dmg, label, pierce = 0) {
     id = spawnFault("battle");
     if (id) log("Damage control: the hit started a fault aboard — it's on the DECK, and the Lieutenant can reach it mid-battle.", "fault");
   }
-  const gun = gunOf(foe(G.sp.battle));
+  const gun = gunOf(src || foe(G.sp.battle));
   hooks.shipHit.forEach(f => f({ sys: id, hit: gun ? gun.hits : null }));   // phase 6: a hull hit can injure someone (js/injuries.js)
 }
-function enemyFire() {
-  const B = G.sp.battle, SP = G.sp, E = foe(B), gun = gunOf(E);
-  if (!B || B.dying || !gun) return;
+function enemyFire(E = foe(G.sp.battle)) {
+  const B = G.sp.battle, SP = G.sp, gun = gunOf(E);
+  if (!B || B.dying || !gun || !E || E.dead) return;
+  const T = pickTarget(E, B); if (!T) return;
+  if (T.ref !== "ship") {   // she turns her guns on an escort
+    const f = hpOf(E, "fire"), to = hpOf(T, "hit"); setAnim(E.id, "firing");
+    SFX.beams.push({ x0: f[0], y0: f[1], x1: to[0], y1: to[1], t: 0, dur: 0.4, col: gun.col });
+    damageAlly(T, rand(gun.dmg[0], gun.dmg[1]) * (E.wing ? WING().dmg : 1), `${gun.name} from ${the(shipOf(E))}`); return;
+  }
   if (E.lastVolleyAt !== undefined) E.volleyGap = G.ship.elapsed - E.lastVolleyAt;
   E.lastVolleyAt = G.ship.elapsed;
   const from = jemHp(E, "fire"), ev = SP.evasiveT > 0;
   const miss = tenHp("miss"), to = ev ? [miss[0] - 0.05, miss[1] - 0.06] : tenPoint(0.72, 0.52);
   SFX.beams.push({ x0: from[0], y0: from[1], x1: to[0], y1: to[1], t: 0, dur: 0.4, col: gun.col });
   SFX.evasiveGraze = ev; setAnim(E.id, "firing");
-  damageShip(rand(gun.dmg[0], gun.dmg[1]), `${gun.name} from ${the(shipOf(E))}`, gun.pierce || 0);
+  damageShip(rand(gun.dmg[0], gun.dmg[1]) * (E.wing ? WING().dmg : 1), `${gun.name} from ${the(shipOf(E))}`, gun.pierce || 0, E);
   SFX.evasiveGraze = false;
   SFX.jink.next = Math.min(SFX.jink.next, 0.25);
+}
+// an armed ally (the Bird-of-Prey) fires at her pick; the freighter has no guns (volleyT stays 99)
+function allyFire(A) {
+  const B = G.sp.battle, gun = gunOf(A); if (!B || B.dying || !gun || A.dead) return;
+  const T = pickTarget(A, B); if (!T) return;
+  const f = hpOf(A, "fire"), to = hpOf(T, "hit"); setAnim(A.id, "firing");
+  SFX.beams.push({ x0: f[0], y0: f[1], x1: to[0], y1: to[1], t: 0, dur: 0.35, col: gun.col });
+  damageEnemy(Math.round(rand(gun.dmg[0], gun.dmg[1])), `${gun.name} from ${the(shipOf(A))}`, T, A);
 }
 function haleFirePhaser() {
   const B = G.sp.battle, S = G.ship;
@@ -195,9 +256,9 @@ function haleFirePhaser() {
   damageEnemy(Math.round(rand(PHASER.dmg[0], PHASER.dmg[1]) * (eps ? 0.5 : 1)), "Hale: " + PHASER.name + (eps ? " (EPS fault — output halved)" : ""));
 }
 function launchTorp(delay = 0) {
-  const from = tenHp("torp"), to = jemPoint(rand(0.3, 0.6), rand(0.35, 0.65));
-  const dmg = Math.round(rand(TORP.dmg[0], TORP.dmg[1])), B = G.sp.battle;
-  SFX.shots.push({ x0: from[0], y0: from[1], x1: to[0], y1: to[1], t: -delay, dur: 0.5, dmg });
+  const B = G.sp.battle, E = foe(B), from = tenHp("torp"), to = ptOf(E, rand(0.3, 0.6), rand(0.35, 0.65));
+  const dmg = Math.round(rand(TORP.dmg[0], TORP.dmg[1]));
+  SFX.shots.push({ x0: from[0], y0: from[1], x1: to[0], y1: to[1], t: -delay, dur: 0.5, dmg, tid: E ? E.id : null });
   if (B) B.inflight = (B.inflight || 0) + dmg;   // BUG-17: saved with the battle so a reload doesn't eat the salvo
 }
 // BUG-17: after a reload, torpedoes that were in flight when the game saved land at once (SFX.shots isn't saved)
@@ -315,7 +376,7 @@ function useSpread() {
 function autoFire() {
   const B = G.sp.battle, ab = G.ab, S = G.ship, E = foe(B);
   if (!B || B.dying || !E) return;
-  if (armed(ab.pattern) && E.volleyT <= 1.5) usePattern();
+  if (armed(ab.pattern) && Math.min(...liveOf(B.enemies).map(e => e.volleyT)) <= 1.5) usePattern();
   if (armed(ab.scan)) useScan();
   if (armed(ab.spread) && ((S.torps >= 2 && E.hull > E.max * 0.5) || S.torps >= 3)) useSpread();
   if (armed(ab.miracle) && (Object.keys(S.faults).length > 0 || S.hull < 60)) useMiracle();
@@ -336,12 +397,14 @@ export function tickBattle(dt) {
     B.enterT = Math.min(1, B.enterT + dt / 1.4 * Math.max(0.6, spd));   // a fast ship arrives faster
     for (const k of Object.keys(B.cd)) if (B.cd[k] > 0) B.cd[k] = Math.max(0, B.cd[k] - dt);
     if (SP.evasiveT > 0) SP.evasiveT = Math.max(0, SP.evasiveT - dt);
+    for (const c of [...B.enemies, ...B.allies]) if (c.dead && c.dying > 0) { c.dying = Math.max(0, c.dying - dt); if (c.dying <= 0 && c.side === "ally") B.allyDying = Math.max(0, (B.allyDying | 0) - 1); }
     if (B.dying) {
       B.dying -= dt;
       if (B.dying <= 0) endBattleVictory();
-    } else {
-      E.volleyT -= dt;
-      if (E.volleyT <= 0) { const g = gunOf(E); E.volleyT = g ? rand(g.every[0], g.every[1]) : 99; enemyFire(); }
+    } else for (const c of [...B.enemies, ...B.allies]) {   // multi-ship P1: every live gun on its own clock (gunGap: enemy 'every', ally 'cd')
+      if (c.ref === "ship" || c.dead || !SP.battle || SP.battle.dying) continue;
+      c.volleyT = (typeof c.volleyT === "number" ? c.volleyT : 2) - dt;
+      if (c.volleyT <= 0) { c.volleyT = gunGap(gunOf(c)) * (c.wing ? WING().gap : 1); if (c.side === "enemy") enemyFire(c); else allyFire(c); }
     }
     officerOrders();
     const jk = SFX.jink;
@@ -358,12 +421,13 @@ export function tickBattle(dt) {
   // smoke when damaged
   const S = G.ship, Bn = SP.battle, En = foe(Bn);
   if (S.hull < 35 && Math.random() < dt * 7) { const p = tenPoint(rand(0.25, 0.45), rand(0.4, 0.6)); SFX.smoke.push({ x: p[0], y: p[1], vx: rand(-0.03, -0.012), vy: rand(-0.02, -0.006), t: 0, life: rand(0.9, 1.7), r: rand(0.012, 0.024), kind: "smoke" }); }
-  if (Bn && En && (En.hull < En.max * 0.35 || Bn.dying) && Math.random() < dt * (Bn.dying ? 16 : 8)) { const p = jemPoint(rand(0.3, 0.65), rand(0.35, 0.65)); SFX.smoke.push({ x: p[0], y: p[1], vx: rand(-0.01, 0.01), vy: rand(-0.03, -0.01), t: 0, life: rand(0.3, 0.6), r: rand(0.01, 0.018), kind: "flame" }); }
+  if (Bn && En) for (const c of [...Bn.enemies, ...Bn.allies]) { if (c.ref === "ship" || (c.dead && !(c.dying > 0))) continue; const hot = c.dead;   // every crippled or dying ship burns
+    if ((hot || c.hull < c.max * 0.35) && Math.random() < dt * (hot ? 16 : 8)) { const p = ptOf(c, rand(0.3, 0.65), rand(0.35, 0.65)); SFX.smoke.push({ x: p[0], y: p[1], vx: rand(-0.01, 0.01), vy: rand(-0.03, -0.01), t: 0, life: rand(0.3, 0.6), r: rand(0.01, 0.018), kind: "flame" }); } }
   for (let i = SFX.smoke.length - 1; i >= 0; i--) { const s = SFX.smoke[i]; s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; if (s.t > s.life) SFX.smoke.splice(i, 1); }
   if (SFX.smoke.length > 170) SFX.smoke.splice(0, SFX.smoke.length - 170);
   for (let i = SFX.shots.length - 1; i >= 0; i--) {
     const sh = SFX.shots[i]; sh.t += dt;
-    if (sh.t >= sh.dur) { SFX.shots.splice(i, 1); if (SP.battle) SP.battle.inflight = Math.max(0, (SP.battle.inflight || 0) - sh.dmg); SFX.booms.push({ x: sh.x1, y: sh.y1, t: 0, dur: 0.55 }); damageEnemy(sh.dmg, "Photon torpedo — direct hit"); }
+    if (sh.t >= sh.dur) { SFX.shots.splice(i, 1); if (SP.battle) SP.battle.inflight = Math.max(0, (SP.battle.inflight || 0) - sh.dmg); SFX.booms.push({ x: sh.x1, y: sh.y1, t: 0, dur: 0.55 }); damageEnemy(sh.dmg, "Photon torpedo — direct hit", SP.battle ? SP.battle.enemies.find(e => e.id === sh.tid) : null); }
   }
   for (const k of ["beams", "booms", "floaters", "flares"]) {
     const arr = SFX[k];
@@ -371,4 +435,5 @@ export function tickBattle(dt) {
   }
   if (!SP.battle) SFX.shots.length = 0;
 }
-export const debugKillEnemy = () => { for (let i = 0; i < 30 && G.sp.battle && !G.sp.battle.dying; i++) damageEnemy(1e6, "Debug kill"); };   // tools/boom-shots.js
+export const debugKillEnemy = () => { for (let i = 0; i < 30 && G.sp.battle && !G.sp.battle.dying; i++) damageEnemy(1e6, "Debug kill"); };   // tools/boom-shots.js (kills every enemy)
+export const debugKillOne = (id, side = "enemy") => { const B = G.sp.battle; if (!B) return; const c = (side === "enemy" ? B.enemies : B.allies).find(x => x.id === id); if (!c) return; for (let i = 0; i < 30 && !c.dead; i++) side === "enemy" ? damageEnemy(1e6, "Debug kill", c) : damageAlly(c, 1e6, "Debug kill"); };   // tools/multiship-shots.js

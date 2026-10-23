@@ -65,6 +65,23 @@ export const PACE = {
     // than knockFrac x cdMax left) goes to knockFrac x its cdMax; abilities cooling longer than that keep their timer (never pushed further). A rested bridge used to one-volley
     // her (Scan + Spread) for 0% hull. Away fights skip it: the night watch start (bcAway) already has every ability cooling.
     bcAlpha: { knockFrac: 0.5 },
+    // multi-ship P2: enemy GROUPS. The lead ship is rolled as above (weights + battlecruiser gates); wingmen then join by progression
+    // tier (G.prog.playDays), each rolled at wingP while the group's threat stays within the tier's budget (the lead counts). Wingmen
+    // are lighter escorts, not full warships (wing: hull / damage multipliers, volley gap stretch) - battle-sim, worn start + passive Lt.
+    // Story contexts that name the enemy (defector, shadow) and debug drills stay one-on-one; a crippled ship (shipCrippled) gets no
+    // wingmen; away fights cap at awayMax ships.
+    groups: {
+      threat: { jh_fighter: 1, galor: 2, jh_battlecruiser: 4 },
+      wingmen: { jh_fighter: 70, galor: 30 },          // who can fly wing (never the battlecruiser), by weight
+      tiers: [                                          // the highest tier whose minPlayDays is met applies
+        { minPlayDays: 0, budget: 2, wingP: 0 },        // early game: one-on-one, as before
+        { minPlayDays: 3, budget: 2, wingP: 0.3 },      // a fighter may pick up a fighter wingman (Galor leads stay solo)
+        { minPlayDays: 8, budget: 3, wingP: 0.4 },      // Galor + fighter, or up to 3 fighters
+        { minPlayDays: 15, budget: 4, wingP: 0.5 },     // Galor + 2 fighters, or 2 Galors. The battlecruiser (threat 4) always flies alone
+      ],
+      wing: { hull: 0.6, dmg: 0.6, gap: 1.5 },
+      max: 3, awayMax: 2, solo: ["defector", "shadow", "debug"],
+    },
   },
   // --- faults ---
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)

@@ -50,6 +50,19 @@ export function chooseEncounter(ctx, { prog, ship, enc, forced, away = false, rn
   return { id, src: "table", held: !!(bcRow && bcRow.why === "crippled") };
 }
 // book-keeping after a battle starts (debug drills don't count: they are not encounters)
+// multi-ship P2: the wingmen that join a lead ship (ids, slot order). rnd is injectable for the sims.
+export function chooseWingmen(lead, ctx, { prog, ship, away = false, rnd = Math.random } = {}) {
+  const g = PACE.encounter.groups; const S = ship || {}, bc = PACE.encounter.bc;   // a battered ship (hull below the battlecruiser gate, or a fault at its block severity) meets lone ships; torps/power don't count here
+  if (!g || g.solo.includes(ctx) || !(S.hull >= bc.minHull) || (S.faults && Object.values(S.faults).some(f => f && f.sev === bc.blockSev))) return [];
+  const pd = (prog && prog.playDays) | 0, tier = g.tiers.filter(t => pd >= t.minPlayDays).pop(); if (!tier || !(tier.wingP > 0)) return [];
+  const max = Math.min(g.max, away ? g.awayMax : g.max), out = []; let left = tier.budget - (g.threat[lead] || 1);
+  while (out.length + 1 < max && rnd() < tier.wingP) {
+    const pool = Object.entries(g.wingmen).filter(([id, w]) => w > 0 && (g.threat[id] || 1) <= left); if (!pool.length) break;
+    let x = rnd() * pool.reduce((a, [, w]) => a + w, 0), id = pool[0][0]; for (const [k, w] of pool) { x -= w; if (x < 0) { id = k; break; } }
+    out.push(id); left -= g.threat[id] || 1;
+  }
+  return out;
+}
 export function noteEncounter(SP, id, ctx, playDays, held, away = false) {
   if (ctx === "debug") return;
   const e = SP.enc = hardenEnc(SP.enc);

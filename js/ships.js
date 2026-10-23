@@ -57,12 +57,18 @@ export const ALLY_IDS = Object.keys(SHIPS).filter(k => SHIPS[k].side === "ally")
 export const CTX_ENEMY = { defector: "galor", shadow: "jh_fighter", debug: BASELINE_ENEMY };
 // combatants. Allies: the Tenacity's live hull/shields stay on G.ship (ref: "ship"); other allies would carry their own.
 // Enemies carry hull / max (points) and their volley clock.
-export function makeAlly(ship, slot = 0) { const d = SHIPS[ship]; return ship === "tenacity" ? { id: "tenacity", ship, side: "ally", slot, ref: "ship" } : { id: ship + "-" + slot, ship, side: "ally", slot, hull: d.hull, max: d.hull, shields: d.shields }; }
-export function makeEnemy(ship, slot = 0) { const d = SHIPS[ship], w = d.weapons[0]; return { id: ship + "-" + slot, ship, side: "enemy", slot, hull: d.hull, max: d.hull, volleyT: w ? w.first : 99 }; }
+// multi-ship P1: every gun has a first-volley delay and a gap. Enemy guns carry every: [lo, hi]; ally guns (Tenacity table style)
+// carry cd only (P23: ally weapons had no 'every' - battle.js read it blind). gunFirst / gunGap cover both.
+export const gunFirst = g => g ? (g.first ?? (g.cd ? g.cd * 0.6 : 2)) : 99;
+export const gunGap = (g, rnd = Math.random) => !g ? 99 : g.every ? g.every[0] + rnd() * (g.every[1] - g.every[0]) : g.cd ? g.cd * (0.9 + rnd() * 0.25) : 99;
+export function makeAlly(ship, slot = 0) { const d = SHIPS[ship]; return ship === "tenacity" ? { id: "tenacity", ship, side: "ally", slot, ref: "ship" } : { id: ship + "-" + slot, ship, side: "ally", slot, hull: d.hull, max: d.hull, shields: d.shields, volleyT: gunFirst(d.weapons[0]) }; }
+export function makeEnemy(ship, slot = 0) { const d = SHIPS[ship]; return { id: ship + "-" + slot, ship, side: "enemy", slot, hull: d.hull, max: d.hull, volleyT: gunFirst(d.weapons[0]) }; }
 export const shipOf = c => SHIPS[c && c.ship] || SHIPS[BASELINE_ENEMY];
 export const gunOf = c => shipOf(c).weapons[0] || null;
-// the enemy the Tenacity is fighting (the selected target; one-on-one: enemies[0])
-export function foe(B) { if (!B || !Array.isArray(B.enemies) || !B.enemies.length) return null; return B.enemies[B.target | 0] || B.enemies[0]; }
+// the enemy the Tenacity is fighting: the selected target while it lives, else the first live enemy; once every enemy is dead
+// (the victory countdown) the last target, so the victory / record code still reads the ship that went down
+export function foe(B) { if (!B || !Array.isArray(B.enemies) || !B.enemies.length) return null; const t = B.enemies[B.target | 0]; if (t && !t.dead) return t; return B.enemies.find(e => !e.dead) || t || B.enemies[0]; }
+export const liveOf = list => (list || []).filter(c => c && !c.dead);
 export const hullPct = c => c ? Math.max(0, Math.round(c.hull / (c.max || 1) * 100)) : 0;
 // ---- save: v14 migration (pre-groundwork battle -> combatants) + hardening for any loaded battle ----
 // a v13 battle kept the single enemy's hull / max / volley clock on the battle itself; it becomes a Galor (the baseline
@@ -89,25 +95,32 @@ export function hardenBattle(sp) {
     if (!SHIPS[e.ship] || SHIPS[e.ship].side !== "enemy") e.ship = BASELINE_ENEMY;
     const d = SHIPS[e.ship]; e.max = e.max >= 1 ? fin(e.max, d.hull, 1, 1000) : d.hull; e.hull = fin(e.hull, e.max, 0, e.max); e.volleyT = fin(e.volleyT, (gunOf(e) || { first: 2 }).first, 0, 60);
     if (typeof e.id !== "string") e.id = e.ship + "-0"; e.side = "enemy"; e.slot = fin(e.slot, 0, 0, SLOTS - 1) | 0;
+    e.wing = e.wing === true && e.slot > 0; e.dead = e.dead === true || e.hull <= 0; e.dying = e.dead ? fin(e.dying, 0, 0, 30) : 0;
   }
   if (!B.enemies.length) { sp.battle = null; return false; }
   B.allies = B.allies.filter(a => a && typeof a === "object" && SHIPS[a.ship] && SHIPS[a.ship].side === "ally");
   if (!B.allies.some(a => a.ship === "tenacity")) B.allies.unshift(makeAlly("tenacity", 0));
+  for (const a of B.allies) { if (a.ship === "tenacity") { a.id = "tenacity"; a.ref = "ship"; a.slot = 0; delete a.dead; continue; }
+    const d = SHIPS[a.ship]; a.max = fin(a.max, d.hull, 1, 1000); a.hull = fin(a.hull, a.max, 0, a.max); a.shields = fin(a.shields, d.shields, 0, 1000);
+    a.volleyT = fin(a.volleyT, gunFirst(d.weapons[0]), 0, 99); if (typeof a.id !== "string") a.id = a.ship + "-" + (a.slot | 0); a.side = "ally"; a.slot = fin(a.slot, 1, 1, SLOTS - 1) | 0;
+    a.dead = a.dead === true || a.hull <= 0; a.dying = a.dead ? fin(a.dying, 0, 0, 30) : 0; }
+  if (B.enemies.every(e => e.dead) && !(B.dying > 0)) B.dying = 0.1;   // every enemy already down: the victory fires next tick
   B.target = fin(B.target, 0, 0, B.enemies.length - 1) | 0;
   B.live = B.live === true;   // pass 16 B1 (v14-compatible additive field): pre-fix saves mid-fight keep the old (away) rules
   if (!B.cd || typeof B.cd !== "object" || Array.isArray(B.cd)) B.cd = {};
   for (const k of ["phaser", "torp", "evasive", "divert"]) B.cd[k] = fin(B.cd[k], 0, 0, 60);
+  B.allyDying = fin(B.allyDying, 0, 0, SLOTS) | 0;
   for (const k of ["enterT", "dying", "inflight", "injN"]) if (B[k] !== undefined) B[k] = fin(B[k], 0, 0, k === "inflight" ? 1000 : 100);
   return true;
 }
 
-// ---- multi-ship hooks: STUBBED, unused by the one-on-one battle ----
+// ---- multi-ship hooks (P1: combatants fight; formation, target selection, HUD rows) ----
 // Formation slots. Slot 0 on each side is the one-on-one position (render/space.js computes it per orientation, unchanged
 // from the pre-groundwork layout); slots 1-2 are wingmen: box centre (cx, cy) as fractions of the space view and s = scale
 // vs the one-on-one size. portrait / landscape tables: upright, allies hold the lower half and enemies the upper; sideways,
 // allies the left and enemies the right.
 export const FORMATION = {
-  portrait: { ally: [null, { cx: 0.27, cy: 0.47, s: 0.5 }, { cx: 0.76, cy: 0.47, s: 0.5 }], enemy: [null, { cx: 0.24, cy: 0.1, s: 0.55 }, { cx: 0.74, cy: 0.09, s: 0.5 }] },
+  portrait: { ally: [null, { cx: 0.27, cy: 0.47, s: 0.5 }, { cx: 0.76, cy: 0.47, s: 0.5 }], enemy: [null, { cx: 0.22, cy: 0.21, s: 0.5 }, { cx: 0.72, cy: 0.13, s: 0.45 }] },   // P2: below the red-alert banner, clear of the lead
   landscape: { ally: [null, { cx: 0.15, cy: 0.2, s: 0.46 }, { cx: 0.38, cy: 0.22, s: 0.4 }], enemy: [null, { cx: 0.84, cy: 0.66, s: 0.5 }, { cx: 0.6, cy: 0.12, s: 0.36 }] },
 };
 export const SLOTS = 3;   // per side
@@ -122,8 +135,8 @@ export function combatantRows(B, ship) {
     return { id: c.id, side, name: d.name, cls: d.cls, faction: d.faction, pct: self ? Math.round(ship ? ship.hull : 100) : hullPct(c), shields: self && ship ? Math.round(ship.shields) : c.shields ?? null, targeted: side === "enemy" && i === (B.target | 0), slot: c.slot | 0 }; };
   return [...(B.allies || []).map((c, i) => row(c, i, "ally")), ...(B.enemies || []).map((c, i) => row(c, i, "enemy"))];
 }
-// formation preview (tests / artist review only): fills the side arrays with extra ships in slots 1-2. Extra combatants
-// are display-only: the battle logic only ever reads foe(B) and the Tenacity.
+// formation preview (tests / artist review only): fills the side arrays with extra ships in slots 1-2. Since multi-ship P1
+// they fight like any combatant (battle.js startBattle opts.enemies / opts.allies is the real route).
 export function previewFormation(B, allies, enemies) {
   if (!B) return;
   B.allies = allies.map((s, i) => makeAlly(s, i)); B.enemies = enemies.map((s, i) => makeEnemy(s, i)); B.target = 0; B.preview = true;

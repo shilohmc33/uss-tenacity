@@ -172,7 +172,7 @@ export function drawShip(ctx, shipId, x, y, w, h, opts = {}) {
   if (art) res = { art: true, ...drawSheet(ctx, art, shipState(opts.anim, pct, opts.dying), opts.t || 0, w, h) };
   else if (painted) { drawPainted(ctx, painted, w, h, pct); res = { art: false, painted: painted.p.img, state: shipState(opts.anim, pct, opts.dying).state }; }
   else { ctx.save(); ctx.beginPath(); ctx.rect(-w * 0.1, -h * 0.2, w * 1.2, h * 1.4); ctx.clip(); drawVectorRim(ctx, d, w, h, opts.t || 0, pct); ctx.restore(); res = { art: false, state: shipState(opts.anim, pct, opts.dying).state }; }
-  if (mix > 0) { const busy = art && (res.state === "firing" || res.state === "shieldsHit"); ctx.globalAlpha = a0 * mix * (busy ? 0.5 : 1); drawCell(ctx, dmgIm, w, h); res.damaged = +mix.toFixed(2); }
+  if (mix > 0) { ctx.globalAlpha = a0 * mix; drawCell(ctx, dmgIm, w, h); res.damaged = +mix.toFixed(2); }   // P23: no 50% dip on firing / shieldsHit (it read as a pulse every volley)
   ctx.restore();
   return res;
 }

@@ -13,6 +13,7 @@ import { SHIP_SHEET } from "../data.js";
 
 const deaths = new Map();              // key -> death state
 const chunkCache = new Map();          // `${ship}|${w}|${h}|${mirror}` -> [{ img, glow, ang }]
+const LITE_AT = 3, STAG = 0.3, LITE_K = 0.4;   // P2 particle budget (see startShipDeath)
 const POOL = 160, parts = Array.from({ length: POOL }, () => ({ on: false, x: 0, y: 0, vx: 0, vy: 0, t: 0, life: 1, r: 1, kind: 0 }));
 let flashT = 0, flashDur = 1, flashBlue = false, hitStopUntil = 0, hitScale = 1, shakeT = 0, shakeDur = 1, shakeAmp = 0;
 const R = (a, b) => a + Math.random() * (b - a);
@@ -81,7 +82,12 @@ export function startShipDeath(key, ship, box, vw, vh, mirror, drawFn) {
   const wreck = wreckOf(ship, w, mirror, P);
   const chunks = wreck ? [] : cutChunks(ship, w, h, mirror, P.chunks.n, drawFn).map(c => ({ c, dx: 0, dy: 0, rot: 0,
     vx: Math.cos(c.ang) * L * P.chunks.speed * R(0.5, 1.1), vy: Math.sin(c.ang) * L * P.chunks.speed * R(0.4, 0.9) * 0.6, vr: R(-1, 1) * P.chunks.spin }));
-  deaths.set(key, { P, t: 0, cx: x + w / 2, cy: y + h / 2, w, h, L, vw, vh, chain, chunks, wreck: wreck || [], boomed: false });
+  // multi-ship P2 budget: 3+ deaths/wrecks on screen -> every one goes LITE (painted debris dropped, no wreck glow, at most 2 chain
+  // blasts, 0.4x embers/specks); and at most 2 detonations start per STAG s (later ones wait, keeping the frame and the particle pool sane)
+  const recent = [...deaths.values()].filter(o => o.t < STAG).length, lite = deaths.size >= LITE_AT - 1;
+  if (lite) { if (chain.length > 2) chain.length = 2; for (const o of deaths.values()) { o.lite = true; o.wreck = o.wreck.filter(p => p.sec); } }
+  deaths.set(key, { P, t: recent >= 2 ? -STAG * (recent - 1) : 0, cx: x + w / 2, cy: y + h / 2, w, h, L, vw, vh, chain, chunks,
+    wreck: (wreck || []).filter(p => !lite || p.sec), boomed: false, lite });
 }
 
 function spawn(d, kind, n, speed, life) {
@@ -99,8 +105,11 @@ export function tickShipFx(rdt) {
   for (const [k, d] of deaths) {
     d.t += dt; const P = d.P;
     if (!d.boomed && d.t >= P.det) {
-      d.boomed = true; hitStopUntil = now() + P.hitStop.dur * 1000; hitScale = P.hitStop.scale; shakeT = shakeDur = P.shake.dur; shakeAmp = P.shake.amp; flashT = flashDur = P.flash; flashBlue = !!P.breach;
-      spawn(d, 0, P.embers.n, P.embers.speed, P.embers.life); spawn(d, 1, P.specks.n, P.chunks.speed * 0.6, P.specks.life);
+      d.boomed = true; const lk = d.lite ? LITE_K : 1;   // P2: hit-stop / shake / flash never stack - a new one wins only if it is stronger
+      if (now() >= hitStopUntil || P.hitStop.scale < hitScale) { hitStopUntil = now() + P.hitStop.dur * 1000; hitScale = P.hitStop.scale; }
+      if (shakeT <= 0 || P.shake.amp > shakeAmp * shakeT / shakeDur) { shakeT = shakeDur = P.shake.dur; shakeAmp = P.shake.amp; }
+      if (flashT <= 0 || P.flash > flashT) { flashT = flashDur = P.flash; flashBlue = !!P.breach; }
+      spawn(d, 0, Math.round(P.embers.n * lk), P.embers.speed, P.embers.life); spawn(d, 1, Math.round(P.specks.n * lk), P.chunks.speed * 0.6, P.specks.life);
     }
     if (d.boomed) for (const p of d.wreck) { p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt; }
     if (d.boomed) for (const c of d.chunks) { c.dx += c.vx * dt; c.dy += c.vy * dt; c.rot += c.vr * dt; c.vx *= 1 - dt * 0.35; c.vy *= 1 - dt * 0.35; }
@@ -148,7 +157,7 @@ export function drawShipFx(ctx, w, h) {
     for (const p of d.wreck) { if (e > p.life) continue; const k = e / p.life, fo = p.sec ? 0.65 : 0.3, al = k < fo ? 1 : 1 - (k - fo) / (1 - fo), s = p.k * kx;
       ctx.save(); ctx.translate(cx + p.x * kx, cy + p.y * ky); ctx.rotate(p.rot); ctx.scale(p.m, 1); ctx.globalAlpha = al;
       ctx.drawImage(p.im, -p.pv[0] * s, -p.pv[1] * s, p.sz[0] * s, p.sz[1] * s);
-      if (p.gl) { const g = p.gl, hot = P.wreck.glow * Math.max(0, 1 - e / (p.life * 0.35)); if (hot > 0) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = al * hot;
+      if (p.gl && !d.lite) { const g = p.gl, hot = P.wreck.glow * Math.max(0, 1 - e / (p.life * 0.35)); if (hot > 0) { ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = al * hot;
         ctx.drawImage(g.c, (-p.pv[0] - g.pad) * s, (-p.pv[1] - g.pad) * s, g.c.width * s, g.c.height * s); } }
       ctx.restore(); }
     // 3) smoke (normal blend, after a delay), then the fireball and breach on top
