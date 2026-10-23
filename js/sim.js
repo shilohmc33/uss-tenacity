@@ -14,6 +14,8 @@ import { tickNeeds } from "./needs.js";
 import { tickCrew, endOffline } from "./crewlife.js";
 import { tickCabin } from "./cabin.js";
 import { tickMed } from "./injuries.js";
+import { tickHolo } from "./holodeck.js";
+import { tickCare } from "./crewcare.js";
 import { romLogHidden } from "./romance.js";
 
 export function stepSim(dt) {
@@ -65,6 +67,7 @@ export function stepSim(dt) {
   syncFaultEffects();
   tickEvents(dt);
   tickJobs(dt);   // pt04: odd jobs between repairs
+  tickHolo(dt / 3600); tickCare();   // N4: crew self-booked holodeck sessions; shore leave resets per dock
   tickVoyage(dt);
   applyNightFloors();
 }

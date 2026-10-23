@@ -9,7 +9,7 @@ import { DECKS, NODEMAP, HEAD_Y } from "./data.js";
 import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, awardXP, taskMult, taskDone, nudge, crewList, opinionOf, addr } from "./progression.js";
 import { PACE_RT, nightActive, isPresent } from "./pacing.js";
-import { resolveIncident, expireIncident } from "./incidents.js";
+import { resolveIncident, expireIncident, checkIncident } from "./incidents.js";
 
 const P = () => G.prog;
 const K = () => PROG.jobs;
@@ -62,6 +62,7 @@ export function tickJobs(dt) {
   const k = K(); if (!k || !k.enabled) return;
   const j = J(), L = G.lt, a = activeJob();
   if (a) {
+    if (a.kind === "incident" && !checkIncident(a)) { j.active = null; j.next = rr(k.gap); return; }   // P29b: they left the ship
     if (a.kind === "incident" && (PACE_RT.offline || !isPresent())) return;   // P29 #4: frozen while the player is away; the timer resumes when he is back
     if (PACE_RT.offline) { j.active = null; j.next = rr(k.gap); return; }   // errands don't survive a break
     a.t -= dt;

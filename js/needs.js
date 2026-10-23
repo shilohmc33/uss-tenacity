@@ -23,7 +23,7 @@ export function hardenNeeds(p) {
   for (const id of aboard) {
     const r = src[id], f = fresh(id); if (!r || typeof r !== "object") { if (src[id] !== undefined) out[id] = f; continue; }
     const n = {}; for (const k of NEED_KEYS) { const v = r.n && r.n[k]; n[k] = typeof v === "number" && Number.isFinite(v) ? clamp(v, 0, 100) : f.n[k]; }
-    out[id] = { n, shift: [0, 1, 2].includes(r.shift) ? r.shift : f.shift, act: ["duty", "sleep", "eat", "fun"].includes(r.act) ? r.act : "duty", ...(r.nap === true ? { nap: true } : {}) };
+    out[id] = { n, shift: [0, 1, 2].includes(r.shift) ? r.shift : f.shift, act: ["duty", "sleep", "eat", "fun", "holo"].includes(r.act) ? r.act : "duty", ...(r.nap === true ? { nap: true } : {}) };
     hardenMood(out[id], r);   // N2
   }
   p.needs = out;
@@ -37,8 +37,9 @@ function comfortTarget() {
   if (S.hull < c.lowHullAt) t -= c.lowHull; if (SP.battle) t -= c.alert;
   return clamp(t, 0, 100);
 }
-export function choose(r) {
+export function choose(r, id) {
   const n = r.n, T = NEEDS.th, A = r.act, on = r.shift === shiftNow();
+  { const b = G.prog.holo && G.prog.holo.busy && G.prog.holo.busy[id || ""]; if (b && b.endT > ((G.ship && G.ship.elapsed) || 0)) return "holo"; }   // N4: on the holodeck (off the visible deck)
   if (r.argue) { if (r.argue > ((G.ship && G.ship.elapsed) || 0) && !r.unwell) return "fun"; if (!(r.argue > ((G.ship && G.ship.elapsed) || 0))) delete r.argue; }   // N3: arguing in the Mess & Bar
   if (r.unwell) { if (r.unwell > ((G.ship && G.ship.elapsed) || 0)) return n.food < T.wakeToEat ? "eat" : "sleep"; delete r.unwell; }   // N3: signed off duty (not an injury): rests in quarters
   if (A === "eat" && n.food < 99) return "eat";   // finish the meal
@@ -72,14 +73,15 @@ export function tickNeeds(dt) {
     if (q.includes("homesick") && !(G.sp.location === "ds9" && !G.sp.travel)) cAdj = -8;
     n.rest += (A === "sleep" ? Gn.sleep : -D.rest * mRest) * h;
     n.food += (A === "eat" ? Gn.eat : -D.food) * h;
-    n.fun += (A === "fun" ? Gn.fun : -D.fun * mFun) * h;
+    n.fun += (A === "fun" || A === "holo" ? Gn.fun : -D.fun * mFun) * h;
     n.social += (A === "eat" || A === "fun" ? Gn.socialGroup * gSoc : -D.social * mSoc) * h;
     n.comfort += clamp(clamp(ct + cAdj, 0, 100) - n.comfort, -NEEDS.comfort.rate * h, NEEDS.comfort.rate * h);
     for (const k of NEED_KEYS) n[k] = clamp(n[k], floor, 100);
-    r.act = alert ? "duty" : choose(r);
+    { const lk = G.prog.holo && G.prog.holo.lock && G.prog.holo.lock[id]; if (lk > ((G.ship && G.ship.elapsed) || 0)) n.comfort = Math.max(n.comfort, 90); }   // N4: Risa keeps Comfort high for a day
+    r.act = alert ? "duty" : choose(r, id);
     tickMood(id, r, h, r.shift === sh);   // N2: mood, stress, skills XP, minor incidents
   }
 }
 export function chatNeed(id) { const r = needsOf(id), q = quirksOf(id); r.n.social = clamp(r.n.social + NEEDS.gain.chat * (q.includes("butterfly") ? 2 : q.includes("loner") ? 0.5 : 1), 0, 100); moodlet(id, "chat"); }
-export const ACT_LABEL = { duty: "on duty", sleep: "asleep", eat: "at the mess", fun: "off duty · unwinding" };
+export const ACT_LABEL = { duty: "on duty", sleep: "asleep", eat: "at the mess", fun: "off duty · unwinding", holo: "on the holodeck" };
 export const statusOf = id => { const r = needsOf(id); return r.act === "duty" && r.shift !== shiftNow() ? "off duty" : ACT_LABEL[r.act]; };

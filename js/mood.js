@@ -4,7 +4,7 @@
 // Everything rides on the needs record (G.prog.needs[id]: mood, band, stress, ml, wins, slip) and G.prog.skills (save v15,
 // additive; hardenNeeds / hardenSkills fill defaults). Quirks are derived (START_QUIRKS / tags), never saved.
 import { G } from "./state.js";
-import { MOOD, PACE_RT, offRules, isPresent } from "./pacing.js";
+import { MOOD, HOLO, PACE_RT, offRules, isPresent } from "./pacing.js";
 import { PROG } from "./progression.js";
 import { QUIRKS, START_QUIRKS, TAG_QUIRK, SLOTMAP } from "./roster.js";
 import { needsOf, NEED_KEYS } from "./needs.js";
@@ -106,10 +106,12 @@ export function effOf(id) {
 // which roster slots man each engineering system (all faults are on the engineering deck)
 export const STATION_CREW = { warpcore: ["chief-engineer", "engineer-1"], coolant: ["engineer-1", "engineer-2"], eps: ["engineer-2", "chief-engineer"],
   shields: ["engineer-1", "tactical"], phasers: ["tactical", "security"], loader: ["security", "engineer-2"], transporter: ["transporter"] };
+const holoBuff = (id, sys, t) => { const b = G.prog.holo && G.prog.holo.buffs && G.prog.holo.buffs[id]; if (!b || !(b.t1 > t)) return 0;   // N4 holodeck buffs (no stacking: one per person)
+  return b.k === "sharp" ? HOLO.sharp : b.k === "drilled" && HOLO.drilledSys.includes(sys) ? HOLO.drilled : 0; };
 export function stationEff(sys) {
   const C = G.prog && G.prog.crew, slots = STATION_CREW[sys]; if (!C || !C.slots || !slots) return 1;
   const inj = injured(), t = now(); let s = 0, n = 0, slip = 0;
-  for (const sl of slots) { const id = C.slots[sl]; if (!id || !C.occ[id] || inj.has(id)) continue; const r = G.prog.needs && G.prog.needs[id]; s += effOf(id) * (r && r.unwell > t ? MOOD.medium.unwellEff : r && r.refuse > t ? MOOD.medium.refuseEff : 1); n++;   /* P29 #9: off duty counts at half */ if (r && r.slip > t) slip++; }   // N3: refusing an order -> 70%
+  for (const sl of slots) { const id = C.slots[sl]; if (!id || !C.occ[id] || inj.has(id)) continue; const r = G.prog.needs && G.prog.needs[id]; s += holoBuff(id, sys, t) + effOf(id) * (r && r.unwell > t ? MOOD.medium.unwellEff : r && r.refuse > t ? MOOD.medium.refuseEff : 1); n++;   /* P29 #9: off duty counts at half */ if (r && r.slip > t) slip++; }   // N3: refusing an order -> 70%
   return n ? clamp(s / n - slip * MOOD.eff.slip, MOOD.medium.unwellEff * MOOD.eff.lo - MOOD.eff.slip, MOOD.eff.hi) : 1;
 }
 // bridge officers' ability cooldown speed (battle.js tickAbilities): mood 0.9-1.05, +1% per Tactical level, max 1.1
@@ -119,7 +121,7 @@ export function cdRate(ab) {
   const D = MOOD.cd, e = (effOf(id) - MOOD.eff.lo) / (MOOD.eff.hi - MOOD.eff.lo);
   return clamp((D.lo + (D.hi - D.lo) * e) * (1 + 0.01 * skillLvl(id, "tactical")), D.lo, D.max);
 }
-export const ltRepairSkill = () => 1 + 0.02 * skillLvl("lt", "engineering");
+export const ltRepairSkill = () => (1 + 0.02 * skillLvl("lt", "engineering")) * (holoBuff("lt", "", now()) ? 1 + HOLO.sharp : 1);   // N4: "Sharp" from the warp core drill
 
 // ---- minor incidents (Strained or worse) ----
 const GRUMBLE = ["{n} is heard grumbling about the replicator coffee.", "{n} snaps at a console that wasn't doing anything wrong.", "{n} mutters that this tour will never end.",

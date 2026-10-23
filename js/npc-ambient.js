@@ -316,11 +316,15 @@ const SPOT = (id, x, y, face, action, seat) => ({ id, x, y, face, action, t: [1e
 const EAT = ["table1", "table3", "table5", "table6"].map(k => () => { const nd = NODEMAP[k]; return SPOT("eat-" + k, nd.seat.stand[0], nd.seat.stand[1], "down", "eat", k); });   // table 4 = the botanist's, mess = the Lt's
 const FUN = [SPOT("fun-bar", 0.37, 0.355, "up", "talk"), SPOT("fun-window", 0.70, 0.55, "right", null), SPOT("fun-bar2", 0.30, 0.40, "up", "talk"), SPOT("fun-window2", 0.72, 0.62, "right", null)];
 const BUNK = [SPOT("bunk-west", 0.20, 0.44, "up", null), SPOT("bunk-mid", 0.45, 0.44, "up", null), SPOT("bunk-east", 0.64, 0.44, "up", null)];
+const ARGUE = [SPOT("argue-a", 0.51, 0.362, "left", "talk"), SPOT("argue-b", 0.45, 0.362, "right", "talk")];   // P29b/P30: two facing spots on the open floor along the bar, clear of the fun-bar stools (the old .41,.40 was off the walk mask and snapped behind a patron)
 function placeFor(n, act) {
   const sl = SLOTMAP[n.slot], taken = id => ambient.some(a => a !== n && a.visit && a.visit.spot && a.visit.spot.id === id);
   const pick = (list, deck, inside) => { const free = list.filter(s => !taken(s.id)); const s = (free.length ? free : list)[idHash(n.occId) % (free.length || list.length)]; return { deck, spot: s, inside }; };
   if (act === "eat") return pick(EAT.map(f => f()), "lounge");
-  if (act === "fun") return pick(FUN, "lounge");
+  if (act === "holo") return { deck: null };   // N4: on the holodeck, off the visible deck
+  if (act === "fun") { const a = G.prog.jobs && G.prog.jobs.active, r = G.prog.needs && G.prog.needs[n.occId];
+    if (a && a.kind === "incident" && a.inc === "argument" && r && r.argue > G.ship.elapsed && (a.who === n.occId || a.other === n.occId)) return { deck: "lounge", spot: ARGUE[a.who === n.occId ? 0 : 1] };
+    return pick(FUN, "lounge"); }
   if (act === "sleep") return sl && sl.senior ? { deck: null } : pick(BUNK, "berthing", true);
   return null;
 }

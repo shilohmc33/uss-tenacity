@@ -154,7 +154,9 @@ export const MOOD = {
   day: 57600,                                                                // a ship's day in seconds (PROG.dayLength)
   mlet: { win: [5, 1], disengage: [-4, 1], tow: [-10, 1], injury: [-4, 1], death: [-15, 3], gift: [4, 1], giftLoved: [8, 1], giftBad: [-2, 0.5],
     dinner: [4, 1], shore: [20, 2], chat: [2, 0.25], allyLost: [-6, 2], keralaLost: [-9, 3],
-    talked: [6, 1], heard: [10, 1], scuffle: [-3, 0.5] },                     // [value, ship's days]; fades linearly to 0
+    talked: [6, 1], heard: [10, 1], scuffle: [-3, 0.5],
+    holoCal: [6, 0.5], holoZen: [5, 0.5], holoNovel: [10, 1], holoProton: [6, 0.5], holoVic: [8, 0.5], holoRisa: [20, 1], holoCrowd: [-3, 0.5], holoLoved: [4, 1],
+    rested: [3, 0.5], counsel: [6, 1], swap: [3, 0.5] },                     // [value, ship's days]; fades linearly to 0
   maxMlets: 8,
   eff: { lo: 0.85, hi: 1.05, slip: 0.03 },                                   // station efficiency from mood; a slip -3% for 1 h
   cd: { lo: 0.9, hi: 1.05, max: 1.1 },                                       // bridge officers' cooldown speed from mood (+1%/Tactical level, capped)
@@ -165,4 +167,29 @@ export const MOOD = {
   medium: { perHour: 0.3, stressH: 1, gapS: 57600, refuseS: 7200, refuseEff: 0.7, unwellEff: 0.5, unwellS: 14400 },
   major: { perHour: 0.2, stressH: 4, gapS: 5 * 57600, breakdownS: 57600, misset: 0.15, insubOp: -4 },
   graceDays: 7, workS: [8, 12], helpOp: 2,                   // XP; level L needs 100 x L more (50 L (L+1) total)
+};
+
+// ---- N4: player crew-care tools (js/crewcare.js) and the Holodeck panel (js/holodeck.js, plan section 8) ----
+export const CARE = {
+  restS: 4 * 3600, restDayCap: 1,          // order rest: off duty 4 h, once per ship's day per crewmember (a senior signs it off)
+  counselGapDays: 3,                       // counselor visit: stress reset, 3 ship's days per crewmember
+  swapDayCap: 1,                           // shift swap: once per ship's day per crewmember
+  shoreRep: 10, shoreFill: 40,             // shore leave at DS9: ship-wide, once per dock, costs 10 rep; fun/social/comfort +40
+  insightQuirk1: 2, insightQuirks: 3, insightBars: 3,   // Insight gating: one quirk at 2, all quirks + need bars at 3
+};
+export const HOLO = {
+  // cost FR, min (session length, ship seconds = min x 60), group = up to 4, fit = quirks that love it
+  progs: {
+    tactical_sim: { name: "Starfleet Tactical Sim", sub: "Kobayashi Maru variant", fr: 20, min: 20, kind: "drill", skill: "tactical", xp: 40, buff: "drilled", fit: ["green", "workaholic"] },
+    warp_core_breach: { name: "Warp Core Breach Drill", sub: "engineering sim", fr: 20, min: 20, kind: "drill", skill: "engineering", xp: 40, buff: "sharp", fit: ["workaholic"] },
+    klingon_calisthenics: { name: "Klingon Calisthenics", sub: "bat'leth forms", fr: 15, min: 15, kind: "solo", skill: "fitness", xp: 40, fit: ["shortfuse"] },
+    vulcan_garden: { name: "Vulcan Meditation Garden", sub: "Kolinahr-lite", fr: 15, min: 30, kind: "solo", skill: "composure", xp: 30, fit: ["vulcan", "devout"] },
+    dixon_hill: { name: "Dixon Hill", sub: "holonovel, San Francisco 1941", fr: 30, min: 40, kind: "novel", fit: ["holo"] },
+    captain_proton: { name: "Captain Proton", sub: "serial, chapter 7 (group)", fr: 45, min: 40, kind: "group", fit: ["butterfly"] },
+    vics_lounge: { name: "Vic's Lounge Night", sub: "Las Vegas 1962 (group)", fr: 35, min: 30, kind: "group", fit: ["butterfly", "nightowl"] },
+    risa_beach: { name: "Risa Beach", sub: "premium", fr: 120, min: 120, kind: "premium", fit: ["homesick"], gapDays: 5 },
+  },
+  buffS: 4 * 3600, drilled: 0.05, sharp: 0.08, drilledSys: ["phasers", "loader"],
+  groupMax: 4, opinion: 1, groupOpinion: 2, crewCheapFr: 20, crewPerHour: 0.5,
+  overuse: { perDay: 2, days: 2 }, nightOwl: 1.25, addict: 1.5, recent: 3,
 };

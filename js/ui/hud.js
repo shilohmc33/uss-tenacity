@@ -26,6 +26,8 @@ import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering, lt
 import { BR, missionText } from "../battle.js";
 import { foe, shipOf, hullPct, combatantRows, FACTIONS } from "../ships.js";
 let hudRowsKey = "";
+import * as CC from "../crewcare.js";
+import { careHtml, holoChips } from "./holo.js";
 import { ltScreenFrac } from "../render/deck.js";
 
 const $ = s => document.querySelector(s);
@@ -266,11 +268,11 @@ export function updateHud() {
   renderCareer();
   autoModals();
   // chips
-  const bp = IN.pending(), sg = RM.pendingSignal(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "");
+  const bp = IN.pending(), sg = RM.pendingSignal(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck);
   if (ck !== lastChips) {
     lastChips = ck;
     // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
-    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
      
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;
@@ -412,7 +414,7 @@ export function renderCareer(force = false) {
     const injTag = inj ? ` <em class="injb${inj.state === "warning" || inj.state === "surgery" ? " crit" : ""}">${inj.state === "warning" ? "INJURED · SERIOUS" : inj.state === "surgery" ? "IN SURGERY" : "INJURED"}</em>` : "";
     const injNote = inj ? (inj.state === "surgery" ? (inj.held ? `in surgery — held stable until you're back on watch` : `in surgery — ${MD.docName(inj.id).replace(/^The /, "the ")} operating`) : inj.state === "warning" ? `in sickbay — needs the ${SYSTEMS[inj.sys].name} fixed (${Math.max(0, Math.ceil(inj.left))}s${!inj.ack ? " · waiting for you — the clock starts when you respond" : MD.isPresentNow() ? " left · clock running" : " left · paused while you're away"})` : `in sickbay — recovering${inj.healAt ? `, back in ~${Math.max(1, Math.round((inj.healAt - G.ship.elapsed) / 3600))} h` : ""}`) : "";
     const pin = (c.senior || !PROG.deaths.enabled) ? `<span class="pin0"></span>` : `<button class="pin${pinned ? " on" : ""}${fav ? " fav" : ""}" data-pin="${c.id}" title="${pinned ? "Pinned favourite (protected)" : fav ? "Favourite — protected (tap to pin)" : "Pin as a protected favourite"}"><i>${pinned || fav ? "★" : "☆"}</i></button>`;
-    const nr = inj ? null : needsOf(c.id), needs = nr ? `<div class="needs${openNeeds.has(c.id) ? " open" : ""}" data-needs="${c.id}" title="${SHIFT_NAME[nr.shift]} shift · ${statusOf(c.id)}">${NEED_KEYS.map(k => { const v = Math.round(nr.n[k]); return `<i title="${NEED_LABEL[k]} ${v}"><b class="${v < 25 ? "lo" : v < 50 ? "mid" : ""}" style="width:${v}%"></b></i>`; }).join("")}<span>${statusOf(c.id)} · <em class="md b${bandOf(c.id)}">${bandLabel(bandOf(c.id))}</em></span><small class="nv">${SHIFT_NAME[nr.shift]} shift · ${NEED_KEYS.map(k => `${NEED_LABEL[k]} ${Math.round(nr.n[k])}`).join(" · ")}<br>Mood ${Math.round(moodOf(c.id))} (${bandLabel(bandOf(c.id))}) · station efficiency ${Math.round(effOf(c.id) * 100)}%<br>Quirks: ${quirkNames(c.id).join(", ") || "none"}<br>Skills: ${skillLine(c.id)}</small></div>` : "";
+    const nr = inj ? null : needsOf(c.id), needs = nr ? `<div class="needs${openNeeds.has(c.id) ? " open" : ""}" data-needs="${c.id}" title="${SHIFT_NAME[nr.shift]} shift · ${statusOf(c.id)}">${CC.barsShown() ? NEED_KEYS.map(k => { const v = Math.round(nr.n[k]); return `<i title="${NEED_LABEL[k]} ${v}"><b class="${v < 25 ? "lo" : v < 50 ? "mid" : ""}" style="width:${v}%"></b></i>`; }).join("") : ""}<span>${statusOf(c.id)} · <em class="md b${bandOf(c.id)}">${bandLabel(bandOf(c.id))}</em></span><small class="nv">${SHIFT_NAME[nr.shift]} shift · ${CC.barsShown() ? NEED_KEYS.map(k => `${NEED_LABEL[k]} ${Math.round(nr.n[k])}`).join(" · ") : "needs: readable at Insight 3"}<br>Mood ${Math.round(moodOf(c.id))} (${bandLabel(bandOf(c.id))}) · station efficiency ${Math.round(effOf(c.id) * 100)}%<br>Quirks: ${quirkLine(c.id)}<br>Skills: ${skillLine(c.id)}</small></div>` : "";
     return `<div class="rel${inj ? " inj" : ""}">${face}<div class="nm">${c.rankShort} ${c.short}${c.intro ? ` <em class="newb">NEW</em>` : ""}${injTag}<small>${inj ? injNote : `${c.speciesName} · ${c.role}`}</small></div>${pin}<div class="opbar"><i class="${v >= 0 ? "pos" : "neg"}" style="width:${w}%"></i></div><small class="lab" title="7-day trend: ${st.trend.label}">${st.label}${IN.numbersShown() ? ` <b class="opn">${sgn(v)}</b>` : ""}<i class="tr t${st.trend.dir}">${st.trend.arrow}</i></small>${needs}</div>`;   // plog1 follow-up: label + trend, number hidden (as in the Personal Log)
   };
   const pend = G.prog.crew.pending;
@@ -464,7 +466,7 @@ function renderQuarters(force) {
   const st = CB.storage();
   setHtml("quarters", `<h4>LT'S QUARTERS <small>${T.name}</small></h4>
     <p class="cnote">Rest on your rack: <b>${CB.rackRest().toFixed(1)}</b> energy/s (comfort +${pct(tt.comfort)}%) · social +${pct(tt.social)}% · readiness +${tt.readiness} · catalogue ${pct(CB.completion())}% · ${cur.name} <b>${G.prog.rations}</b>${st.length ? ` · ${st.length} in storage` : ""}</p>
-    <div class="slots">${rows}</div>${(() => { const ds = CB.dinnerState(), K = PROG.cabin.dinner; return `<div class="req fav${ds.ok ? "" : " off"}"><div>Host a dinner in your quarters<small>+opinion with the ${K.guests} crew who like you least${ds.ok ? "" : ` · ${ds.why}`}</small></div><button data-sink="dinner" ${ds.ok ? "" : "disabled"}>${costText(K.cost)}</button></div>`; })()}${G.lt.deck !== "quarters" ? `<button class="goq" data-node="rack">Go to quarters ▸</button>` : ""}`, force);
+    <div class="slots">${rows}</div><div class="req fav"><div>Holodeck<small>Book a program for yourself or a crewmate (Rations)</small></div><button data-holo-open="1">OPEN</button></div>${(() => { const ds = CB.dinnerState(), K = PROG.cabin.dinner; return `<div class="req fav${ds.ok ? "" : " off"}"><div>Host a dinner in your quarters<small>+opinion with the ${K.guests} crew who like you least${ds.ok ? "" : ` · ${ds.why}`}</small></div><button data-sink="dinner" ${ds.ok ? "" : "disabled"}>${costText(K.cost)}</button></div>`; })()}${G.lt.deck !== "quarters" ? `<button class="goq" data-node="rack">Go to quarters ▸</button>` : ""}`, force);
 }
 let decorSlot = null;
 // ---- phase 5: promotion board modal + specialisation picker ----
@@ -643,6 +645,8 @@ function giftSections(id, w, aboard) {
   return `<div class="plsec">CARE PACKAGE</div><div class="req"><div>${last}<small>${sent ? `+${sent} of +${PROG.gifts.care.max} so far` : `Up to +${PROG.gifts.care.max} opinion in total`} · Fleet Reputation already banked stays as it is${st.ok ? "" : ` · ${esc(st.why)}`}</small></div><button data-pl-care="${id}" ${st.ok ? "" : "disabled"}>SEND · ${PROG.gifts.care.cost} ${FR()}</button></div>${known}`;
 }
 // ---- Personal Log phase 3: Insight ----
+const quirkLine = id => { const all = quirkNames(id), sh = CC.quirksShown(id); if (!all.length) return IN.level() >= 2 ? "none" : "unknown until Insight 2";
+  return sh.length ? sh.join(", ") + (sh.length < all.length ? " · more at Insight 3" : "") : "unknown until Insight 2"; };
 const sgn = v => { const r = Math.round(v); return r > 0 ? `+${r}` : `${r}`; };
 function insightBar() { const x = IN.xpBand(); return `<div class="inbar"><i style="width:${Math.round(x.frac * 100)}%"></i></div>`; }
 function insightRow() {
@@ -805,5 +809,5 @@ function renderPlog() {
   const jr = PL.journalOf(id);
   const journal = `<div class="plsec">JOURNAL</div>${jr.length ? jr.map(j => `<p class="plj"><small>${j.sd != null ? `SD ${j.sd.toFixed(1)}` : `Day ${j.day}`}</small>${esc(j.text)}</p>`).join("") : `<p class="plnote">No entries yet.</p>`}`;
   const res = plogView.result, banner = res ? `<div class="plres${res.why ? " bad" : res.r === "uncomfortable" ? " dis" : ""}">${esc(res.why || res.line)}${res.learned && res.learned.length ? `<small>You learned: ${esc(res.learned.join("; "))}</small>` : ""}</div>` : "";
-  body.innerHTML = `<button class="plback" data-pl="index">‹ BACK</button>${banner}${head}${stand}${bondSection(id, w, aboard)}${giftSections(id, w, aboard)}${hw}${moved}${journal}`;
+  body.innerHTML = `<button class="plback" data-pl="index">‹ BACK</button>${banner}${head}${stand}${aboard ? careHtml(id) : ""}${bondSection(id, w, aboard)}${giftSections(id, w, aboard)}${hw}${moved}${journal}`;
 }

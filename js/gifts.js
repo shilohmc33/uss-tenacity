@@ -7,7 +7,7 @@
 // The gift-driven part of an opinion (gifts.giftOp) counts 50% toward board readiness and the Fleet Reputation of a transfer.
 import { G } from "./state.js";
 import { log, toast } from "./bus.js";
-import { moodlet } from "./mood.js";
+import { quirksOf, moodlet } from "./mood.js";
 import { PROG, hooks, nudge, opinionOf, spend, canAfford, addr, crewTouch } from "./progression.js";
 import { GIFT, GIFT_ITEMS, CAT_LABEL, tastesOf, L2_ALT } from "./gift-data.js";
 import { pr, Pr, POSTINGS } from "./roster.js";
@@ -99,6 +99,9 @@ const LINES = {
   uncomfortable: "{S} looks at {A} a moment too long. 'That's... kind.' {Sub} {is} uncomfortable.",
 };
 const fillL = (t, o, it) => t.replace(/\{S\}/g, o.short).replace(/\{A\}/g, it.a).replace(/\{lt\}/g, addr()).replace(/\{Sub\}/g, Pr(o)).replace(/\{is\}/g, pr(o, "is"));
+const QUIRK_CATS = { holo: ["holo", "story"], gourmand: ["food", "cooking", "sweets"], homesick: ["family", "home", "sentimental"], devout: ["spiritual"], vulcan: ["vulcan", "logic"],
+  workaholic: ["tech", "career"], butterfly: ["game", "music"], loner: ["book"], nightowl: ["coffee", "hot"], green: ["tactical", "career"], oldhand: ["antique", "keepsake"], shortfuse: ["klingon"] };
+export const quirkFit = (id, it) => quirksOf(id).some(q => (QUIRK_CATS[q] || []).some(c => it.cats.includes(c)));
 export function giveGift(id, itemId) {
   const it = GIFT[itemId], st = giveState(id); if (!it || !st.ok) return { ok: false, why: st.why || "unknown gift" };
   const g = Gs(), K_ = K(), T = tierOf(it), o = P().crew.occ[id], p = P();
@@ -111,7 +114,7 @@ export function giveGift(id, itemId) {
   if (it.cats.includes(t.dislike)) { r = "uncomfortable"; if (!k.dislike) { k.dislike = 2; learned.push(`${o.short} doesn't care for ${CAT_LABEL[t.dislike]}`); } }
   else {
     const hits = ["like1", "like2"].map(f => ({ f, L: t[f], exact: t[f].item === it.id, cat: it.cats.includes(t[f].cat) })).filter(h => h.exact || h.cat);
-    if (hits.some(h => h.exact && k[h.f] === 2) && T.loved) { r = "delighted"; mult = K_.loved; }
+    if ((hits.some(h => h.exact && k[h.f] === 2) && T.loved) || quirkFit(id, it)) { r = "delighted"; mult = K_.loved; }   // N4: a gift that suits a quirk counts as loved
     else if (hits.length) { r = "pleased"; mult = K_.liked; }
     else r = "polite";
     reveal = !!T.loved && r !== "delighted" && hits.some(h => h.exact && k[h.f] < 2);   // pt07 m5: this gift reveals a loved item

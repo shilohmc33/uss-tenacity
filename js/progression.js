@@ -822,6 +822,7 @@ function hardenCrew(p) {
 // PARTS 1000000000/30). Caps that the game derives (locker size from the requisition tier, torpedo complement) are
 // recomputed rather than trusted; open-ended currencies get a generous sanity ceiling.
 export const SANE_MAX = 1e7;
+export function addHardener(f) { (addHardener.list = addHardener.list || []).push(f); }   // hoisted: safe to call from any module top level
 export function clampResources() {
   const S = G.ship, p = P(), int = (v, lo, hi, d = lo) => clamp(Math.floor(num(v, d)), lo, hi);
   if (!isObj(S)) return;
@@ -902,6 +903,7 @@ export const clampProg = () => {
   hardenNeeds(p);  // v15 crew needs
   hardenSkills(p);  // N2 skills (additive to v15)
   hardenInc(p);     // N3 incident caps
+  for (const f of addHardener.list || []) f(p);   // N4: holodeck, crew care (registered by their modules; no static import, load order)
   if (!p.moodInc || typeof p.moodInc !== "object" || !Number.isFinite(p.moodInc.last)) p.moodInc = { last: -1e9, n: 0 };
   p.med.inj = p.med.inj.filter(x => x && p.crew.occ[x.id] && (x.sev !== "serious" || typeof x.sys === "string"));
   hardenMed10(p);  // v10

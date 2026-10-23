@@ -42,7 +42,9 @@ function post(job) {
   Object.assign(job, { kind: "incident", deck: NODEMAP[job.node].deck, t: k.expire, dur: k.expire, need: rr(MOOD.workS), acc: 0, id: ++j.n });
   const old = j.active, L = G.lt;
   if (old && old.kind !== "incident") {   // P29 #6: an incident outranks an odd job; stop his walk to it and say so
-    if (L.intent && L.intent.kind === "use" && L.intent.node === old.node) { L.intent = null; L.path = null; L.mode = "idle"; }
+    const it = L.intent, toOld = x => x && x.kind === "use" && x.node === old.node;
+    if (toOld(it) || (it && it.kind === "liftRide" && toOld(it.then))) { L.intent = null; L.path = null; L.mode = "idle"; }
+    if (L.lift && toOld(L.lift.then)) L.lift.then = null;   // P29b: riding the lift to it: arrive and stand by instead
     log(`Odd job dropped — ${old.label.replace(/^./, c => c.toLowerCase())}. A crew incident needs you more.`, "comm");
   }
   j.active = job;
@@ -52,15 +54,19 @@ function post(job) {
 const S = id => pr(occ(id), "sub"), O = id => pr(occ(id), "obj"), Ps = id => pr(occ(id), "pos"), V = (id, they, it) => pr(occ(id), "s") ? it : they;
 const Cap = t => t.replace(/^./, c => c.toUpperCase());
 const ROLE = { security: "tactical", captain: "co", doctor: "doctor", chief: "chief-engineer" };
-function resp(role, ...not) {   // the officer who steps in; falls back to another senior when the usual one is involved
+function respId(role, ...not) {   // the officer who steps in; falls back to another senior when the usual one is involved
   const inj = injured();
-  for (const sl of [ROLE[role], "tactical", "co", "chief-engineer", "science", "doctor"]) { const id = P().crew.slots[sl]; if (id && occ(id) && !not.includes(id) && !inj.has(id) && !(needsOf(id).unwell > now())) return nm(id); }
-  return "The duty officer";
+  for (const sl of [ROLE[role], "tactical", "co", "chief-engineer", "science", "doctor"]) { const id = P().crew.slots[sl]; if (id && occ(id) && !not.includes(id) && !inj.has(id) && !(needsOf(id).unwell > now())) return id; }
+  return null;
 }
+const resp = (role, ...not) => { const id = respId(role, ...not); return id ? nm(id) : "The duty officer"; };
+const MAST = { tren: "'Logical.'", hale: "'Good. I hate paperwork.'", okafor: "'Right. Back to work.'", diallo: "'Noted. We'll say no more about it.'" };   // P29b: flavor per officer
+const NO_ARGUE = new Set(["doctor"]);   // P29b: Dr. Orvin never brawls in the Mess
+export function checkIncident(a) { return !!(occ(a.who) && (a.inc !== "argument" || occ(a.other))); }   // P29b: the crewmember left the ship -> drop it
 // ---- medium ----
 function argument(id) {
-  const inj = injured(); if (SLOTMAP[occ(id).slot].senior) return false;   // seniors don't brawl in the Mess
-  const others = Object.values(P().crew.slots).filter(o => o && o !== id && occ(o) && !inj.has(o) && !hasQ(o, "vulcan") && !(needsOf(o).unwell > now()) && !SLOTMAP[occ(o).slot].senior);
+  const inj = injured(); if (SLOTMAP[occ(id).slot].senior || NO_ARGUE.has(occ(id).slot)) return false;   // seniors don't brawl in the Mess
+  const others = Object.values(P().crew.slots).filter(o => o && o !== id && occ(o) && !inj.has(o) && !hasQ(o, "vulcan") && !(needsOf(o).unwell > now()) && !SLOTMAP[occ(o).slot].senior && !NO_ARGUE.has(occ(o).slot));
   if (!others.length) return false;
   const o = pick(others), until = now() + MOOD.major.breakdownS;
   needsOf(id).argue = until; needsOf(o).argue = until;   // both walk to the Mess & Bar (needs.js: act "fun") so the Lt finds them there
@@ -132,7 +138,7 @@ export function resolveIncident(a) {
   else if (a.inc === "breakdown") { r.unwell = Math.min(r.unwell || 0, now() + MOOD.major.breakdownS / 2); r.stress = 0; moodlet(id, "heard"); nudge(id, A + 1, "incident");
     log(`You stay with ${nm(id)} until the shaking stops. ${resp("doctor", id)} halves ${Ps(id)} time off duty: 'Whatever you said, keep saying it, ${addr()}.'`, "good"); }
   else if (a.inc === "insub") { nudge(id, -MOOD.major.insubOp + A, "incident", true); moodlet(id, "heard"); calm(id);
-    log(`${nm(id)} apologises before ${resp("captain", id)} has to ask. The mast is dismissed. 'Logical.'`, "good"); }
+    { const c = respId("captain", id); log(`${nm(id)} apologises before ${c ? nm(c) : "the captain"} has to ask. The mast is dismissed. ${(c && MAST[occ(c).id || c]) || MAST[c] || "'Dismissed.'"}`, "good"); } }
   else if (a.inc === "misset") { moodlet(id, "heard"); calm(id); nudge(id, A, "incident");
     log(`${nm(id)} admits it: ${S(id)} wanted someone to notice how close to the edge ${S(id)} ${V(id, "are", "is")}. You noticed. ${resp("chief", id)} keeps it off the record.`, "good"); }
   toast(`Incident resolved — ${a.short}`, "good");

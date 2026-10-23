@@ -364,7 +364,8 @@ export function drawDeck(ctx, t, dt) {
     ring(ctx, x, y, 22 * K, 0.5 + 0.5 * Math.sin(t * 2.4), "rgba(120,230,210,0.75)", 2);
     if (job.acc > 0) ring(ctx, x, y, 17 * K, job.acc / job.need, "#9fe8b1", 3);
     ctx.fillStyle = "#9ff0de"; ctx.font = `bold ${7 * K}px Antonio, sans-serif`; ctx.textAlign = "center";
-    if (job.kind !== "incident") ctx.fillText("ODD JOB", x, y + 14 * K);   // the INCIDENT label is drawn after the mood icons (P29 #8) ctx.textAlign = "left";   // under his feet so the Lt never hides it
+    if (job.kind !== "incident") ctx.fillText("ODD JOB", x, y + 14 * K);   // under his feet so the Lt never hides it; INCIDENT is drawn after the mood icons (P29 #8)
+    ctx.textAlign = "left";
   }
   // repair progress ring
   if (L.mode === "repair" && L.repairSys) ring(ctx, L.x * DW, L.y * DH + 2, 16 * K, L.repairT / SYSTEMS[L.repairSys].dur, "#ffb27a", 3);
@@ -387,7 +388,9 @@ export function drawDeck(ctx, t, dt) {
   updateDoors(L.deck, dt, cast);   // sliding doors: every figure's feet (x, y fractions) so far; drawn next frame under the cast
   if (!L.lift && !dk.cabin) cast.push(...occluderCast(ctx, L.deck, cast));
   cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
-  if (!L.lift) for (const c of cast) if (c.id && c.id !== "lt" && G.prog && G.prog.needs && G.prog.needs[c.id]) { const b = bandOf(c.id); if (b >= 2) { const y0 = (c.y - HEAD_Y * (c.seat ? 0.78 : 1.02)) * DH, top = cam.y - (cam.h / 2 - 34) / cam.scale + 10 * K; moodIcon(ctx, c.x * DW, Math.max(y0, top), b, t, y0 < top); } }   // P28: never above the top edge (34 px clears the deck label)   // N2: Strained or worse
+  if (!L.lift) for (const c of cast) if (c.id && c.id !== "lt" && G.prog && G.prog.needs && G.prog.needs[c.id]) { const b = bandOf(c.id); if (b >= 2) { const y0 = (c.y - HEAD_Y * (c.seat ? 0.78 : 1.02)) * DH, sx = (c.x * DW - cam.x) * cam.scale + cam.w / 2, res = sx < 260 ? 34 : 4, top = cam.y - (cam.h / 2 - res) / cam.scale + 9 * K;
+    const yy = Math.max(y0, top), side = yy - y0 > 6 * K ? 13 * K : 0;   /* P30: clear of the deck label only where it is; still pushed onto the head -> sit beside it, never over the face */
+    moodIcon(ctx, c.x * DW + side, yy, b, t, y0 < top); } }   // P28: never above the top edge (34 px clears the deck label)   // N2: Strained or worse
   { const job = activeJob(); if (job && job.kind === "incident" && job.deck === L.deck && !L.lift) { const n = NODEMAP[job.node], x = n.x * DW, y = n.y * DH;
     ctx.font = `bold ${8 * K}px Antonio, sans-serif`; ctx.textAlign = "center"; ctx.lineWidth = 3 * K; ctx.strokeStyle = "rgba(10,14,24,0.9)"; ctx.strokeText("INCIDENT", x, y + 14 * K);
     ctx.fillStyle = "#ffb86b"; ctx.fillText("INCIDENT", x, y + 14 * K); ctx.textAlign = "left"; } }   // P29 #8: above mood icons
