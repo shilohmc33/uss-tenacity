@@ -34,6 +34,10 @@ export const SHIPS = {
   klingon_bop: { name: "IKS Ch'Tang", short: "Ch'Tang", a: "the Bird-of-Prey", cls: "Klingon Bird-of-Prey", faction: "klingon", side: "ally", hull: 80, shields: 70, speed: 1.4, sprite: "klingon_bop", aspect: 2.0, size: 0.6,
     weapons: [{ id: "disruptor", name: "Disruptor cannons", kind: "beam", dmg: [9, 14], cd: 2.8, power: 0, col: "120,255,90" }],
     hp: { fire: [0.96, 0.64], torp: [0.6, 0.5], hit: [0.5, 0.5], miss: [0.1, 0.2], boom: [0.5, 0.5] } },   // batch2 polish: nose emitter
+  // P3: the Federation escort (artist's ships_batch3; USS Yeager is a canon Saber-class). A light escort: lighter guns than the Ch'Tang
+  fed_saber: { name: "USS Yeager", short: "Yeager", a: "the Saber-class escort", cls: "Saber-class escort", faction: "starfleet", side: "ally", hull: 75, shields: 60, speed: 1.3, sprite: "fed_saber", aspect: 3.0, size: 0.6,
+    weapons: [{ id: "phaser", name: "Phaser strip", kind: "beam", dmg: [7, 11], cd: 2.6, power: 0, col: "255,150,60" }],
+    hp: { fire: [0.989, 0.584], torp: [0.7, 0.55], hit: [0.5, 0.5], miss: [0.1, 0.2], boom: [0.5, 0.5] } },
   // ---- enemies ----
   jh_fighter: { name: "Jem'Hadar fighter", short: "fighter", a: "a Jem'Hadar fighter", cls: "Jem'Hadar attack ship", faction: "dominion", side: "enemy", hull: 60, shields: 0, speed: 1.6, evade: 0.15, sprite: "jh_fighter", aspect: 2.1, size: 0.44,
     weapons: [{ id: "polaron", name: "Polaron volley", kind: "beam", dmg: [7, 12], every: [2.1, 2.7], first: 1.3, col: "190,140,255", hits: "a polaron hit" }],
@@ -110,6 +114,7 @@ export function hardenBattle(sp) {
   if (!B.cd || typeof B.cd !== "object" || Array.isArray(B.cd)) B.cd = {};
   for (const k of ["phaser", "torp", "evasive", "divert"]) B.cd[k] = fin(B.cd[k], 0, 0, 60);
   B.allyDying = fin(B.allyDying, 0, 0, SLOTS) | 0;
+  if (B.mission && typeof B.mission === "object" && typeof B.mission.id === "string") B.mission = { id: B.mission.id, lead: String(B.mission.lead || ""), protect: typeof B.mission.protect === "string" ? B.mission.protect : null, failed: B.mission.failed === true }; else B.mission = null;   // P3
   for (const k of ["enterT", "dying", "inflight", "injN"]) if (B[k] !== undefined) B[k] = fin(B[k], 0, 0, k === "inflight" ? 1000 : 100);
   return true;
 }
@@ -120,7 +125,7 @@ export function hardenBattle(sp) {
 // vs the one-on-one size. portrait / landscape tables: upright, allies hold the lower half and enemies the upper; sideways,
 // allies the left and enemies the right.
 export const FORMATION = {
-  portrait: { ally: [null, { cx: 0.27, cy: 0.47, s: 0.5 }, { cx: 0.76, cy: 0.47, s: 0.5 }], enemy: [null, { cx: 0.22, cy: 0.21, s: 0.5 }, { cx: 0.72, cy: 0.13, s: 0.45 }] },   // P2: below the red-alert banner, clear of the lead
+  portrait: { ally: [null, { cx: 0.27, cy: 0.47, s: 0.5 }, { cx: 0.76, cy: 0.47, s: 0.5 }], enemy: [null, { cx: 0.22, cy: 0.21, s: 0.5 }, { cx: 0.8, cy: 0.12, s: 0.45 }] },   // P2/P25: below the red-alert banner, clear of the lead
   landscape: { ally: [null, { cx: 0.15, cy: 0.2, s: 0.46 }, { cx: 0.38, cy: 0.22, s: 0.4 }], enemy: [null, { cx: 0.84, cy: 0.66, s: 0.5 }, { cx: 0.6, cy: 0.12, s: 0.36 }] },
 };
 export const SLOTS = 3;   // per side

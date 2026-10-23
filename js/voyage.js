@@ -120,7 +120,8 @@ export function arriveAtDest() {
     log(`Docking clamps away — the Tenacity holds station at Deep Space Nine. Station crews begin hull patching; the quartermaster opens resupply${S.torps < S.torpCap ? " and the ordnance crews start loading torpedoes" : ""}.`, "good");
   } else if (id === "convoy") {
     log("Convoy rendezvous made — twelve freighters falling in behind the old girl's shields.");
-    if (!(Math.random() < 0.12 && startBattle("convoy"))) { SP.escortT = 0; SP.escortDone = false; SP.escortChecked = false; log("All quiet on the route — for now. Escort clock running.", "comm"); }
+    SP.escortT = 0; SP.escortDone = false; SP.escortChecked = false;   // P26: the escort clock starts even if raiders hit at the rendezvous - a won fight no longer ends the run
+    if (!(Math.random() < 0.12 && startBattle("convoy"))) log("All quiet on the route — for now. Escort clock running.", "comm");
   } else if (id === "nebula") {
     log("Entering the Omarion Nebula — sensors half-blind in the clouds, hearts fully awake.", "comm");
     const r = Math.random();

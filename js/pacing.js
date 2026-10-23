@@ -83,6 +83,23 @@ export const PACE = {
       max: 3, awayMax: 2, solo: ["defector", "shadow", "debug"],
     },
   },
+  // multi-ship P3: ALLIES come from mission context, not the encounter roll. A fight on the convoy route brings the convoy's freighter
+  // (no guns; she must survive - losing her fails the convoy run); a fight at / to / from Qo'noS brings a Klingon Bird-of-Prey (joint op).
+  // p = chance the mission's ships are in the fight; ids missing from SHIPS are skipped (fed_saber: a Federation escort, ready for when the
+  // artist's Saber-class lands - add her SHIPS entry + sheet, then give "escort" a when/p). {name} / {short} = the first ally's names.
+  allies: {
+    missions: {
+      convoy: { allies: ["freighter"], protect: "freighter", p: 1, objective: "Protect the {name} - if she's lost, the convoy run fails.", short: "Protect the {short}" },
+      jointop: { allies: ["klingon_bop"], p: 1, objective: "Klingon joint op - the {name} fights alongside us.", short: "Joint op with the {short}" },
+      // the Saber-class escort: a chance on ordinary patrol / transit fights (kinds), once the ship has some play days behind her
+      escort: { allies: ["fed_saber"], p: 1, chance: 0.25, kinds: ["enroute", "nebula", "hulk"], minPlayDays: 3, objective: "Federation escort - the {name} flies with us.", short: "Escort: the {short}" },
+    },
+    // who enemies shoot when allies are present: the Tenacity, the weakest ally, else any; protectP = the chance raiders go for the
+    // protected ship first (cargo is the prize). Allies: the Tenacity's target (focus fire), the weakest enemy, else any.
+    aim: { enemy: { ship: 0.4, weakest: 0.4 }, protectP: 0.2, ally: { focus: 0.6, weakest: 0.25 } },
+    morale: { energy: 12 },          // an ally lost costs the Lieutenant's energy (the crew takes it hard)
+    failRep: 2,                      // losing the protected ship: reputation lost (and no convoy-delivered bonus)
+  },
   // --- faults ---
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)
   critKnockOnS: travelS(150),      // pass 18: an open CRIT strains a random LOW fault to MEDIUM every this many s (was 150; x TRAVEL_SCALE)

@@ -17,7 +17,7 @@ import * as IN from "../insight.js";
 import * as RM from "../romance.js";
 import { GIFT, GIFT_ITEMS } from "../gift-data.js";
 import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering, ltStatus } from "../crew.js";
-import { BR } from "../battle.js";
+import { BR, missionText } from "../battle.js";
 import { foe, shipOf, hullPct, combatantRows, FACTIONS } from "../ships.js";
 let hudRowsKey = "";
 import { ltScreenFrac } from "../render/deck.js";
@@ -283,7 +283,7 @@ export function updateHud() {
   if (B) { const E = foe(B), d = shipOf(E), p = hullPct(E); $("#enemyName").textContent = d.name.toUpperCase(); $("#enemyPct").textContent = p + "%"; $("#enemyBar").style.width = p + "%"; $("#enemyBar").style.background = (FACTIONS[d.faction] || {}).trim || "";
     // battle groundwork: the per-combatant HUD rows (stub): rendered into the hidden #combatantRows list, unused by the one-on-one HUD
     const rows = combatantRows(B, S), rk = rows.map(r => r.id + r.pct + (r.targeted ? "*" : "")).join("|");
-    if (rk !== hudRowsKey) { hudRowsKey = rk; $("#combatantRows").innerHTML = rows.map(r => `<li data-cid="${r.id}" data-side="${r.side}"${r.targeted ? ' class="target"' : ""}>${r.name} · ${r.pct}%</li>`).join(""); } $("#bridgeOrders").textContent = `T'Ren: ${BR.tren} · Hale: phasers ${B.cd.phaser > 0 ? "cycling" : "ready"}, torpedoes ${G.gates.loader ? "OFFLINE" : S.torps}`; }
+    if (rk !== hudRowsKey) { hudRowsKey = rk; $("#combatantRows").innerHTML = rows.map(r => `<li data-cid="${r.id}" data-side="${r.side}"${r.targeted ? ' class="target"' : ""}>${r.name} · ${r.pct}%</li>`).join(""); } $("#bridgeOrders").textContent = (B.mission ? `Objective: ${missionText(B)}${B.mission.failed ? " — FAILED" : ""} · ` : "") + `T'Ren: ${BR.tren} · Hale: phasers ${B.cd.phaser > 0 ? "cycling" : "ready"}, torpedoes ${G.gates.loader ? "OFFLINE" : S.torps}`; }
   // crew cards
   const ab = G.ab;
   $("#crewState").textContent = B ? (B.dying ? "Target destroyed" : "Officers acting — red alert") : "Stand by — officers act on their own judgment";

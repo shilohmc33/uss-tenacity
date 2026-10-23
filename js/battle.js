@@ -37,12 +37,28 @@ const pctOf = c => c.ref === "ship" ? G.ship.hull : hullPct(c);
 export function pickTarget(c, B = G.sp.battle, rnd = Math.random) {
   if (!B || !c) return null; const pool = liveOf(c.side === "enemy" ? B.allies : B.enemies); if (pool.length < 2) return pool[0] || null;
   const weakest = pool.reduce((a, x) => pctOf(x) < pctOf(a) ? x : a), r = rnd();
-  if (c.side === "enemy") return r < 0.4 ? (pool.find(x => x.ref === "ship") || weakest) : r < 0.8 ? weakest : pool[Math.floor(rnd() * pool.length)];
-  return r < 0.6 ? foe(B) : r < 0.85 ? weakest : pool[Math.floor(rnd() * pool.length)];
+  const A = PACE.allies.aim;   // P3: tunable in pacing.js
+  if (c.side === "enemy") { const pr = B.mission && !B.mission.failed && pool.find(x => x.ship === B.mission.protect);
+    if (pr && rnd() < A.protectP) return pr;
+    return r < A.enemy.ship ? (pool.find(x => x.ref === "ship") || weakest) : r < A.enemy.ship + A.enemy.weakest ? weakest : pool[Math.floor(rnd() * pool.length)]; }
+  return r < A.ally.focus ? foe(B) : r < A.ally.focus + A.ally.weakest ? weakest : pool[Math.floor(rnd() * pool.length)];
 }
 // P2: a wingman (slot 1-2) is a lighter escort: PACE.encounter.groups.wing scales her hull now, her damage and volley gap when she fires
 const WING = () => (PACE.encounter.groups && PACE.encounter.groups.wing) || { hull: 1, dmg: 1, gap: 1 };
-function wingOf(e, i) { if (i > 0) { e.wing = true; e.max = e.hull = Math.max(1, Math.round(e.hull * WING().hull)); } return e; }
+function wingOf(e, i, on = true) { if (i > 0 && on) { e.wing = true; e.max = e.hull = Math.max(1, Math.round(e.hull * WING().hull)); e.volleyT *= WING().gap; } return e; }   // P25: her first volley waits the stretched gap too
+// P3: the mission a fight belongs to (allies + objective): opts.mission (tests, drills), the convoy route, or Qo'noS joint ops
+function missionOf(kind, opts) {
+  const M = PACE.allies.missions, SP = G.sp, T = SP.travel;
+  if (opts.mission) return M[opts.mission] ? opts.mission : null; if (kind === "debug") return null;
+  if (kind === "convoy" || (SP.location === "convoy" && !SP.escortDone && !T)) return "convoy";
+  if (SP.location === "qonos" || (T && (T.dest === "qonos" || T.from === "qonos"))) return "jointop";
+  const E = M.escort;   // the Federation escort: sometimes on patrol / transit fights
+  if (E && E.kinds.includes(kind) && (G.prog.playDays | 0) >= E.minPlayDays && Math.random() < E.chance) return "escort";
+  return null;
+}
+const fillM = (s, d) => s.replace("{name}", d.name).replace("{short}", d.short);
+export const missionText = (B, long = false) => { const m = B && B.mission, M = m && PACE.allies.missions[m.id]; if (!M) return "";
+  const d = SHIPS[m.lead] || SHIPS[M.allies[0]] || {}; return fillM(long ? M.objective : M.short, { name: d.name || "", short: d.short || "" }); };
 // the officers retarget the weakest live enemy when theirs goes down
 function retarget(B) { const live = liveOf(B.enemies); if (!live.length) return; const w = live.reduce((a, x) => hullPct(x) < hullPct(a) ? x : a); B.target = B.enemies.indexOf(w); }
 const the = d => "the " + d.name;
@@ -89,9 +105,12 @@ export function startBattle(kind = "enroute", opts = {}) {
   if (opts.enemy && !isE(opts.enemy)) { console.warn(`startBattle: '${opts.enemy}' is not an enemy ship${isA(opts.enemy) ? " - added as an ally" : ""}`); if (isA(opts.enemy)) fA.unshift(opts.enemy); }
   const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: fE[0] || (isE(opts.enemy) ? opts.enemy : null), away }), enemy = pick.id, d = SHIPS[enemy];
   const wings = fE.length ? fE.slice(1) : chooseWingmen(enemy, kind, { prog: G.prog, ship: G.ship, away });   // P2: the groups table (forced lists skip it)
-  const enemies = [enemy, ...wings].map((s, i) => wingOf(makeEnemy(s, i), i)), allies = [makeAlly("tenacity", 0), ...fA.slice(0, SLOTS - 1).map((s, i) => makeAlly(s, i + 1))];
+  const mid = away || PACE_RT.offline ? null : missionOf(kind, opts), M = mid && PACE.allies.missions[mid], mA = M && Math.random() < M.p ? M.allies.filter(isA) : [];   // P3: mission allies (P26: only in fights the player watches - none away / offline)
+  const aIds = [...fA, ...mA.filter(id => !fA.includes(id))].slice(0, SLOTS - 1);
+  const enemies = [enemy, ...wings].map((s, i) => wingOf(makeEnemy(s, i), i, opts.wing !== false)), allies = [makeAlly("tenacity", 0), ...aIds.map((s, i) => makeAlly(s, i + 1))];
+  const mission = M && aIds.some(id => M.allies.includes(id)) ? { id: mid, lead: aIds.find(id => M.allies.includes(id)), protect: M.protect && aIds.includes(M.protect) ? M.protect : null, failed: false } : null;
   noteEncounter(SP, enemy, kind, G.prog.playDays, pick.held, away);
-  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, live: !away, allies, enemies, target: 0, allyDying: 0 };
+  SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, mission, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, live: !away, allies, enemies, target: 0, allyDying: 0 };
   PACE_RT.liveFight = !away;   // pass 16 B1: live-started = live rules to the end (saved with the battle)
   G.stats.battles++;
   if (SP.battle.bc && away) nightWatch();
@@ -112,6 +131,7 @@ export function startBattle(kind = "enroute", opts = {}) {
   log(openLine(kind, d), "fault");
   if (enemies.length > 1) log(`Hale: '${enemies.length} contacts — ${enemies.slice(1).map(e => the(shipOf(e))).join(", ")} with her.'`, "fault");
   for (const a of allies.slice(1)) log(`${shipOf(a).name} forms up on our flank.`, "comm");
+  if (mission) log(`Objective: ${missionText(SP.battle, true)}`, "comm");   // P3: who is with us, and what the fight is for
   if (enemy === "jh_battlecruiser") {   // encounter weighting: the capital ship is an EVENT - a red-alert card, not just a toast.
     // Not quiet-gated: the pass 09 gate (bus.js cheerful) holds back light / cheerful lines only, and this is a danger
     // alert (a death-hush must never hide a battle warning). Offline catch-up (bus quiet) skips it like every toast.
@@ -119,7 +139,7 @@ export function startBattle(kind = "enroute", opts = {}) {
       // pass 13: the copy matches the real danger (gated start: she wins ~1 fight in 8, and a won fight still costs ~20% hull)
       lines: ["She outguns us — if it goes badly, T'Ren will break off. Expect hull damage.", "Her polarons bleed through shields. Keep shields and weapons up, tubes loaded, the deck patched."] });   // pass 15 copy: injuries are ~2% a fight, and disengages happen
     log("Diallo: 'Captain — that's a battlecruiser. She outguns us, and those polarons go straight through shields. All hands, brace.'", "fault");
-  } else toast("RED ALERT — " + d.name, "crit");
+  } else toast("RED ALERT — " + d.name + (mission ? " · " + missionText(SP.battle) : ""), "crit");
   shipNews("<b>Red alert.</b> The bridge officers have the fight; your post is the <b>deck</b>: keep her systems alive and her tubes loaded.");
   return true;
 }
@@ -159,7 +179,13 @@ function damageAlly(A, dmg, label) {
   SFX.booms.push({ x: tp[0], y: tp[1], t: 0, dur: 0.45, big: false }); SFX.floaters.push({ x: tp[0], y: tp[1], t: 0, text: "HULL −" + Math.round(through), color: "#ff8a7a" });
   log(`${label} — ${d.name} hull at ${hullPct(A)}%.`, "fault");
   if (A.hull <= 0) { A.dead = true; A.dying = deathTotal(A.ship); B.allyDying = (B.allyDying | 0) + 1; setAnim(A.id, "explode");
-    log(`${d.name} is gone — her warp core lets go and the wreck tumbles out of formation. T'Ren says nothing for a long moment.`, "fault"); toast(`${d.short} lost`, "crit"); }
+    log(`${d.name} is gone — her warp core lets go and the wreck tumbles out of formation. T'Ren says nothing for a long moment.`, "fault"); toast(`${d.short} lost`, "crit");
+    const S = G.ship, mo = PACE.allies.morale, e0 = S.energy; S.energy = clamp(S.energy - mo.energy, 0, 100);   // P3: an ally lost costs morale
+    log(`Engineering goes quiet. Nobody says her name. Energy −${Math.round(e0 - S.energy)}.`, "fault");
+    const m = B.mission; if (m && !m.failed && A.ship === m.lead && A.ship !== m.protect) { m.failed = true; log(`Objective failed — the ${d.short} is lost.`, "fault"); }   // P26: an escort / joint-op ally lost = FAILED too (no rep cost)
+    if (m && !m.failed && A.ship === m.protect) { m.failed = true; const SP = G.sp; SP.rep = Math.max(0, SP.rep - PACE.allies.failRep);
+      log(`Objective failed — the ${d.short} is lost${m.id === "convoy" ? " and the convoy run with her" : ""}. Reputation −${PACE.allies.failRep}.`, "fault"); toast(`Objective failed — ${d.short} lost`, "crit");
+      if (m.id === "convoy" && SP.location === "convoy") { SP.escortDone = true; } } }
 }
 // pass 15 D2: a battlecruiser fight's record (hull before / after, outcome, whether the player was away) -> G.sp.enc.bcRec
 function recBc(B, out, h1) {
@@ -176,7 +202,10 @@ function endBattleVictory() {
   toast(killed.length > 1 ? `Victory — ${killed.length} ships destroyed` : `Victory — ${d.short} destroyed`, "good");
   for (const k of killed) if (k.rep && k !== d) SP.rep += k.rep;
   if (d.rep) { SP.rep += d.rep; log(`Starfleet Command notes the kill: ${d.a.replace(/^a /, "a ")} doesn't go down every day. Reputation +${d.rep}.`, "comm"); }
-  if (kind === "convoy") { SP.rep++; SP.escortDone = true; log("The convoy is safe — every freighter accounted for. Reputation rising.", "comm"); }
+  const mf = B0 && B0.mission && B0.mission.failed;   // P3: a lost freighter means no convoy bonus
+  const cv = kind === "convoy" || (B0 && B0.mission && B0.mission.id === "convoy");   // P26: the debug mission:'convoy' hook pays like a real convoy fight
+  if (cv && !mf) { SP.rep++; log("The convoy is safe — every freighter accounted for. Reputation rising.", "comm"); }   // P26: the run continues - 'Convoy delivered' pays when the escort clock completes
+  else if (mf && B0.mission.id === "convoy") { SP.escortDone = true; log("The raiders are dead, but the convoy run is over: the Kerala's cargo went with her.", "comm"); }
   if (SP.travel && SP.travelPaused) { SP.travelPaused = false; log(`Course resumed — back to warp for ${DESTS[SP.travel.dest].name}.`, "comm"); }
   else { SP.cap.decideT = 30; SP.cap.dest = null; SP.cap.reason = `Action resolved at ${SP.location ? DESTS[SP.location].name : "deep space"} — the Captain is evaluating her next orders.`; }
   shipNews("Battle won. Check the <b>deck</b> for damage the fight left behind.");

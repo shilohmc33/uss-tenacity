@@ -633,7 +633,7 @@ export const SHIP_SHEET = {
 export const SHIP_ART_BATCH2 = true;
 const B2 = id => (SHIP_ART_BATCH2 ? { img: "ship-" + id, engine: false } : { img: null });
 export const SHIP_ART = {
-  tenacity: { img: null }, freighter: B2("freighter"), klingon_bop: B2("klingon_bop"),
+  tenacity: { img: null }, freighter: B2("freighter"), klingon_bop: B2("klingon_bop"), fed_saber: { img: "ship-fed_saber", engine: false },
   jh_fighter: { img: null }, galor: B2("galor"), jh_battlecruiser: B2("jh_battlecruiser"),
 };
 // FX_SHEET: the artist's explosion sheets (sprites/fx_explosion_v1/fx.json). 256px cells, pivot (128,128).

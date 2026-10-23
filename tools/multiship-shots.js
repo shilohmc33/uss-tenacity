@@ -30,6 +30,29 @@ const SIZES = (process.env.SIZES || '390x844 844x390 1280x800').split(' ').map(s
     await p.evaluate(() => { __T.G.sp.battle = null; });
     R.v3 = await start({ enemies: ['galor', 'jh_fighter', 'jh_fighter'] }); await sleep(3000); await shot('1v3');
     await p.evaluate(() => { __T.G.sp.battle = null; });
+    // P3) missions: a real convoy-route fight (location convoy, escort running) brings the Kerala + objective; kill her = convoy failed + morale;
+    // a fight en route to Qo'noS brings the Ch'Tang (joint op)
+    R.convoy = await p.evaluate(async () => { const BT = await import('/js/battle.js'), PC = await import('/js/pacing.js'), G = __T.G; PC.PACE_RT.sessionT = 1e5;
+      G.sp.battle = null; G.sp.travel = null; G.sp.location = 'convoy'; G.sp.escortDone = false; G.sp.lastBattleT = -1e9; G.ship.hull = 100; G.ship.shields = 100; G.prog.playDays = 8;
+      BT.startBattle('convoy'); const B = G.sp.battle; document.querySelectorAll('#toasts > *').forEach(t => t.remove());
+      return { allies: B.allies.map(a => a.ship), enemies: B.enemies.map(e => e.ship), mission: B.mission, objLog: G.log.slice(-6).map(l => l.text || l.msg || String(l)).filter(s => /Objective/.test(s)) }; });
+    await sleep(2500); await shot('p3-convoy');
+    R.convoy.fail = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G, B = G.sp.battle, e0 = G.ship.energy, r0 = G.sp.rep;
+      BT.debugKillOne('freighter-1', 'ally'); return { failed: B.mission.failed, escortDone: G.sp.escortDone, energy: Math.round(e0 - G.ship.energy), rep: G.sp.rep - r0, orders: document.querySelector('#bridgeOrders').textContent }; });
+    await sleep(1500); await shot('p3-convoy-fail');
+    R.convoy.end = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G; for (const e of G.sp.battle.enemies) BT.debugKillOne(e.id); return true; }); R.convoy.cleared = await waitEnd(12000);
+    R.joint = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G; G.sp.battle = null; G.sp.location = null; G.sp.travel = { dest: 'qonos', t: 10, dur: 600, from: 'ds9' }; G.sp.lastBattleT = -1e9; G.ship.hull = 100;
+      BT.startBattle('enroute'); const B = G.sp.battle; document.querySelectorAll('#toasts > *').forEach(t => t.remove()); return { allies: B.allies.map(a => a.ship), mission: B.mission, orders: document.querySelector('#bridgeOrders').textContent }; });
+    await sleep(2500); await shot('p3-jointop');
+    // P3b) the Federation escort (USS Yeager, Saber-class): real roll odds on transit fights at day 8, then a drill + her death/wreck
+    R.escort = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G; let n = 0; G.prog.playDays = 8;
+      for (let i = 0; i < 60; i++) { G.sp.battle = null; G.sp.location = null; G.sp.travel = { dest: 'nebula', t: 10, dur: 600, from: 'ds9' }; G.sp.lastBattleT = -1e9; G.ship.hull = 100; BT.startBattle('enroute'); if (G.sp.battle && G.sp.battle.mission && G.sp.battle.mission.id === 'escort') n++; }
+      G.sp.battle = null; G.sp.travel = null; BT.startBattle('debug', { enemies: ['galor', 'jh_fighter'], mission: 'escort' }); document.querySelectorAll('#toasts > *').forEach(t => t.remove());
+      const B = G.sp.battle; return { rollPct: Math.round(n / 60 * 100), allies: B.allies.map(a => a.ship), mission: B.mission }; });
+    await sleep(3000); await shot('p3-escort');
+    R.escort.hits = await p.evaluate(async () => { const BT = await import('/js/battle.js'), B = __T.G.sp.battle; const Y = B.allies[1]; const h = { hull: Y.hull, shields: Y.shields }; BT.debugKillOne('fed_saber-1', 'ally'); return { before: h, dead: Y.dead }; });
+    await sleep(1300); await shot('p3-escort-death');
+    await p.evaluate(() => { __T.G.sp.battle = null; __T.G.sp.travel = null; __T.G.sp.location = 'ds9'; });
     // P2) real progression rolls (no forced list): 'enroute' fights at play days 0 / 8 / 15, a healthy ship; one shot of a rolled group
     R.prog = await p.evaluate(async () => { const BT = await import('/js/battle.js'), PC = await import('/js/pacing.js'), G = __T.G, out = {}; PC.PACE_RT.sessionT = 1e5; G.ship.torps = 8; G.ship.power = 90;
       for (const pd of [0, 8, 15]) { G.prog.playDays = pd; const c = {}; for (let i = 0; i < 40; i++) { G.sp.battle = null; G.ship.hull = 100; G.sp.lastBattleT = -1e9;
