@@ -24,7 +24,7 @@ const DESC = {
 };
 export function holoChips(deck) {
   let h = deck === "lounge" ? `<button class="chip holoc" data-holo-open="1">Holodeck ▸</button>` : "";
-  if (CC.atDS9() && !CC.C().shoreUsed) h += `<button class="chip shorec" data-shore="1">Shore leave · ${CARE.shoreRep} rep</button>`;
+  if (CC.atDS9() && !CC.C().shoreUsed) h += `<button class="chip shorec" data-shore="1">Request shore leave · ${CARE.shoreRep} rep if granted · ${CC.shoreOdds()}</button>`;
   return h;
 }
 // ---- Personal Log section ----
@@ -33,7 +33,7 @@ export function careHtml(id) {
   const btn = (k, label, st) => `<button data-care-tool="${k}" data-care-id="${id}" ${st.ok ? "" : "disabled"} title="${esc(st.why || "")}">${label}</button>`;
   const row = (title, sub, k, label, st) => `<div class="req"><div>${title}<small>${sub}${st.ok ? "" : ` · ${esc(st.why)}`}</small></div>${btn(k, label, st)}</div>`;
   return `<div class="plsec">LATELY</div><p class="lately"><i class="tr">${L.trend.a}</i> ${esc(L.text)} <small>(${L.trend.w}${hs ? " · on the holodeck now" : ""})</small></p>
-<div class="plsec">CREW CARE</div>${row("Order rest", "Four hours off duty, signed off by a senior · once a ship's day", "rest", "ORDER", ts.rest)}${row("Counselor visit", `Clears stress · every ${CARE.counselGapDays} ship's days`, "counsel", "ASK", ts.counsel)}${row("Suggest a shift swap", `Move ${esc(w.short)} to ${ts.swap.to} shift · once a ship's day`, "swap", "SUGGEST", ts.swap)}${row("Book the holodeck", "Pick a program for them, on your Rations · +1 opinion a day", "holo", "BOOK", { ok: !hs, why: hs ? "already in a session" : "" })}`;
+<div class="plsec">CREW CARE</div>${ts.direct ? row("Order rest", "Four hours off duty, on your authority · once a ship's day", "rest", "ORDER", ts.rest) : row("Request rest", `Ask the captain for four hours off duty · ${ts.odds} · no cost if denied`, "rest", "REQUEST", ts.rest)}${row("Counselor visit", `Clears stress · every ${CARE.counselGapDays} ship's days`, "counsel", "ASK", ts.counsel)}${ts.direct ? row("Order a shift swap", `Move ${esc(w.short)} to ${ts.swap.to} shift · once a ship's day`, "swap", "ORDER", ts.swap) : row("Request a shift swap", `Ask the captain to move ${esc(w.short)} to ${ts.swap.to} shift · ${ts.odds}`, "swap", "REQUEST", ts.swap)}${row("Book the holodeck", "Pick a program for them, on your Rations · +1 opinion a day", "holo", "BOOK", { ok: !hs, why: hs ? "already in a session" : "" })}`;
 }
 // ---- the panel ----
 let target = "lt";

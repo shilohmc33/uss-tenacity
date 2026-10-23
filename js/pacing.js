@@ -176,6 +176,9 @@ export const CARE = {
   swapDayCap: 1,                           // shift swap: once per ship's day per crewmember
   shoreRep: 10, shoreFill: 40,             // shore leave at DS9: ship-wide, once per dock, costs 10 rep; fun/social/comfort +40
   insightQuirk1: 2, insightQuirks: 3, insightBars: 3,   // Insight gating: one quirk at 2, all quirks + need bars at 3
+  // P31 (Shiloh): rest / swap / shore leave are requests to the captain below Lt Cmdr. chance = base + stress + need + opinion,
+  // stress term full at stressFull stress-hours, need term full when the worst need is 0 (none above needOk), opinion = captain's of the Lt / 100
+  req: { base: 0.30, stressW: 0.30, stressFull: 8, needW: 0.25, needOk: 60, opW: 0.25, min: 0.05, max: 0.95, denyDays: 1, directRank: 2 },
 };
 export const HOLO = {
   // cost FR, min (session length, ship seconds = min x 60), group = up to 4, fit = quirks that love it
