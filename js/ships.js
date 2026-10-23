@@ -33,7 +33,7 @@ export const SHIPS = {
     weapons: [], hp: { fire: [0.8, 0.5], torp: [0.5, 0.3], hit: [0.5, 0.5], miss: [0.1, 0.2], boom: [0.5, 0.5] } },
   klingon_bop: { name: "IKS Ch'Tang", short: "Ch'Tang", a: "the Bird-of-Prey", cls: "Klingon Bird-of-Prey", faction: "klingon", side: "ally", hull: 80, shields: 70, speed: 1.4, sprite: "klingon_bop", aspect: 2.0, size: 0.6,
     weapons: [{ id: "disruptor", name: "Disruptor cannons", kind: "beam", dmg: [9, 14], cd: 2.8, power: 0, col: "120,255,90" }],
-    hp: { fire: [0.92, 0.55], torp: [0.6, 0.5], hit: [0.5, 0.5], miss: [0.1, 0.2], boom: [0.5, 0.5] } },
+    hp: { fire: [0.96, 0.64], torp: [0.6, 0.5], hit: [0.5, 0.5], miss: [0.1, 0.2], boom: [0.5, 0.5] } },   // batch2 polish: nose emitter
   // ---- enemies ----
   jh_fighter: { name: "Jem'Hadar fighter", short: "fighter", a: "a Jem'Hadar fighter", cls: "Jem'Hadar attack ship", faction: "dominion", side: "enemy", hull: 60, shields: 0, speed: 1.6, evade: 0.15, sprite: "jh_fighter", aspect: 2.1, size: 0.44,
     weapons: [{ id: "polaron", name: "Polaron volley", kind: "beam", dmg: [7, 12], every: [2.1, 2.7], first: 1.3, col: "190,140,255", hits: "a polaron hit" }],
@@ -42,7 +42,7 @@ export const SHIPS = {
   galor: { name: "Cardassian Galor", short: "Galor", a: "a Cardassian Galor", cls: "Galor-class warship", faction: "cardassian", side: "enemy", hull: 100, shields: 0, speed: 1, sprite: "galor", aspect: 2.6, size: 0.68,
     weapons: [{ id: "disruptor", name: "Spiral-wave disruptor volley", kind: "beam", dmg: [10, 18], every: [3.0, 3.8], first: 2.0, col: "255,190,80", hits: "a disruptor hit" }],
     parting: [8, 14], salvage: 3, death: "The Galor's spine buckles — her reactor goes, and the wreck tumbles away dark. She's gone.",
-    hp: { fire: [0.95, 0.5], hit: [0.55, 0.5], boom: [0.5, 0.5] } },
+    hp: { fire: [0.97, 0.8], hit: [0.55, 0.5], boom: [0.5, 0.5] } },   // batch2 polish: nose emitter
   jh_battlecruiser: { name: "Jem'Hadar battlecruiser", short: "battlecruiser", a: "a Jem'Hadar battlecruiser", cls: "Dominion capital ship",   // pass 12 m7: was the name again (label read 'Jem'Hadar battlecruiser / Jem'Hadar battlecruiser')
     faction: "dominion", side: "enemy", hull: 170, shields: 0, speed: 0.7, sprite: "jh_battlecruiser", bigBoom: true, aspect: 2.3, size: 0.9,
     weapons: [{ id: "polaron", name: "Heavy polaron barrage", kind: "beam", dmg: [12, 20], every: [3.4, 4.2], first: 2.4, pierce: 0.5, col: "200,120,255", hits: "a heavy polaron hit" }],   // pass 13 tuning (gated start, battle-sim): hull 150 -> 170, pierce 0.5 = half of each absorbed hit bleeds to the hull
