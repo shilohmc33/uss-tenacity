@@ -24,7 +24,7 @@ const DESC = {
 };
 export function holoChips(deck) {
   let h = deck === "lounge" ? `<button class="chip holoc" data-holo-open="1">Holodeck ▸</button>` : "";
-  if (CC.atDS9() && !CC.C().shoreUsed) h += `<button class="chip shorec" data-shore="1">Request shore leave · ${CARE.shoreRep} rep if granted · ${CC.shoreOdds()}</button>`;
+  if (CC.atDS9() && !CC.C().shoreUsed) h += `<button class="chip shorec" data-shore="1">Request shore leave<small>${CARE.shoreRep} rep if granted · ${CC.shoreOdds()}</small></button>`;
   return h;
 }
 // ---- Personal Log section ----

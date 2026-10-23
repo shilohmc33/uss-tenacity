@@ -1,5 +1,6 @@
 // Boot, main loop (delta time, pause when hidden), input, view modes, save/load, debug.
-import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY } from "./state.js";
+import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY, TAB_RT } from "./state.js";
+import { initTabLock, TL, check as tabCheck } from "./tablock.js";   // P32 #1: one playing tab
 import { preload, missing, IMG } from "./assets.js";
 import { applyWalkMasks, snapToFloor } from "./path.js";
 import { applyArtHooks } from "./art-hooks.js";
@@ -26,6 +27,8 @@ import { awardXP, PROG, qualityOdds, markPlayDay, tickPlayDay } from "./progress
 // phase 6 test override: tools force deaths ON (DEATHS=1) or OFF (DEATHS=0) via an init script; default = PROG.deaths.enabled (true since retune v2)
 if (typeof window !== "undefined" && typeof window.__TENACITY_TEST_DEATHS === "boolean") PROG.deaths.enabled = window.__TENACITY_TEST_DEATHS;
 import { setupDebug } from "./debug.js";
+import * as ST from "./story.js";   // E1 story events; the overlay (ui/story.js) registers on import
+import "./ui/story.js";
 import { settleInflightTorps } from "./battle.js";
 
 const $ = s => document.querySelector(s);
@@ -124,16 +127,17 @@ document.querySelectorAll("[data-sheet]").forEach(b => b.onclick = () => {
 $("#sheetClose").onclick = closeSheet;
 window.addEventListener("resize", resize);
 document.addEventListener("gesturestart", e => e.preventDefault());
-document.addEventListener("touchmove", e => { if (!e.target.closest("#panels,.chips,.card")) e.preventDefault(); }, { passive: false });
+document.addEventListener("touchmove", e => { if (!e.target.closest("#panels,.chips,.card,.storypanel")) e.preventDefault(); }, { passive: false });
 on("fx", (k, d) => { if (k === "openLift") openLiftPanel(); else if (k === "closeLift") closeLiftPanel(); else { if (k === "levelUp" || k === "promotion") flashLevel(); deckFx(k, d); } });
 
 // ---------- loop ----------
-let last = performance.now(), saveT = 0, hudT = 0, rt = 0;
+let last = performance.now(), saveT = 0, hudT = 0, rt = 0, roDraw = -1e9;
 const MAX_DT = 0.1;
 function frame(now) {
   requestAnimationFrame(frame);
   ORDER.manual = false;
-  if (app.paused) { last = now; return; }
+  if (TAB_RT.ro) { if (now - roDraw > 1000) { roDraw = now; try { if (app.view === "deck") drawDeck(dctx, rt, 0); else drawSpace(sctx, rt, 0); } catch (e) {} } last = now; return; }   /* P32b #4: a read-only tab still shows the deck, still, no sim */
+  if (app.paused || ST.storyOpen()) { last = now; return; }   // P32 #1: a read-only tab runs no sim   // E1: the sim pauses while a story scene is open
   let dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
   rt += dt;
   tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
@@ -151,6 +155,8 @@ document.addEventListener("visibilitychange", () => {
   PACE_RT.hidden = document.hidden;   // pass 06: never 'present' while hidden
   if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (!window.__noSave) saveGame(); }
   else {
+    tabCheck();   // P32 #1: yield first if another tab took over while this one was hidden
+    if (TAB_RT.ro) return;
     const gap = (Date.now() - hiddenAt) / 1000;
     if (hiddenAt && gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }   // pass 16 B1: a live fight -> deferred (showReport notes it)
     if (hiddenAt && gap > 600) { PACE_RT.sessionT = 0; markPlayDay(); }   // back after a real break = a new session (calm opening again)
@@ -166,7 +172,8 @@ async function boot() {
   const masks = applyWalkMasks(IMG);
   applyArtHooks();   // pass 08: seated / lying / tint-base art switches on when its files loaded (data.js ART HOOKS)
   const params = new URLSearchParams(location.search);
-  if (params.has("reset")) {
+  initTabLock();
+  if (params.has("reset") && !TAB_RT.ro) {
     wipeSave();
     // strip ?reset=1 so a refresh doesn't wipe the save again (keep ?debug=1)
     const keep = new URLSearchParams(location.search); keep.delete("reset");
@@ -206,7 +213,7 @@ function bootGame(params, masks) {
   if (masks.length < 5) console.warn("Walk masks missing for some decks; using fallback rects.");
   $("#loading").classList.add("done");
   if (params.has("debug")) setupDebug(app, { setView, setMode });
-  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger, PACE_RT, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds };
+  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger, PACE_RT, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds, ST, TL, TAB_RT };
   updateHud();
   requestAnimationFrame(t => { last = t; frame(t); });
 }

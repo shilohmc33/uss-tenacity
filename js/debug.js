@@ -9,9 +9,12 @@ import { catchUp } from "./sim.js";
 import { showReport, renderLog } from "./ui/hud.js";
 import { DESTS } from "./data.js";
 import { DBG } from "./render/deck.js";
+import { forceStory, EV as STORY_EV } from "./story.js";
 export function setupDebug(app, ui) {
   const el = document.getElementById("debug");
   el.hidden = false;
+  const sid = new URLSearchParams(location.search).get("story");   // E1: ?debug=1&story=<id> forces a story event (no gates)
+  if (sid) setTimeout(() => { if (!STORY_EV[sid]) console.warn("unknown story id: " + sid + " (" + Object.keys(STORY_EV).join(", ") + ")"); else forceStory(sid); }, 300);
   const btn = (label, fn) => `<button data-a="${label}">${label}</button>`;
   const acts = {
     "Battle": () => startBattle("debug"),

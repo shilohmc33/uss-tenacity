@@ -4,7 +4,7 @@ import { freshEnc, hardenEnc, seedEnc } from "./encounters.js";
 import { DECKS, NODEMAP, SYSTEMS, DESTS } from "./data.js";
 import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, migrateProg8, migrateProg9, migrateProg10, migrateProg11, migrateProg12, migrateProg13, clampProg, clampResources } from "./progression.js";
 export const SAVE_KEY = "tenacity.save.v1";   // key kept; the schema version lives in G.version
-export const SAVE_VERSION = 15;   // v15: crew needs (G.prog.needs, needs.js; additive)
+export const SAVE_VERSION = 16;   // v16: story events (G.prog.story, story.js; additive)   // v15: crew needs (G.prog.needs, needs.js; additive)
 //               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med); v8: Personal Log (G.prog.plog) + crew pronouns (memo 'v7'; memo v8/v9/v10 -> v9/v10/v11); v9: gifts + tastes known (G.prog.gifts / G.prog.know; memo 'v8'); v10: pass 06 presence-based injury clock, surgery outcome, play-day high-water mark (memo 'v9' Insight is now v11); v11: Insight (G.prog.insight, memo 'v9'), seeded second likes, avoid known; v12: romance (G.prog.romance, memo 'v10'); v13: pass 07 present-time play days (G.prog.dayPresent), paused surgery + assist; v14: battle combatants (G.sp.battle.allies[] / enemies[] / target, js/ships.js)
 export const G = {};
 export function freshState() {
@@ -50,8 +50,18 @@ export function resetState() {
   for (const k of Object.keys(G)) delete G[k];
   Object.assign(G, freshState());
 }
+export const TAB_RT = { ro: false, why: "" };   // P32 #1 (tablock.js): a read-only tab never saves
 export function saveGame() {
+  if (TAB_RT.ro) return false;
   try { G.savedAt = Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; }
+}
+// P31 / E1: save right now after a roll the player must not reroll (a denial, the shore-leave roll, a story outcome).
+// window.__noSave (tests, the debug Wipe) skips the write; SAVE_RT counts the requests either way so tests can see them.
+export const SAVE_RT = { n: 0, why: "" };
+export function saveSoon(why = "") {
+  SAVE_RT.n++; SAVE_RT.why = why;
+  if (typeof window !== "undefined" && window.__noSave) return false;
+  return saveGame();
 }
 export function loadGame() {
   try {
@@ -73,7 +83,8 @@ export function loadGame() {
     if (data.version < 12) { data.prog = migrateProg12(data.prog); data.version = 12; }
     if (data.version < 13) { data.prog = migrateProg13(data.prog); data.version = 13; }
     if (data.version < 14) { migrateBattle14(data.sp); data.version = 14; }
-    if (data.version < 15) { if (data.prog) data.prog.needs = {}; data.version = 15; }   // crew needs: filled lazily (everyone starts rested and fed)   // battle groundwork: a saved battle's single enemy -> battle.enemies[] / allies[]
+    if (data.version < 15) { if (data.prog) data.prog.needs = {}; data.version = 15; }
+    if (data.version < 16) { if (data.prog && typeof data.prog === "object") data.prog.story = null; data.version = 16; }   // story events: the story.js hardener fills freshStory()   // crew needs: filled lazily (everyone starts rested and fed)   // battle groundwork: a saved battle's single enemy -> battle.enemies[] / allies[]
     // pass 13: a save without encounter memory (pre-encounter builds, or a junk value) rebuilds it from its battle + ship log; a valid one is kept as-is
     if (data.sp && typeof data.sp === "object" && !Array.isArray(data.sp) && !(data.sp.enc && typeof data.sp.enc === "object" && !Array.isArray(data.sp.enc))) data.sp.enc = seedEnc(data.sp, data.prog, data.log);
     for (const k of Object.keys(G)) delete G[k];

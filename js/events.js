@@ -8,6 +8,7 @@ import { spawnFault } from "./faults.js";
 import { ZONE } from "./crew.js";
 import { startBattle as _sb, battleAllowed } from "./battle.js";
 import { PACE, PACE_RT, rr, travelS } from "./pacing.js";
+import { legStory, tickStoryDock, storyLeg } from "./story.js";   // E1 story events (story.js never imports events.js)
 
 // pass 09 (4): light events skipped in the quiet period after a death (bus.js cheerful gate)
 const LIGHT_EVENTS = ["crewmoment", "ferengi"];
@@ -20,6 +21,12 @@ export function evResetLeg(dest) {
   const ev = G.sp.ev;
   const dur = G.sp.travel ? G.sp.travel.dur : 600;
   ev.legTarget = Math.round(rr(PACE.eventsPerLeg)); ev.legFired = 0; ev.nextT = dur * rr(PACE.eventAt);
+  storyLeg();   // E1: legs since the last story event
+}
+// E1: a story event can take this voyage event slot (PACE / STORY.legChance, gated in story.js); it uses the slot like any event
+function storySlot() {
+  if (!legStory()) return false;
+  G.sp.ev.legFired++; G.stats.events++; evScheduleNext(); return true;
 }
 function pickEvent() {
   const ev = G.sp.ev, pool = EV_POOL.filter(e => e.id !== ev.lastId && !(LIGHT_EVENTS.includes(e.id) && !cheerful()));   // pass 08 (5): no birthday / mail call in the quiet period after a death
@@ -138,10 +145,11 @@ export function tickEvents(dt) {
     }
     return;
   }
+  if (!SP.travel && !SP.battle) { tickStoryDock(dt); return; }   // E1: docked at DS9, a modest chance of a story event (story.js gates)
   if (!SP.travel || SP.travelPaused || SP.battle) return;
   if (ev.legFired >= ev.legTarget || ev.nextT < 0) return;
   ev.nextT -= dt;
-  if (ev.nextT <= 0 && SP.travel.t < SP.travel.dur - 20) fireEvent(pickEvent());
+  if (ev.nextT <= 0 && SP.travel.t < SP.travel.dur - 20 && !storySlot()) fireEvent(pickEvent());
 }
 const dGood = (L, tk) => L.mode === "use" && L.node === tk.node && dDist(L.x, L.y, tk.x, tk.y) <= ZONE;   // must man it, not walk past
 export function resolveEvent(bonus) {   // exported for tools (pt07 hush checks)

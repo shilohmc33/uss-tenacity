@@ -2,7 +2,8 @@
 // Order rest (4 h off duty, once per ship's day per crewmember), a counselor visit (stress reset, every 3 ship's days),
 // a shift swap (Okafor approves engineering, T'Ren the rest; once per ship's day), shore leave at DS9 (ship-wide, once
 // per dock, 10 rep). Plus the Personal Log "Lately" line and the Insight gates for quirks / need bars.
-import { G } from "./state.js";
+import { G, saveSoon } from "./state.js";
+import { numIn } from "./util.js";
 import { CARE, MOOD } from "./pacing.js";
 import { PROG, addHardener, nudge, spend, canAfford, addr, opinionOf } from "./progression.js";
 import { SLOTMAP, pr } from "./roster.js";
@@ -41,13 +42,16 @@ const R = CARE.req;
 export const direct = () => (P().rank || 0) >= R.directRank;
 const capId = () => { const a = P().crew.slots.co; return a && occ(a) && !injured().has(a) ? a : null; };
 const capName = () => capId() ? nm(capId()) : "The duty officer";
-const parts = ids => {
+const parts = ids => {   // P31 low 3: junk inputs (NaN, strings, negatives) clamp to neutral values instead of poisoning the odds
   let st = 0, nd = 0;
-  for (const id of ids) { const r = needsOf(id), w = Math.min(...NEED_KEYS.map(k => r.n[k] ?? 100)); st += Math.min(1, (r.stress || 0) / R.stressFull); nd += Math.max(0, Math.min(1, (R.needOk - w) / R.needOk)); }
-  const n = Math.max(1, ids.length), op = capId() ? opinionOf(capId()) : 0;
-  return { st: st / n, nd: nd / n, op: Math.max(-1, Math.min(1, op / 100)) };
+  for (const id of ids) {
+    const r = needsOf(id), nn = r && r.n && typeof r.n === "object" ? r.n : {}, w = Math.min(...NEED_KEYS.map(k => numIn(nn[k], 0, 100, 100)));
+    st += numIn(numIn(r && r.stress, 0, 1e9, 0) / R.stressFull, 0, 1, 0); nd += numIn((R.needOk - w) / R.needOk, 0, 1, 0);
+  }
+  const n = Math.max(1, ids.length), op = capId() ? numIn(opinionOf(capId()), -100, 100, 0) : 0;
+  return { st: st / n, nd: nd / n, op: op / 100 };
 };
-export function chance(ids) { const f = parts(ids); return Math.max(R.min, Math.min(R.max, R.base + R.stressW * f.st + R.needW * f.nd + R.opW * f.op)); }
+export function chance(ids) { const f = parts(ids); return numIn(R.base + R.stressW * f.st + R.needW * f.nd + R.opW * f.op, R.min, R.max, R.base); }
 export const oddsWord = p => p >= 0.75 ? "likely" : p >= 0.5 ? "fair odds" : p >= 0.3 ? "a long shot" : "unlikely";
 const denyLeft = (id, k) => { const t = (C().deny[id] || {})[k]; return t != null ? t + R.denyDays * PROG.dayLength - now() : 0; };
 const hrs = s => { const h = Math.ceil(s / 3600); return `${h} h`; };
@@ -63,10 +67,10 @@ function askCaptain(ids) {
   const said = yes ? `${capName()}: "Approved."` : `${capName()}: "${noReason(ids, f)}"`;
   return { ok: yes, said, p };
 }
-function deny(id, k, said) { (C().deny[id] = C().deny[id] || {})[k] = now(); C().n.denied++; log(said, "warn"); return { ok: false, denied: true, why: said, line: said }; }
+function deny(id, k, said) { (C().deny[id] = C().deny[id] || {})[k] = now(); C().n.denied++; log(said, "warn"); saveSoon("deny"); return { ok: false, denied: true, why: said, line: said }; }
 export function toolState(id) {
   const c = C(), r = needsOf(id), co = occ(id) && occ(id).slot === "co", base = common(id);
-  const rest = base || (co ? "you can't order the captain to bed" : r.unwell > now() ? `${nm(id)} is already off duty` : c.rest[id] === day() ? "once per ship's day" : null);
+  const rest = base || (co ? (direct() ? "you can't order rest for the captain" : "you can't request rest for the captain") : r.unwell > now() ? `${nm(id)} is already off duty` : c.rest[id] === day() ? "once per ship's day" : null);
   const lastC = c.counsel[id], cd = lastC != null ? Math.max(0, Math.ceil(CARE.counselGapDays - (now() - lastC) / PROG.dayLength)) : 0;
   const counsel = base || (cd > 0 ? `again in ${cd} ship's day${cd === 1 ? "" : "s"}` : null);
   const swap = base || (co ? "the captain sets her own watch" : c.swap[id] === day() ? "once per ship's day" : null);
@@ -107,12 +111,12 @@ export function shoreState() {
 export function shoreLeave() {
   const st = shoreState(); if (!st.ok) return st;
   const ids = shipIds(), a = askCaptain(ids); C().shoreUsed = true;
-  if (!a.ok) { C().shoreDenied = true; C().n.denied++; log(a.said, "warn"); return { ok: false, denied: true, why: a.said, line: a.said }; }
+  if (!a.ok) { C().shoreDenied = true; C().n.denied++; log(a.said, "warn"); saveSoon("shore"); return { ok: false, denied: true, why: a.said, line: a.said }; }
   spend({ rep: CARE.shoreRep }, "shore"); C().shoreDenied = false; C().n.shore++;
   moodAll("shore");
   for (const id of Object.values(P().crew.slots)) if (id && occ(id) && !injured().has(id)) { const r = needsOf(id); for (const k of ["fun", "social", "comfort"]) r.n[k] = Math.min(100, r.n[k] + CARE.shoreFill); r.stress = (r.stress || 0) * 0.5; }
-  const line = `${a.said} ${capName()} grants shore leave on DS9. Quark's is loud, the Promenade is crowded, and the crew come back lighter.`;
-  log(line, "good"); toast("Shore leave granted", "good"); return { ok: true, line };
+  const line = `${a.said} Shore leave on DS9: Quark's is loud, the Promenade is crowded, and the crew come back lighter.`;
+  log(line, "good"); toast("Shore leave granted", "good"); saveSoon("shore"); return { ok: true, line };
 }
 export function tickCare() { if (!atDS9() && C().shoreUsed) { C().shoreUsed = false; C().shoreDenied = false; } }   // a new dock, a new shore leave
 // ---- Insight gates (plan section 5) ----
@@ -128,6 +132,7 @@ const LATELY = {
   rested: "looks better for the rest", swap: "seems happier on the new shift", chat: "has been chatty lately",
   holoCal: "has been bragging about bat'leth forms", holoZen: "has been unusually calm", holoNovel: "keeps quoting Dixon Hill", holoProton: "keeps humming the Captain Proton theme",
   holoVic: "has been humming Sinatra", holoRisa: "is still sunburnt from Risa", holoCrowd: "wants a little less company", holoLoved: "loved that holodeck booking",
+  storyGood: "is still pleased with how that turned out", storyRough: "is still shaken from the other day", storyFeud: "is still sore about the mess hall argument",
 };
 const BAND_LINE = ["seems settled", "seems steady enough", "seems strained", "is clearly stressed", "is close to breaking"];
 export function lately(id) {

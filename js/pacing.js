@@ -156,7 +156,8 @@ export const MOOD = {
     dinner: [4, 1], shore: [20, 2], chat: [2, 0.25], allyLost: [-6, 2], keralaLost: [-9, 3],
     talked: [6, 1], heard: [10, 1], scuffle: [-3, 0.5],
     holoCal: [6, 0.5], holoZen: [5, 0.5], holoNovel: [10, 1], holoProton: [6, 0.5], holoVic: [8, 0.5], holoRisa: [20, 1], holoCrowd: [-3, 0.5], holoLoved: [4, 1],
-    rested: [3, 0.5], counsel: [6, 1], swap: [3, 0.5] },                     // [value, ship's days]; fades linearly to 0
+    rested: [3, 0.5], counsel: [6, 1], swap: [3, 0.5],
+    storyGood: [5, 1], storyRough: [-4, 1], storyFeud: [-3, 0.5] },   // E1 story events (js/story.js)                     // [value, ship's days]; fades linearly to 0
   maxMlets: 8,
   eff: { lo: 0.85, hi: 1.05, slip: 0.03 },                                   // station efficiency from mood; a slip -3% for 1 h
   cd: { lo: 0.9, hi: 1.05, max: 1.1 },                                       // bridge officers' cooldown speed from mood (+1%/Tactical level, capped)
@@ -179,6 +180,17 @@ export const CARE = {
   // P31 (Shiloh): rest / swap / shore leave are requests to the captain below Lt Cmdr. chance = base + stress + need + opinion,
   // stress term full at stressFull stress-hours, need term full when the worst need is 0 (none above needOk), opinion = captain's of the Lt / 100
   req: { base: 0.30, stressW: 0.30, stressFull: 8, needW: 0.25, needOk: 60, opW: 0.25, min: 0.05, max: 0.95, denyDays: 1, directRank: 2 },
+};
+// ---- E1: illustrated story events (js/story.js, notes/2026-10-23-story-events-plan.md sections 4 and 6) ----
+export const STORY = {
+  legChance: 0.35,          // a voyage event slot becomes a story event (the total event rate does not grow)
+  dockPerHour: 0.6,         // docked at DS9: chance per present ship-hour (dt-scaled roll), at most one per dock visit
+  minLegs: 2,               // legs started since the last story event before the next one in travel (one quiet leg between; so at most 1 per leg)
+  perDay: 2,                // story events per ship's day (PROG.dayLength)
+  graceDays: 2, gentleUntil: 5,   // play days: none before 2, only the gentle pool before 5
+  odds: { base: 0.35, skill: 0.06, rel: 0.15, friend: 0.10, rival: -0.05, partner: 0.05, min: 0.10, max: 0.90, success: 0.6,
+    words: { likely: 0.5, fair: 0.33, long: 0.15, partialHint: 0.6 } },   // P32 #6: the word is on FULL success (0.6p): likely >= 50% (p >= .834), fair odds >= 33% (p >= .55), a long shot >= 15% (p >= .25), else unlikely; '· partial likely' when p (not failing) >= 60% and the word isn't 'likely'
+  relSkillDiv: 10,          // a relationship check rolls opinion instead of a skill: max(0, opinion) / 10 stands in for the 0-10 skill level
 };
 export const HOLO = {
   // cost FR, min (session length, ship seconds = min x 60), group = up to 4, fit = quirks that love it

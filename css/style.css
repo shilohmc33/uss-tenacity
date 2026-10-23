@@ -395,6 +395,8 @@ button.fo{white-space:nowrap}button.fo.on{background:#2e4a3a;color:#c9f5d8}
 .ltSkills small{opacity:.85}
 /* N4 holodeck + crew care */
 .chip.holoc{background:#7a5cc2}.chip.shorec{background:#3d8f8a}
+.chip.shorec small{display:block;font-size:11px;opacity:.92;line-height:1.15}
+body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height:1.2;padding-top:4px;padding-bottom:4px;text-align:left}
 .holocard{max-width:min(94vw,560px)}
 .holocard select{min-height:44px;font:inherit;background:var(--lc3);color:#141a2a;font-weight:700;border:0;border-radius:8px;padding:4px 6px}
 .holorow{gap:8px}.holorow.off{opacity:.6}
@@ -407,3 +409,29 @@ button.fo{white-space:nowrap}button.fo.on{background:#2e4a3a;color:#c9f5d8}
 .holoblurb b{color:#ffcc66;letter-spacing:.12em;font-size:.85em}.holoblurb p{margin:.4em 0;overflow:auto;min-height:0;flex:0 1 auto}.holoblurb b,.holoblurb small{flex:none}.holoblurb small{opacity:.7}
 .lately{margin:4px 0 8px}.lately .tr{font-style:normal;color:var(--lc1)}
 .holoblurb.more small::before{content:"▾ scroll for more · "}
+/* E1 story events (js/ui/story.js): portrait = the panel over the lower frame; landscape = the panel beside the frame */
+.storyscene{background:#000;z-index:62}
+.storywrap{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;width:100%;height:100%}
+.storyframe{position:relative;aspect-ratio:1080/1920;height:min(100%,177.78vw);max-width:100vw;flex:none}
+.storyframe img{display:block;width:100%;height:100%;object-fit:cover}
+.modal .storyx{position:absolute;top:8px;right:8px;border-radius:50%;background:rgba(0,0,0,.6);color:#f3ead7;font-size:18px;padding:0}
+.storypanel{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:min(100vw,56.25vh);max-height:66%;display:flex;flex-direction:column;box-sizing:border-box;padding:10px 5% 12px;background:linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.9) 34px);color:#f3ead7;font-size:clamp(12px,1.85vh,16px);overflow-y:auto}
+.storypanel .sttitle{color:#ffcc66;letter-spacing:.12em;font-size:.8em;flex:none;padding-top:22px}
+.sttext{margin:.35em 0;overflow:auto;min-height:2.8em;flex:0 1 auto;line-height:1.35}
+.sttext .band{font-style:normal;font-weight:700;color:#ffcc66}.storypanel.success .band{color:var(--good)}.storypanel.fail .band{color:var(--bad)}
+.stmore{display:none;opacity:.7;font-size:.8em;flex:none;margin:-.2em 0 .3em}.storypanel.more .stmore{display:block}
+.stchoices{display:flex;flex-direction:column;gap:6px;flex:none}
+.modal .stc{min-height:44px;width:100%;text-align:left;border-radius:10px;padding:5px 12px;background:var(--lc3);color:#141a2a;font-weight:700;display:flex;flex-direction:column;justify-content:center;font-size:.95em;line-height:1.2}
+.stc small{font-weight:500;font-size:.82em;opacity:.9}.stc .risk{color:#7a1d12}.stc.safe{background:#a9b4c9}.stc[disabled]{opacity:.5}
+.stchips{display:flex;flex-wrap:wrap;gap:5px;margin:.2em 0 .7em;flex:none}
+.stchip{border-radius:12px;padding:3px 9px;font-size:.82em;background:#1f2a40}.stchip.good{background:#1d4d33;color:#bff3cf}.stchip.bad{background:#5a1f1a;color:#ffc9c0}
+.modal .stcont{min-height:44px;flex:none;border-radius:22px;background:var(--lc1);color:#141a2a;font-weight:700}
+@media (min-aspect-ratio:1/1){
+  .storywrap{flex-direction:row;justify-content:center;align-items:stretch}
+  .storyframe{height:100%}
+  .storypanel{position:relative;left:auto;bottom:auto;transform:none;width:min(460px,calc(100vw - 56.25vh));max-height:100%;background:#0b1020;padding:12px 16px;justify-content:safe center}
+  .storypanel .sttitle{padding-top:0}
+}
+/* P32 #1 one playing tab; #7 debug panel moves left while a story scene is open (the scene's close button is top-right) */
+#tabLock,body>.modal.tablock{z-index:90}.tablock{z-index:90;background:rgba(0,0,0,.82)}.tablock .card{max-width:min(92vw,420px)}.tablock button{background:var(--lc1);color:#141a2a;font-weight:700;border-radius:22px;padding:0 18px;margin-top:8px}
+body.story-open #debug{right:auto;left:calc(4px + var(--safe-l));z-index:63}
