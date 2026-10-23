@@ -27,6 +27,7 @@
 //  Rate: when the system is restored live, Dr. Orvin operates (a short scene); a small chance she can't save them.
 import { G } from "./state.js";
 import { log, toast } from "./bus.js";
+import { moodAll } from "./mood.js";
 import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, fullName, rankOf, addr, freshMed } from "./progression.js";
 import { SLOTMAP, SPECIES, POSTINGS, pr, Pr } from "./roster.js";
 import { SYSTEMS } from "./data.js";
@@ -118,6 +119,7 @@ export function injure(cause, opts = {}) {
   const inj = { id: c.id, slot: c.slot, short: c.short, name: c.name, cause, what: opts.what || (cause === "battle" ? "a hit through the shields" : "a hazard"),
     sev, sys, state: sev === "serious" ? "warning" : "recovering", at: now, pd: p.playDays, day: p.day, left: k.window, seen: live, seenT: 0, offline: !!PACE_RT.offline, ack: false, acked: false, pendT: 0, ackT: 0, away: false,
     visited: false, excellent: 0, crewSave: Math.random() < k.crewStabilise, healAt: sev === "minor" ? now + rnd(k.heal.minor) : null, crit: !!opts.crit, src: typeof opts.src === "string" ? opts.src : "" };   // pass 15: src = the enemy (battle) / hazard kind, for death attribution
+  moodAll("injury", { skip: [inj.id] });   // N2
   m.inj.push(inj); m.day.n++; m.n.injuries++; m.n[sev]++; if (inj.offline) m.n.offlineInj++;
   crewTouch();
   const role = SLOTMAP[c.slot].role.split(" ·")[0];
@@ -258,6 +260,7 @@ const DEPT_CREW = { eng: "Okafor's engineering crew", sec: "The security section
 function die(inj, how = "expired") {
   const p = P(), m = M(), k = K(), cr = p.crew, o = cr.occ[inj.id]; if (!o) return null;
   if (!isPresent()) { m.n.blockedAway = (m.n.blockedAway || 0) + 1; return null; }   // pass 06 hard rule backstop (deathCheck already refuses)
+  moodAll("death", { skip: [inj.id] });   // N2: ship-wide loss, 3 ship's days
   const sl = SLOTMAP[o.slot], sd = G.ship.stardate.toFixed(1), sp = (SPECIES[o.species] || SPECIES.human).name;
   const audit = { pd: p.playDays, day: p.day, rank: p.rank, id: o.id, senior: !!sl.senior, prot: !!o.protected, fav: favourites().includes(o.id), gap: m.lastDeathPD == null ? null : p.playDays - m.lastDeathPD,
     caps: crewCapsOk(), offline: !!PACE_RT.offline, present: isPresent(), hidden: !!(PACE_RT.hidden || (typeof document !== "undefined" && document.hidden)), idleT: Math.round(PACE_RT.idleT), ack: !!inj.ack, seen: inj.seen, seenT: Math.round(inj.seenT), ackT: Math.round(inj.ackT || 0), window: k.window - Math.max(0, inj.left), how, cause: inj.cause, src: inj.src || "", crit: !!inj.crit, injuredAt: inj.pd, gentle: gentle() };

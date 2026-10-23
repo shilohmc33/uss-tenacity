@@ -4,6 +4,7 @@ import { PROG, milestone, hooks } from "./progression.js";
 import { DESTS, isHomeworld } from "./data.js";
 import { clamp, pick, rand } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
+import { moodAll } from "./mood.js";
 import { spawnFault } from "./faults.js";
 import { startBattle } from "./battle.js";
 import { foe, shipOf } from "./ships.js";
@@ -145,6 +146,7 @@ function arriveHomeworld(id) {
   SP.cap.dest = null;
   if (id === "earth") {
     SP.cap.reason = "In spacedock at Earth — yard patching at full rate, resupply, and shore leave.";
+    moodAll("shore");   // N2
     log("Spacedock doors close behind the Tenacity — Earth below, the Moon standing off. Yard crews swarm the hull; shore leave is granted by watch rotation.", "good");
   } else if (id === "qonos") {
     SP.rep += 2; const scarred = S.hull < 70; if (scarred) SP.rep += 1;

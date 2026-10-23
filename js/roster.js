@@ -191,3 +191,25 @@ export const pr = (o, form = "sub") => (PRONOUNS[o && o.pronoun] || PRONOUNS.the
 // fill {sub} {obj} {pos} {ref} (and {Sub} etc. capitalised) in a crew line for crewmate o
 export const prFill = (str, o) => str.replace(/\{(sub|obj|pos|poss|ref|Sub|Obj|Pos|Poss|Ref)\}/g, (_, f) => f[0] === f[0].toUpperCase() ? Pr(o, f.toLowerCase()) : pr(o, f));
 export const Pr = (o, form = "sub") => { const w = pr(o, form); return w.charAt(0).toUpperCase() + w.slice(1); };
+// ---- crew needs N2: quirks (notes/2026-10-22-crew-needs-plan.md §4). Effects live in needs.js / mood.js. ----
+export const QUIRKS = {
+  nightowl: { name: "Night owl", d: "prefers gamma shift; sleeps better at night" },
+  workaholic: { name: "Workaholic", d: "Fun drains slower, Rest faster" },
+  gourmand: { name: "Gourmand", d: "food counts 1.5x toward mood" },
+  loner: { name: "Loner", d: "needs little company" },
+  butterfly: { name: "Social butterfly", d: "Social drains 2x; chats count double" },
+  shortfuse: { name: "Short fuse", d: "a won battle +10; tempers flare (N3)" },
+  vulcan: { name: "Vulcan calm", d: "mood swings halved" },
+  holo: { name: "Holonovel addict", d: "lives for the holodeck (N4)" },
+  homesick: { name: "Homesick", d: "Comfort lower away from DS9" },
+  devout: { name: "Devout", d: "a daily ritual: mood +5, Fun drains slower" },
+  green: { name: "Green as grass", d: "battles hit 1.5x until the 3rd win" },
+  oldhand: { name: "Old hand", d: "battle and loss x0.6; mentors Green crew" },
+};
+export const START_QUIRKS = { tren: ["vulcan", "workaholic"], okafor: ["workaholic", "gourmand"], diallo: ["nightowl", "butterfly"], hale: ["shortfuse", "oldhand"],
+  orvin: ["oldhand", "loner"], tull: ["butterfly", "gourmand"], vardock: ["green", "holo"], sorvan: ["vulcan", "loner"], kovac: ["workaholic"], seo: ["homesick", "green"],
+  grevv: ["shortfuse"], mollo: ["gourmand", "butterfly"], doru: ["devout"], rhovan: ["butterfly"], natarajan: ["workaholic", "nightowl"], rmira: ["holo", "nightowl"],
+  thelev: ["shortfuse", "oldhand"], delgado: ["gourmand"] };
+// new arrivals: 1-2 quirks leaning on their TAGS (deterministic from the occupant id, so nothing extra is saved)
+export const TAG_QUIRK = { gruff: "shortfuse", blunt: "shortfuse", calm: "vulcan", stoic: "vulcan", chatty: "butterfly", warm: "butterfly", musical: "butterfly",
+  homesick: "homesick", devout: "devout", ambitious: "workaholic", curious: "nightowl", dry: "loner", playful: "holo", earnest: "green" };

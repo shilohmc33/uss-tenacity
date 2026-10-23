@@ -1,6 +1,8 @@
 // DOM HUD: stat bar, alert chip, orders, duty list, crew cards, chips, log, toasts, lift panel, report.
 import { G } from "../state.js";
 import { NEED_KEYS, NEED_LABEL, SHIFT_NAME, needsOf, statusOf } from "../needs.js";
+import { moodOf, bandOf, bandLabel, effOf, quirkNames, SKILL_KEYS, SKILL_LABEL, skillLvl } from "../mood.js";
+const skillLine = id => SKILL_KEYS.map(k => `${SKILL_LABEL[k]} ${skillLvl(id, k)}`).join(" · ");
 // P27: phones have no hover - tapping a crew row (or its bars) toggles the exact need values
 const openNeeds = new Set();
 document.addEventListener("click", e => { const row = e.target.closest && e.target.closest("#relations .rel"); if (!row || e.target.closest("button")) return; const nd = row.querySelector("[data-needs]"); if (!nd) return; const id = nd.dataset.needs; if (openNeeds.has(id)) openNeeds.delete(id); else openNeeds.add(id); nd.classList.toggle("open", openNeeds.has(id)); }, true);
@@ -227,7 +229,7 @@ export function updateHud() {
     pill.onclick = () => { $("#medPanel").hidden = false; };
   } else if (items.length) {
     const top = items[0];
-    pill.textContent = top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `ODD JOB — ${top.job.label}` : `${PRI_LABEL[top.pri]} — ${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`;
+    pill.textContent = top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `${top.job.kind === "incident" ? "INCIDENT" : "ODD JOB"} — ${top.job.label}` : `${PRI_LABEL[top.pri]} — ${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`;
     pill.className = "alert-pill pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : "");
     pill.onclick = () => top.kind === "task" ? sendUse(top.task.node) : top.kind === "job" ? sendUse(top.job.node) : sendRepair(top.id);
   } else { pill.textContent = "All systems nominal"; pill.className = "alert-pill"; pill.onclick = null; }
@@ -237,7 +239,7 @@ export function updateHud() {
   if (dk !== lastDuty) {
     lastDuty = dk;
     $("#dutyBody").innerHTML = items.length ? items.map(i => {
-      if (i.kind === "job") { const j = i.job, there = L.node === j.node && L.mode === "use"; return `<div class="duty job"><span class="pri p4">ODD JOB</span><span class="what">${j.label}${j.deck !== L.deck ? " · " + DECKS[j.deck].name : ""} · <b>+${Math.round(j.xp)} XP</b>${there ? ` · working ${Math.round(j.acc / j.need * 100)}%` : ""}</span><button data-task="${j.node}">GO</button></div>`; }
+      if (i.kind === "job") { const j = i.job, there = L.node === j.node && L.mode === "use"; return `<div class="duty job"><span class="pri p4">${j.kind === "incident" ? "INCIDENT" : "ODD JOB"}</span><span class="what">${j.label}${j.deck !== L.deck ? " · " + DECKS[j.deck].name : ""}${j.kind === "incident" ? "" : ` · <b>+${Math.round(j.xp)} XP</b>`}${there ? ` · working ${Math.round(j.acc / j.need * 100)}%` : ""}</span><button data-task="${j.node}">GO</button></div>`; }
       if (i.kind === "task") return `<div class="duty"><span class="pri p1">CAPTAIN</span><span class="what">${i.task.label} · <b>${Math.ceil(i.task.t)}s</b></span><button data-task="${i.task.node}">GO</button></div>`;
       const f = G.ship.faults[i.id], s = SYSTEMS[i.id], busy = L.mode === "repair" && L.repairSys === i.id;
       const life = G.prog.med && G.prog.med.inj.find(x => x.state === "warning" && x.sys === i.id);   // phase 6: someone in sickbay depends on it
@@ -397,7 +399,7 @@ export function renderCareer(force = false) {
   const lastB = p.boardLog[p.boardLog.length - 1], cd = BD.boardCdLeft();
   const boardRow = p.board ? `<div class="bstat wait">Promotion board convened — <button class="spb" data-board-open="1">FACE THE BOARD</button></div>`
     : lastB && lastB.outcome !== "pass" && lastB.to === (n && n.id) ? `<div class="bstat">${lastB.outcome === "fail" ? "Last board: not recommended" : "Last board: deferred"}${cd ? ` · next board from ship's day ${p.boardCd}` : " · the board may sit again"}${p.boardMalus ? ` · readiness penalty −${Math.round(p.boardMalus)} (fading)` : ""}</div>` : "";
-  setHtml("career", `<h4>SERVICE RECORD</h4><div class="rankRow"><b>${rankName()}</b> · Level ${p.level} · ${p.xp}/${xpToNext(p.level)} XP${p.history.length ? ` · promoted ${p.history.length}×` : ""}</div>${specRow}${boardRow}${ready}`, force);
+  setHtml("career", `<h4>SERVICE RECORD</h4><div class="rankRow"><b>${rankName()}</b> · Level ${p.level} · ${p.xp}/${xpToNext(p.level)} XP${p.history.length ? ` · promoted ${p.history.length}×` : ""}</div>${specRow}${boardRow}${ready}<div class="ltSkills"><small>Skills: ${skillLine("lt")}</small></div>`, force);
   renderQuarters(force);
   setHtml("plogBox", `<h4>PERSONAL LOG</h4><div class="req"><div>Your own notes on the crew<small>standing, what moved it, journal · ${PL.journalCount()} entr${PL.journalCount() === 1 ? "y" : "ies"}</small></div><button data-plog-open="1">OPEN LOG</button></div>`, force);
   // ---- crew relations: all 18 roster slots grouped by department (vacant slots show the replacement en route) ----
@@ -410,7 +412,7 @@ export function renderCareer(force = false) {
     const injTag = inj ? ` <em class="injb${inj.state === "warning" || inj.state === "surgery" ? " crit" : ""}">${inj.state === "warning" ? "INJURED · SERIOUS" : inj.state === "surgery" ? "IN SURGERY" : "INJURED"}</em>` : "";
     const injNote = inj ? (inj.state === "surgery" ? (inj.held ? `in surgery — held stable until you're back on watch` : `in surgery — ${MD.docName(inj.id).replace(/^The /, "the ")} operating`) : inj.state === "warning" ? `in sickbay — needs the ${SYSTEMS[inj.sys].name} fixed (${Math.max(0, Math.ceil(inj.left))}s${!inj.ack ? " · waiting for you — the clock starts when you respond" : MD.isPresentNow() ? " left · clock running" : " left · paused while you're away"})` : `in sickbay — recovering${inj.healAt ? `, back in ~${Math.max(1, Math.round((inj.healAt - G.ship.elapsed) / 3600))} h` : ""}`) : "";
     const pin = (c.senior || !PROG.deaths.enabled) ? `<span class="pin0"></span>` : `<button class="pin${pinned ? " on" : ""}${fav ? " fav" : ""}" data-pin="${c.id}" title="${pinned ? "Pinned favourite (protected)" : fav ? "Favourite — protected (tap to pin)" : "Pin as a protected favourite"}"><i>${pinned || fav ? "★" : "☆"}</i></button>`;
-    const nr = inj ? null : needsOf(c.id), needs = nr ? `<div class="needs${openNeeds.has(c.id) ? " open" : ""}" data-needs="${c.id}" title="${SHIFT_NAME[nr.shift]} shift · ${statusOf(c.id)}">${NEED_KEYS.map(k => { const v = Math.round(nr.n[k]); return `<i title="${NEED_LABEL[k]} ${v}"><b class="${v < 25 ? "lo" : v < 50 ? "mid" : ""}" style="width:${v}%"></b></i>`; }).join("")}<span>${statusOf(c.id)}</span><small class="nv">${SHIFT_NAME[nr.shift]} shift · ${NEED_KEYS.map(k => `${NEED_LABEL[k]} ${Math.round(nr.n[k])}`).join(" · ")}</small></div>` : "";
+    const nr = inj ? null : needsOf(c.id), needs = nr ? `<div class="needs${openNeeds.has(c.id) ? " open" : ""}" data-needs="${c.id}" title="${SHIFT_NAME[nr.shift]} shift · ${statusOf(c.id)}">${NEED_KEYS.map(k => { const v = Math.round(nr.n[k]); return `<i title="${NEED_LABEL[k]} ${v}"><b class="${v < 25 ? "lo" : v < 50 ? "mid" : ""}" style="width:${v}%"></b></i>`; }).join("")}<span>${statusOf(c.id)} · <em class="md b${bandOf(c.id)}">${bandLabel(bandOf(c.id))}</em></span><small class="nv">${SHIFT_NAME[nr.shift]} shift · ${NEED_KEYS.map(k => `${NEED_LABEL[k]} ${Math.round(nr.n[k])}`).join(" · ")}<br>Mood ${Math.round(moodOf(c.id))} (${bandLabel(bandOf(c.id))}) · station efficiency ${Math.round(effOf(c.id) * 100)}%<br>Quirks: ${quirkNames(c.id).join(", ") || "none"}<br>Skills: ${skillLine(c.id)}</small></div>` : "";
     return `<div class="rel${inj ? " inj" : ""}">${face}<div class="nm">${c.rankShort} ${c.short}${c.intro ? ` <em class="newb">NEW</em>` : ""}${injTag}<small>${inj ? injNote : `${c.speciesName} · ${c.role}`}</small></div>${pin}<div class="opbar"><i class="${v >= 0 ? "pos" : "neg"}" style="width:${w}%"></i></div><small class="lab" title="7-day trend: ${st.trend.label}">${st.label}${IN.numbersShown() ? ` <b class="opn">${sgn(v)}</b>` : ""}<i class="tr t${st.trend.dir}">${st.trend.arrow}</i></small>${needs}</div>`;   // plog1 follow-up: label + trend, number hidden (as in the Personal Log)
   };
   const pend = G.prog.crew.pending;

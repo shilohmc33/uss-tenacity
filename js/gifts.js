@@ -7,6 +7,7 @@
 // The gift-driven part of an opinion (gifts.giftOp) counts 50% toward board readiness and the Fleet Reputation of a transfer.
 import { G } from "./state.js";
 import { log, toast } from "./bus.js";
+import { moodlet } from "./mood.js";
 import { PROG, hooks, nudge, opinionOf, spend, canAfford, addr, crewTouch } from "./progression.js";
 import { GIFT, GIFT_ITEMS, CAT_LABEL, tastesOf, L2_ALT } from "./gift-data.js";
 import { pr, Pr, POSTINGS } from "./roster.js";
@@ -122,6 +123,7 @@ export function giveGift(id, itemId) {
   const why = `gift|${itemId}|${r}`;
   const d = r === "uncomfortable" ? nudge(id, K_.disliked, why, true) : nudge(id, T.base * mult * same * ship * (occ ? occ.mult : 1), why, true, K_.cap);
   if (d > 0) g.giftOp[id] = Math.min((g.giftOp[id] || 0) + d, Math.max(0, opinionOf(id)));
+  moodlet(id, r === "uncomfortable" ? "giftBad" : r === "delighted" ? "giftLoved" : "gift");   // N2
   if (!reveal) cnt[itemId] = n0 + 1;   // pt07 m5: the gift that reveals a loved item doesn't start the repeat decay, so the first 'loved ×2' gift is full value
   g.day.n++; g.last[id] = p.day; g.n.given++; g.n.opinion += Math.max(0, d);
   g.lastR[id] = { item: itemId, r, day: p.day, d: Math.round(d * 10) / 10 };

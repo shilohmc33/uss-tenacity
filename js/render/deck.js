@@ -15,6 +15,7 @@ import { drawCabin, slots as cabinSlots } from "../cabin.js";
 import { isWalkable } from "../path.js";
 import { activeJob } from "../oddjobs.js";
 import { PROG } from "../progression.js";
+import { bandOf } from "../mood.js";
 import { TORP_BUILD_T } from "../crew.js";
 
 // debug overlay (?debug=1: "Walk grid" button, or ?debug=1&walk=1)
@@ -281,6 +282,15 @@ function drawLt(ctx, t) {
 export const fgDrawn = occlDrawn;   // art batch 2 name (tools/art2-bridge.js): ids of the occluders drawn last frame
 // Captain T'Ren (bridge only; js/npc.js drives her)
 function drawTren(ctx, t) { drawWalker(ctx, "tren", tren, tren.action, t, TREN_AS); }
+// N2 placeholder mood icons (code-drawn until art): Strained amber "~", Stressed orange "!", Breaking red "!!"
+function moodIcon(ctx, x, y, b, t, edge = false) {
+  const col = b >= 4 ? "#ff5e57" : b === 3 ? "#ff9f43" : "#ffd166", r = 7 * K, yy = y - Math.sin(t * 2.2) * 1.5 * K;
+  ctx.fillStyle = "rgba(12,16,28,0.85)"; ctx.beginPath(); ctx.arc(x, yy, r + 1.5 * K, 0, 6.29); ctx.fill();
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, yy, r, 0, 6.29); ctx.fill();
+  if (edge) { ctx.beginPath(); ctx.moveTo(x + r + 2 * K, yy - 3 * K); ctx.lineTo(x + r + 6 * K, yy - 3 * K); ctx.lineTo(x + r + 4 * K, yy - 7 * K); ctx.closePath(); ctx.fill(); }   // N3: head is above the view
+  ctx.fillStyle = "#1a0d00"; ctx.font = `bold ${10 * K}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(b >= 4 ? "!!" : b === 3 ? "!" : "~", x, yy + 0.5 * K); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+}
 function zzz(ctx, x, y, t) { ctx.fillStyle = "rgba(200,220,255,0.8)"; ctx.font = `bold ${11 * K}px Antonio, sans-serif`; for (let i = 0; i < 3; i++) { const p = (t * 0.5 + i / 3) % 1; ctx.globalAlpha = 1 - p; ctx.fillText("z", x + p * 10 * K, y - p * 26 * K); } ctx.globalAlpha = 1; }
 function speech(ctx, x, y, t) { if ((t % 6) > 3.5) return; ctx.fillStyle = "rgba(255,240,210,0.92)"; rr(ctx, x, y, 26, 14, 6); ctx.fill(); ctx.fillStyle = "#333"; const n = 1 + Math.floor(t * 3) % 3; ctx.fillText("•".repeat(n), x + 6, y + 11); }
 function rr(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
@@ -354,7 +364,7 @@ export function drawDeck(ctx, t, dt) {
     ring(ctx, x, y, 22 * K, 0.5 + 0.5 * Math.sin(t * 2.4), "rgba(120,230,210,0.75)", 2);
     if (job.acc > 0) ring(ctx, x, y, 17 * K, job.acc / job.need, "#9fe8b1", 3);
     ctx.fillStyle = "#9ff0de"; ctx.font = `bold ${7 * K}px Antonio, sans-serif`; ctx.textAlign = "center";
-    ctx.fillText("ODD JOB", x, y + 14 * K); ctx.textAlign = "left";   // under his feet so the Lt never hides it
+    if (job.kind !== "incident") ctx.fillText("ODD JOB", x, y + 14 * K);   // the INCIDENT label is drawn after the mood icons (P29 #8) ctx.textAlign = "left";   // under his feet so the Lt never hides it
   }
   // repair progress ring
   if (L.mode === "repair" && L.repairSys) ring(ctx, L.x * DW, L.y * DH + 2, 16 * K, L.repairT / SYSTEMS[L.repairSys].dur, "#ffb27a", 3);
@@ -377,6 +387,10 @@ export function drawDeck(ctx, t, dt) {
   updateDoors(L.deck, dt, cast);   // sliding doors: every figure's feet (x, y fractions) so far; drawn next frame under the cast
   if (!L.lift && !dk.cabin) cast.push(...occluderCast(ctx, L.deck, cast));
   cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
+  if (!L.lift) for (const c of cast) if (c.id && c.id !== "lt" && G.prog && G.prog.needs && G.prog.needs[c.id]) { const b = bandOf(c.id); if (b >= 2) { const y0 = (c.y - HEAD_Y * (c.seat ? 0.78 : 1.02)) * DH, top = cam.y - (cam.h / 2 - 34) / cam.scale + 10 * K; moodIcon(ctx, c.x * DW, Math.max(y0, top), b, t, y0 < top); } }   // P28: never above the top edge (34 px clears the deck label)   // N2: Strained or worse
+  { const job = activeJob(); if (job && job.kind === "incident" && job.deck === L.deck && !L.lift) { const n = NODEMAP[job.node], x = n.x * DW, y = n.y * DH;
+    ctx.font = `bold ${8 * K}px Antonio, sans-serif`; ctx.textAlign = "center"; ctx.lineWidth = 3 * K; ctx.strokeStyle = "rgba(10,14,24,0.9)"; ctx.strokeText("INCIDENT", x, y + 14 * K);
+    ctx.fillStyle = "#ffb86b"; ctx.fillText("INCIDENT", x, y + 14 * K); ctx.textAlign = "left"; } }   // P29 #8: above mood icons
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck
   lighting(ctx, t);
   if (L.deck === "medical" && !L.lift) drawPatientTags(ctx, t);   // phase 6

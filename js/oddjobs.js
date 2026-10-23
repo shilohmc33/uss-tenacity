@@ -8,7 +8,8 @@ import { G } from "./state.js";
 import { DECKS, NODEMAP, HEAD_Y } from "./data.js";
 import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, awardXP, taskMult, taskDone, nudge, crewList, opinionOf, addr } from "./progression.js";
-import { PACE_RT, nightActive } from "./pacing.js";
+import { PACE_RT, nightActive, isPresent } from "./pacing.js";
+import { resolveIncident, expireIncident } from "./incidents.js";
 
 const P = () => G.prog;
 const K = () => PROG.jobs;
@@ -61,10 +62,12 @@ export function tickJobs(dt) {
   const k = K(); if (!k || !k.enabled) return;
   const j = J(), L = G.lt, a = activeJob();
   if (a) {
+    if (a.kind === "incident" && (PACE_RT.offline || !isPresent())) return;   // P29 #4: frozen while the player is away; the timer resumes when he is back
     if (PACE_RT.offline) { j.active = null; j.next = rr(k.gap); return; }   // errands don't survive a break
     a.t -= dt;
     if (L.deck === a.deck && !L.lift && L.mode === "use" && L.node === a.node) {
       a.acc += dt * taskMult();
+      if (a.acc >= a.need && a.kind === "incident") { resolveIncident(a); taskDone(a.node, a.deck); j.active = null; j.next = rr(k.gap); return; }   // N3: the Lt talked it through
       if (a.acc >= a.need) {
         const man = !!L.useManual, xp = awardXP(a.xp * (man ? PROG.manual.xp : PROG.auto.xp), man ? "manual" : "auto", "job");
         G.sp.rep += k.rep;
@@ -76,7 +79,7 @@ export function tickJobs(dt) {
         fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 });
       }
     }
-    if (j.active && a.t <= 0) { j.active = null; j.expired++; j.next = rr(k.gap); }   // quietly picked up by the crew, no penalty
+    if (j.active && a.t <= 0) { if (a.kind === "incident") expireIncident(a); j.active = null; j.expired++; j.next = rr(k.gap); }   // quietly picked up by the crew, no penalty
     return;
   }
   if (!quiet() || PACE_RT.sessionT < k.firstAt) return;

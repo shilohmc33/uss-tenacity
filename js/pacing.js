@@ -146,3 +146,23 @@ export function playerInput() { PACE_RT.idleT = 0; }
 // last PROG.deaths.presentIdle s (60). Injury clocks, surgery outcomes and deaths only ever run while present.
 export const presentIdle = { s: 60 };
 export const isPresent = () => !PACE_RT.offline && !PACE_RT.hidden && !(typeof document !== "undefined" && document.hidden) && PACE_RT.idleT < presentIdle.s;
+// crew needs N2: mood, moodlets, minor incidents, station efficiency, combat cooldown, skills (js/mood.js)
+export const MOOD = {
+  w: { rest: 0.25, food: 0.2, fun: 0.2, social: 0.15, comfort: 0.2 },   // mood = weighted needs + moodlets (+ quirks)
+  bands: [60, 40, 25, 10], hyst: 5,                                         // Content 60+ | Steady | Strained 25-39 | Stressed | Breaking <10
+  label: ["Content", "Steady", "Strained", "Stressed", "Breaking"],
+  day: 57600,                                                                // a ship's day in seconds (PROG.dayLength)
+  mlet: { win: [5, 1], disengage: [-4, 1], tow: [-10, 1], injury: [-4, 1], death: [-15, 3], gift: [4, 1], giftLoved: [8, 1], giftBad: [-2, 0.5],
+    dinner: [4, 1], shore: [20, 2], chat: [2, 0.25], allyLost: [-6, 2], keralaLost: [-9, 3],
+    talked: [6, 1], heard: [10, 1], scuffle: [-3, 0.5] },                     // [value, ship's days]; fades linearly to 0
+  maxMlets: 8,
+  eff: { lo: 0.85, hi: 1.05, slip: 0.03 },                                   // station efficiency from mood; a slip -3% for 1 h
+  cd: { lo: 0.9, hi: 1.05, max: 1.1 },                                       // bridge officers' cooldown speed from mood (+1%/Tactical level, capped)
+  stress: { below: 25, decay: 0.5, cap: 200 },                                        // hours below 25 (gates N3's major tier); composure -4%/level
+  minor: { perHour: 0.35, gapS: 7200, slipS: 3600 },                         // Strained or worse: per-crew chance / h; 1 per 2 h ship-wide; online only
+  skill: { duty: 2, fun: 2, repair: 6, win: 12, max: 10 },
+  // N3: medium (Stressed + stress hours) and major (Breaking + 4 h stress) incidents; seen-only, capped, never lethal (js/incidents.js)
+  medium: { perHour: 0.3, stressH: 1, gapS: 57600, refuseS: 7200, refuseEff: 0.7, unwellEff: 0.5, unwellS: 14400 },
+  major: { perHour: 0.2, stressH: 4, gapS: 5 * 57600, breakdownS: 57600, misset: 0.15, insubOp: -4 },
+  graceDays: 7, workS: [8, 12], helpOp: 2,                   // XP; level L needs 100 x L more (50 L (L+1) total)
+};

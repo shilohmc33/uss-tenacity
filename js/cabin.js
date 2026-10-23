@@ -2,6 +2,7 @@
 // comfort-scaled rest on his own rack, decor bonuses (capped), trade-in of spares for rations, decor drops.
 import { G } from "./state.js";
 import { log, toast, fx } from "./bus.js";
+import { moodlet } from "./mood.js";
 import { PROG, hooks, spend, canAfford, costText, cabinFx, earnRations, addr, crewList, nudge } from "./progression.js";
 import { DECKS, DW, DH } from "./data.js";
 import { rectGrid, sampleMask, snapToFloor } from "./path.js";
@@ -189,7 +190,7 @@ export function dinnerState() {
 export function hostDinner() {
   const K = PROG.cabin.dinner; if (!dinnerState().ok || !spend(K.cost, "dinner")) return false;
   const guests = crewList().filter(c => c.id !== "tren" && !(K.noSeniors && c.senior) && !(P().med && P().med.inj.some(x => x.id === c.id))).sort((a, b) => (P().opinions[a.id] ?? 0) - (P().opinions[b.id] ?? 0)).slice(0, K.guests);
-  for (const g of guests) nudge(g.id, K.opinion, "dinner", true);
+  for (const g of guests) { nudge(g.id, K.opinion, "dinner", true); moodlet(g.id, "dinner"); }   // N2 moodlet
   C().dinnerDay = P().day; C().dinners = (C().dinners || 0) + 1;
   log(`Dinner in the ${addr()}'s quarters: ${guests.map(g => `${g.rankShort} ${g.short}`).join(", ")}. The replicator earns its keep; the conversation runs late. (−${costText(K.cost)})`, "good");
   toast(`Dinner for ${guests.length} — −${costText(K.cost)}`, "good");

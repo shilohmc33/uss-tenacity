@@ -3,6 +3,10 @@ import { G } from "./state.js";
 import { DESTS, SYSTEMS } from "./data.js";
 import { clamp, rand } from "./util.js";
 import { log, toast, shipNews, redAlertCard } from "./bus.js";
+import { moodAll, moodlet, addSkillXp, cdRate, stationEff, ltRepairSkill, AB_OWNER } from "./mood.js";
+import { MOOD } from "./pacing.js";
+const MOOD_XP = MOOD.skill;
+
 import { chooseEncounter, chooseWingmen, noteEncounter, noteBcEnd } from "./encounters.js";
 import { spawnFault, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
@@ -182,6 +186,7 @@ function damageAlly(A, dmg, label) {
     log(`${d.name} is gone — her warp core lets go and the wreck tumbles out of formation. T'Ren says nothing for a long moment.`, "fault"); toast(`${d.short} lost`, "crit");
     const S = G.ship, mo = PACE.allies.morale, e0 = S.energy; S.energy = clamp(S.energy - mo.energy, 0, 100);   // P3: an ally lost costs morale
     log(`Engineering goes quiet. Nobody says her name. Energy −${Math.round(e0 - S.energy)}.`, "fault");
+    moodAll(A.ship === "freighter" ? "keralaLost" : "allyLost");   // N2/P28: the crew takes it hard (the Kerala hardest)
     const m = B.mission; if (m && !m.failed && A.ship === m.lead && A.ship !== m.protect) { m.failed = true; log(`Objective failed — the ${d.short} is lost.`, "fault"); }   // P26: an escort / joint-op ally lost = FAILED too (no rep cost)
     if (m && !m.failed && A.ship === m.protect) { m.failed = true; const SP = G.sp; SP.rep = Math.max(0, SP.rep - PACE.allies.failRep);
       log(`Objective failed — the ${d.short} is lost${m.id === "convoy" ? " and the convoy run with her" : ""}. Reputation −${PACE.allies.failRep}.`, "fault"); toast(`Objective failed — ${d.short} lost`, "crit");
@@ -197,6 +202,7 @@ function endBattleVictory() {
   const SP = G.sp, S = G.ship, B0 = SP.battle, kind = B0 ? B0.ctx : null, d = shipOf(foe(B0)), killed = B0 ? B0.enemies.map(shipOf) : [d];
   recBc(SP.battle, "won", S.hull);
   SP.battle = null; SP.evasiveT = 0; G.stats.wins++; clearShipFx();   // P21 #2
+  moodAll("win"); addSkillXp("lt", "tactical", MOOD_XP.win); for (const sl of Object.values(AB_OWNER)) addSkillXp(G.prog.crew && G.prog.crew.slots[sl], "tactical", MOOD_XP.win);   // N2
   const salvage = Math.max(0, Math.min(killed.reduce((a, k) => a + (k.salvage ?? 3), 0), S.partsCap - S.parts)); S.parts += salvage;   // multi-ship P1: every kill's salvage
   log(`Victory. Tractor crews pull ${salvage} usable part(s) from the wreckage.`, "good");
   toast(killed.length > 1 ? `Victory — ${killed.length} ships destroyed` : `Victory — ${d.short} destroyed`, "good");
@@ -327,6 +333,7 @@ function trenDisengage() {
   SP.battle = null; SP.evasiveT = 0; SP.cap.decideT = 30; clearShipFx();
   if (enroute) { SP.travel = null; SP.travelPaused = false; SP.location = null; }
   if (kind === "convoy") SP.escortDone = true;
+  moodAll("disengage");   // N2
   log("T'Ren: 'Helm — emergency warp, disengage.' The Tenacity breaks off and runs.", "comm");
   toast("Disengaged", "warn");
   if (Math.random() < 0.55) { const d = shipOf(foe(B)); log(`A parting volley from ${the(d)} chases her out—`, "fault"); damageShip(rand(d.parting[0], d.parting[1]), "Parting volley"); }
@@ -348,7 +355,7 @@ function officerOrders() {
 export function towToDS9() {
   const SP = G.sp, S = G.ship;
   recBc(SP.battle, "towed", 0);
-  SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++; clearShipFx();
+  SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++; clearShipFx(); moodAll("tow");
   SP.location = "ds9"; SP.escortDone = true;
   Object.assign(SP.cap, { decideT: PACE.dockDwell[0], dest: "convoy", holdLogged: false, reason: "Towed home to Deep Space Nine — holding for repairs. Departure pending my hull minimum of 40%." });
   S.hull = 20; S.shields = 0; S.power = Math.min(S.power, 30);
@@ -412,7 +419,7 @@ function autoFire() {
 }
 function tickAbilities(dt) {
   const ab = G.ab;
-  for (const a of Object.values(ab)) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt);
+  for (const [k, a] of Object.entries(ab)) if (a.cd > 0) a.cd = Math.max(0, a.cd - dt * cdRate(k));   // N2: officer mood / Tactical
   if (ab.pattern.active > 0) { ab.pattern.active -= dt; if (ab.pattern.active <= 0) { ab.pattern.active = 0; if (G.sp.battle) log("Attack Pattern Analysis expired — T'Ren is already recalculating.", "comm"); } }
   if (ab.scan.active > 0) { ab.scan.active -= dt; if (ab.scan.active <= 0) { ab.scan.active = 0; if (G.sp.battle) log("Weak-Point Scan expired — targeting back to standard.", "comm"); } }
 }

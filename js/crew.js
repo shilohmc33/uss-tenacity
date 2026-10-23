@@ -5,6 +5,8 @@ import { walkStep, walkSettle, keepPace } from "./anim.js";
 import { clamp, dDist, inRect } from "./util.js";
 import { findPath, nearestWalkable, cellCenter } from "./path.js";
 import { log, toast, fx, shipNews, cheerful, cheerLog } from "./bus.js";
+import { stationEff, ltRepairSkill, addSkillXp } from "./mood.js";
+import { MOOD } from "./pacing.js";
 import { faultPriority, shieldCap, medFrozen } from "./faults.js";
 import { PACE, PACE_RT, nightActive } from "./pacing.js";
 import { ltChatPartner } from "./npc-ambient.js";
@@ -145,6 +147,7 @@ export function ltStatus() {
   if (L.lift) return `In the turbolift — bound for <b>${DECKS[L.lift.dest].name}</b>.`;
   if (L.mode === "walk") {
     const it = L.intent || {};
+    if (it.kind === "use" && G.prog.jobs && G.prog.jobs.active && G.prog.jobs.active.kind === "incident" && G.prog.jobs.active.node === it.node) return `Responding to incident — heading to the <b>${NODEMAP[it.node].name}</b>…`;
     if (it.kind === "use") return `Heading to the <b>${NODEMAP[it.node].name}</b>…`;
     if (it.kind === "repair") return `Heading to repair the <b>${SYSTEMS[it.sys].name}</b>…`;
     if (it.kind === "liftRide") return `Walking to the turbolift — bound for <b>${DECKS[it.dest].name}</b>.`;
@@ -155,6 +158,8 @@ export function ltStatus() {
     const sy = SYSTEMS[L.repairSys];
     return `Repairing the <b>${sy.name}</b> — ${Math.min(99, Math.round(L.repairT / sy.dur * 100))}%.`;
   }
+  { const a = G.prog && G.prog.jobs && G.prog.jobs.active;   // P29 #8
+    if (a && a.kind === "incident" && L.mode === "use" && L.node === a.node) return `Responding to incident — ${a.label} (${Math.min(99, Math.round(a.acc / a.need * 100))}%).`; }
   if (L.mode === "use" && L.node && NODEMAP[L.node]) {
     const n = NODEMAP[L.node], base = USE_STATUS[L.node] || `At the <b>${n.name}</b>.`;
     let extra = "";
@@ -236,7 +241,7 @@ export function stepLt(dt) {
     const sys = SYSTEMS[L.repairSys];
     if (!sys || !S.faults[L.repairSys]) { L.mode = "idle"; L.repairSys = null; }
     else {
-      L.repairT += dt * (S.energy < 10 ? 0.55 : 1) * repairMult(L.repairSys);
+      L.repairT += dt * (S.energy < 10 ? 0.55 : 1) * repairMult(L.repairSys) * stationEff(L.repairSys) * ltRepairSkill();   // N2: crew mood at the station, the Lt's Engineering
       S.energy = clamp(S.energy - D.repair * eTempo * dt, 0, 100);
       faceToward(sys.mx, sys.my);
       if (Math.random() < dt * 14) fx("spark", { x: L.x + (L.dir === "left" ? -0.03 : L.dir === "right" ? 0.03 : 0) * FIG_K, y: L.y - 0.07 * FIG_K });   // at his hands (option A scale)
@@ -270,7 +275,7 @@ export function stepLt(dt) {
 function finishRepair() {
   const L = lt(), id = L.repairSys, sys = SYSTEMS[id];
   const pri = faultPriority(id), f = G.ship.faults[id], sev = f ? f.sev : "low";
-  delete G.ship.faults[id];
+  delete G.ship.faults[id]; addSkillXp("lt", "engineering", MOOD.skill.repair);   // N2
   L.repairSys = null;
   G.stats.repairs++;
   // progression: quality roll (poor / good / excellent) -> XP, reputation, salvage; manual orders pay more
