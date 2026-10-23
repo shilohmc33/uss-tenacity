@@ -56,7 +56,7 @@ const BE = {
 };
 const LO = {
   planters: S("hydroponics", 0.56, 0.69, "down", "computer", [30, 60], 3), plantersE: S("hydroponics-east", 0.70, 0.69, "down", "computer", [25, 50], 2),
-  windowS: S("viewport", 0.70, 0.55, "right", null, [15, 30], 1), tableW: S("table-west", 0.33, 0.56, "down", "eat", [25, 45], 2),
+  windowS: S("viewport", 0.70, 0.55, "right", null, [15, 30], 1), tableW: { ...S("table-west", 0.4469, 0.60, "down", "eat", [25, 45], 2), seat: "table4" },   // Lounge v2: table 4 chair
   galley: S("galley-pass", 0.30, 0.36, "up", "computer", [20, 40], 3), barEnd: S("bar-west", 0.33, 0.35, "up", "talk", [20, 35], 2),
 };
 export const CREW_ROSTER = [

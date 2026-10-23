@@ -101,7 +101,7 @@ export const DECKS = {
   },
   berthing: {
     name: "Berthing", plate: "deck-berthing", glow: [0.80, 0.16, "255,196,110"],
-    lift: { x: 0.555, y: 0.89, mx: 0.555, my: 0.79 },
+    lift: { x: 0.612, y: 0.89, mx: 0.612, my: 0.79 },   // P22: the painted turbolift door seam on the Berthing v2 plate (x 1175/1920)
     // cleaned plate (decks_berthing_fix_v1): the starboard bench + alcove wall end now sit at y .665-.837 (block) and the floor
     // under them, with the opening (744,534,42,61) into the starboard bay, is walkable (base)
     base: [R(0.045, 0.385, 0.96, 0.515), R(0.735, 0.045, 0.955, 0.29), R(0.79, 0.29, 0.965, 0.905), R(0.44, 0.83, 0.80, 0.97),
@@ -127,12 +127,25 @@ export const DECKS = {
     name: "Mess & Bar", plate: "deck-lounge", glow: [0.42, 0.27, "255,190,110"],
     lift: { x: 0.145, y: 0.6625, mx: 0.145, my: 0.555 },
     base: [R(0.25, 0.20, 0.815, 0.945), R(0.035, 0.45, 0.235, 0.745), R(0.235, 0.615, 0.285, 0.685)],
-    blocks: [R(0.225, 0.205, 0.625, 0.36), R(0.25, 0.015, 0.645, 0.205), R(0.365, 0.415, 0.43, 0.485), R(0.495, 0.415, 0.56, 0.485),
-      R(0.62, 0.41, 0.685, 0.48), R(0.37, 0.585, 0.435, 0.655), R(0.515, 0.58, 0.58, 0.65), R(0.66, 0.575, 0.725, 0.645),
+    // Lounge v2 (sprites/deck_lounge_v2/out/lounge_spots.json): the six tables are blocks_norm_tables (chair carves included); bar, galley, planters kept
+    blocks: [R(0.225, 0.205, 0.625, 0.36), R(0.25, 0.015, 0.645, 0.205), R(0.3583, 0.3797, 0.4292, 0.525), R(0.4854, 0.3797, 0.5563, 0.525),
+      R(0.6125, 0.375, 0.6833, 0.5203), R(0.3656, 0.5516, 0.4365, 0.6969), R(0.5094, 0.5469, 0.5802, 0.6922), R(0.6552, 0.5422, 0.726, 0.6875),
       R(0.485, 0.73, 0.855, 0.955)],
     nodes: {
-      // standing high-top tables (v2 art): the Lt eats standing just north of the middle top-row table, facing it
-      mess: { name: "Mess Table", chip: "Mess Table", x: 0.525, y: 0.4125, mx: 0.521, my: 0.448, rest: 5, face: "down" },
+      // Lounge v2: six seated tables, every chair faces down (south). The mess node is table 2's chair (sit and eat); the other
+      // five are chip-less tap-only seats (ambient crew sit in them via spot.seat). x/y = stand spot, mx/my = hip.
+      mess: { name: "Mess Table", chip: "Mess Table", x: 0.5667, y: 0.4281, mx: 0.5208, my: 0.4156, rest: 5, face: "down",
+        seat: { at: [0.5208, 0.4156], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.5667, 0.4281] } },
+      table1: { name: "Table 1", x: 0.4396, y: 0.4281, mx: 0.3937, my: 0.4156, face: "down",
+        seat: { at: [0.3937, 0.4156], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.4396, 0.4281] } },
+      table3: { name: "Table 3", x: 0.6937, y: 0.4234, mx: 0.6479, my: 0.4109, face: "down",
+        seat: { at: [0.6479, 0.4109], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.6937, 0.4234] } },
+      table4: { name: "Table 4", x: 0.4469, y: 0.6, mx: 0.401, my: 0.5875, face: "down",
+        seat: { at: [0.401, 0.5875], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.4469, 0.6] } },
+      table5: { name: "Table 5", x: 0.5906, y: 0.5953, mx: 0.5448, my: 0.5828, face: "down",
+        seat: { at: [0.5448, 0.5828], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.5906, 0.5953] } },
+      table6: { name: "Table 6", x: 0.6448, y: 0.5906, mx: 0.6906, my: 0.5781, face: "down",
+        seat: { at: [0.6906, 0.5781], face: "down", hip: { down: [0, 0], up: [0, 0] }, stand: [0.6448, 0.5906] } },
       bar: { name: "Bar Counter", chip: "Bar Counter", x: 0.4425, y: 0.3375, mx: 0.4425, my: 0.27, rest: 2.5 },
     },
   },
@@ -493,11 +506,17 @@ export const DECK_OCCL = {
   // end (y 533) has the opening below it (walkers in front) and the starboard corridor / bay beside it, so it stays uncut too.
   berthing: { items: [] },
   // Lounge (cut from deck-lounge): the south jamb of the lobby doorway. Lobby feet reach y ~472, past the jamb's top (~465), so it
-  // hides the feet of a walker behind it. Elsewhere the masks keep feet north of (or beside) the props: the six tables' carve
+  // hides the feet of a walker behind it (Lounge v2: the artist's hires cut, plus the six table fronts over the seated legs). Elsewhere the masks keep feet north of (or beside) the props: the six tables' carve
   // keeps feet off the tabletops (row 16 centres 4 px short of the top edge), the planters' leaves start ~12 px below the floor's
   // south edge, the bar stools and the lift-lobby pillar / door leaf are only ever beside a walker.
   lounge: { items: [
-    { id: "lobby_jamb", poly: [[204, 466], [212, 463], [238, 463], [242, 470], [242, 500], [204, 500]], baseY: 495 },
+    { id: "lobby_jamb", src: "fg-lounge-lobby_jamb", crop: true, box: [202, 459, 246, 502], baseY: 495 },
+    { id: "table1", src: "fg-lounge-table1", crop: true, box: [346, 273, 411, 315], baseY: 315, seats: ["table1"] },
+    { id: "table2", src: "fg-lounge-table2", crop: true, box: [468, 273, 533, 315], baseY: 315, seats: ["mess"] },
+    { id: "table3", src: "fg-lounge-table3", crop: true, box: [590, 270, 655, 312], baseY: 312, seats: ["table3"] },
+    { id: "table4", src: "fg-lounge-table4", crop: true, box: [353, 383, 418, 425], baseY: 425, seats: ["table4"] },
+    { id: "table5", src: "fg-lounge-table5", crop: true, box: [491, 380, 556, 422], baseY: 422, seats: ["table5"] },
+    { id: "table6", src: "fg-lounge-table6", crop: true, box: [631, 377, 696, 419], baseY: 419, seats: ["table6"] },
   ] },
   // Medical v2 (sprites/deck_medical_v2/out/fg-medical.json): the artist's cutouts (hires, lossless webp assets/fg-med-*.webp). The
   // office glass panes carry their glass at alpha 0.5 in the pixels (frames opaque), so the items draw at alpha 1: an item alpha
@@ -561,8 +580,8 @@ export const AMBIENT_NPCS = [
     id: "thelev", who: "andorian", rank: "Crewman", name: "Thelev sh'Zarath", short: "Thelev", pronoun: "she",
     deck: "lounge", speed: 0.056, start: "mess-east",   // speed: option A, 0.09 x FIG_K
     spots: [
-      { id: "mess-east", near: "mess", dx: 0.125, dy: 0.0, face: "down", action: "eat", t: [25, 45], w: 3 },    // next table east of the Lt's
-      { id: "mess-west", near: "mess", dx: -0.125, dy: 0.0, face: "down", action: "eat", t: [25, 45], w: 2 },   // next table west
+      { id: "mess-east", x: 0.6938, y: 0.4234, seat: "table3", face: "down", action: "eat", t: [25, 45], w: 3 },   // Lounge v2: table 3 chair (east of the Lt's)
+      { id: "mess-west", x: 0.4396, y: 0.4281, seat: "table1", face: "down", action: "eat", t: [25, 45], w: 2 },   // Lounge v2: table 1 chair (west)
       { id: "bar", near: "bar", dx: 0.10, dy: 0.0, face: "up", action: "talk", t: [20, 35], w: 3 },              // a stool along from the Lt's
       { id: "replicator", near: "bar", dx: 0.17, dy: 0.01, face: "up", action: "computer", t: [8, 14], w: 2 },  // replicator slot, bar's east end
       { id: "window", x: 0.70, y: 0.55, face: "right", action: null, t: [15, 30], w: 1 },                         // idle by the viewports
@@ -572,7 +591,7 @@ export const AMBIENT_NPCS = [
       // chat spot candidates per Lt node, tried in order; the first whose walkable snap moves it <= maxSnap design px wins.
       // mess: across the table from him (the side away from the bar; the Lt's mess spot sits between table and bar),
       // then beside him to the east. bar: a stool along to the east.
-      nodes: { mess: [{ dx: 0.0, dy: 0.125 }, { dx: 0.075, dy: 0.0 }], bar: [{ dx: 0.075, dy: 0.0 }] }, maxSnap: 28,
+      nodes: { mess: [{ dx: 0.02, dy: 0.035 }, { dx: 0.075, dy: 0.0 }], bar: [{ dx: 0.075, dy: 0.0 }] }, maxSnap: 28,
       joinRange: 360, chatRange: 150,      // design px: she comes over from up to joinRange; a chat breaks off past 1.4x chatRange
       chatDur: [18, 30], lingerT: [4, 8],  // s of talking per chat; s she lingers after he walks off
       lineCooldown: 90,

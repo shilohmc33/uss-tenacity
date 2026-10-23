@@ -130,7 +130,7 @@ const USE_STATUS = {
   shield: "At the <b>Shield Console</b> — recharging emitters.",
   torpbay: "In the <b>Torpedo Bay</b> — replicating torpedoes.",
   biobed: "On the <b>Biobed</b> — the doctor's scanner does its work. Energy recovering.",
-  mess: "Eating at the <b>Mess Table</b> — standing at a high-top, trading mess-hall talk. Energy recovering.",
+  mess: "Eating at the <b>Mess Table</b> — seated at a table, trading mess-hall talk. Energy recovering.",
   bunk: "Off his feet in <b>Berthing</b> — rack time in his own bunk.",
   rack: "Asleep in <b>his own quarters</b> — the best rest aboard.",
   locker: "At the <b>Parts Locker</b> — fabricating spares from stock.",

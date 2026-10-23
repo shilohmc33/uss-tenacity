@@ -16,5 +16,14 @@ export const DECK_DOORS = {
         { img: "door-bridge-turbolift-2-left", rect: [711, 38, 762, 141], slide: [-42.3, -9.3] },
         { img: "door-bridge-turbolift-2-right", rect: [749, 47, 796, 150], slide: [34.7, 7.7] }] },
   ],
+  // Berthing (sprites/deck_berthing_v2b/out/doors_berthing.json): front-on lift door, panels slide straight left/right. The
+  // artist's trigger centre (587, 573) moved north to (587, 560) so the doors stay open with margin while the Lt stands on the
+  // lift's inner spot (DECKS.berthing.lift mx/my = 587, 506: 54 px) and on its floor spot (x/y = 587, 570).
+  berthing: [
+    { id: "turbolift", name: "lift_berthing", clip: [[528, 459.5], [645.5, 459.5], [645.5, 553], [528, 553]], trigger: { c: [587, 560], r: 70 }, timing: T,
+      panels: [
+        { img: "door-berthing-turbolift-left", rect: [528, 459.5, 587.5, 553], slide: [-59.5, 0] },
+        { img: "door-berthing-turbolift-right", rect: [587.5, 459.5, 645.5, 553], slide: [58, 0] }] },
+  ],
 };
 export const DOOR_IMAGES = Object.values(DECK_DOORS).flatMap(L => L.flatMap(d => d.panels.map(p => p.img)));

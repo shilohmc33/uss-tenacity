@@ -35,7 +35,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     // starboard lift too, then walk away: port closes after delay + close time
     await place('bridge', 0.7854, 0.2625); await sleep(1500);
     I.stbd = await state(); if (I.stbd[1].state !== 'open' || I.stbd[0].state !== 'closed') fail++;
-    await place('berthing', 0.5, 0.6); await sleep(1500); await p.screenshot({ path: OUT + `berthing-v3-${tag}.png` });
+    // Berthing lift door (deck_berthing_v2b): closed with the Lt away, mid-slide stepping onto the lift spot, open on it, closes after
+    const bstate = () => p.evaluate(async () => { const D = await import('/js/render/doors.js'); return D.doorState('berthing'); });
+    await place('berthing', 450 / 960, 600 / 640); await sleep(1500);
+    I.bClosed = await bstate(); await p.screenshot({ path: OUT + `berthing-door-closed-${tag}.png` }); if (I.bClosed[0].state !== 'closed') fail++;
+    await place('berthing', 0.612, 0.89);
+    I.bMid = await p.evaluate(async () => { const D = await import('/js/render/doors.js');
+      return new Promise(res => { let n = 0; const f = () => { const s = D.doorState('berthing')[0]; if ((s.open > 0.3 && s.open < 0.75) || ++n > 120) { __T.app.paused = true; res(D.doorState('berthing')); } else requestAnimationFrame(f); }; requestAnimationFrame(f); }); });
+    await p.screenshot({ path: OUT + `berthing-door-mid-${tag}.png` }); if (!(I.bMid[0].open > 0.3 && I.bMid[0].open < 0.75)) fail++;
+    await p.evaluate(() => { __T.app.paused = false; }); await sleep(900);
+    I.bOpen = await bstate(); await p.screenshot({ path: OUT + `berthing-door-open-${tag}.png` }); if (I.bOpen[0].state !== 'open') fail++;
+    await place('berthing', 0.612, 0.79); await sleep(500); I.bInner = await bstate(); if (I.bInner[0].state !== 'open') fail++;
+    await place('berthing', 0.5, 0.6); await sleep(1800); I.bAfter = await bstate(); if (I.bAfter[0].state !== 'closed') fail++;
+    await p.screenshot({ path: OUT + `berthing-v3-${tag}.png` });
     I.berthPlate = await p.evaluate(async () => { const A = await import('/js/assets.js'); const im = A.IMG['deck-berthing']; return im ? [im.width, im.height] : null; });
     rep.errors[tag] = errs; fail += errs.length; await c.close();
   }
