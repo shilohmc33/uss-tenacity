@@ -50,6 +50,35 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
     } finally { await c.close(); }
     const snap1 = fs.readdirSync(ART).sort().map(f => f + ':' + fs.statSync(ART + f).size + ':' + fs.statSync(ART + f).mtimeMs).join('|'); ok(snap1 === snap0, 'assets/story untouched by the test');
   }
+  // ---- P35: the 19 approved bonus / follow-up pictures: on disk (1080x1920 webp), in the manifest, shown at their choice; fallback holds ----
+  { const NEW = [['coolant_cascade', 1, 'story_coolant_c4'], ['mess_hall_feud', 1, 'story_messhall_c4'], ['letter_home', 1, 'story_letter_c4'], ['ferengi_salvage', 1, 'story_ferengi_c4'],
+      ['kestrel_derelict', 1, 'story_kestrel_s1_c4'], ['kestrel_derelict', 2, 'story_kestrel_s2_c4'], ['kestrel_derelict', 3, 'story_kestrel_s3_c4'], ['subspace_echo', 1, 'story_echo_s1_c4'], ['subspace_echo', 2, 'story_echo_s2_c4'],
+      ['vorta_offer', 1, 'story_vorta_c4'], ['bajoran_relic', 1, 'story_relic_c4'], ['cardassian_codes', 1, 'story_rod_c4'], ['jemhadar_wreck', 1, 'story_jemhadar_c4'], ['holo_ghost', 1, 'story_hologhost_c4'], ['shore_trouble', 1, 'story_quarks_c4'],
+      ['debt_repaid', 1, 'story_debt_c1', 'warning'], ['debt_repaid', 1, 'story_debt_c2', 'standoff'], ['vorta_returns', 1, 'story_vreturn_c1', 'price'], ['vorta_returns', 1, 'story_vreturn_c2', 'retrace']];
+    const man = JSON.parse(fs.readFileSync(ART + 'manifest.json', 'utf8')), webp = f => { const b = fs.readFileSync(ART + f + '.webp'); return b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' && b.length < 310 * 1024; };
+    ok(NEW.every(([, , f]) => man.includes(f) && webp(f)), 'P35 files in the manifest, webp, < ~300 KB ' + JSON.stringify(NEW.filter(([, , f]) => !(man.includes(f) && webp(f)))));
+    const run = async (route, list, shots) => { const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await c.newPage(), tag = 'p35art', out = [];
+      p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`)); p.on('requestfailed', r => errs.push(`${tag}: failed ${r.url()}`));
+      if (route) await route(p);
+      try { await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
+        await p.evaluate(() => { window.__noSave = true; const L = (__T.G.prog.skills.lt = __T.G.prog.skills.lt || {}); for (const k of ['engineering', 'tactical', 'fitness', 'composure', 'science', 'medical']) L[k] = 6000; __T.G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; __T.G.sp.location = 'convoy'; });
+        const click = sel => p.evaluate(sel => { const rnd = Math.random; Math.random = () => 0.01; try { const b = document.querySelector('#storyScene ' + sel); if (b) b.click(); return !!b; } finally { Math.random = rnd; } }, sel);
+        for (const [id, step, file, k] of list) {
+          await p.evaluate(id => { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); __T.G.sp.battle = null; __T.G.prog.story.fight = null; __T.ST.closeStory(); __T.ST.forceStory(id); }, id); await sleep(250);
+          for (let s = 1; s < step; s++) { await click('.stc:not(.safe):not(.bonus):not(.locked)'); await sleep(150); await click('[data-story-continue]'); await sleep(250); }
+          const at = await p.evaluate(() => { const c = __T.ST.current(); return c && c.node != null ? c.node + 1 : 1; });
+          const before = await p.evaluate(() => document.querySelector('#storyScene .storyframe').dataset.art);
+          const hit = await click(k ? `[data-story-pick="${k}"]` : '.stc.bonus:not(.locked)'); await sleep(900);
+          const r = await p.evaluate(() => { const f = document.querySelector('#storyScene .storyframe'), on = f.querySelector('img.sl.on'); return { art: f.dataset.art, w: on.naturalWidth, op: +getComputedStyle(on).opacity }; });
+          out.push({ id, step, file, at, hit, before, ...r }); if (shots[file]) await p.screenshot({ path: OUT + shots[file] }); }
+        await p.evaluate(() => __T.ST.closeStory());
+      } finally { await c.close(); } return out; };
+    const B = res.p35 = { bind: await run(null, NEW, { story_coolant_c4: 'p35-bonus-coolant_c4-390x844.png', story_kestrel_s2_c4: 'p35-bonus-kestrel_s2_c4-390x844.png', story_hologhost_c4: 'p35-bonus-hologhost_c4-390x844.png', story_debt_c1: 'p35-debt_c1-390x844.png' }) };
+    const bad = B.bind.filter(x => !(x.hit && x.at === x.step && x.art === x.file && x.w === 1080 && x.op === 1 && x.before !== x.file)); ok(!bad.length, 'P35 every new picture shows at its choice ' + JSON.stringify(bad));
+    // fallback: a bonus picture missing from the manifest, a follow-up one missing, and a broken (junk bytes) step picture -> the main scene stays
+    B.fb = await run(async p => { await p.route('**/assets/story/manifest.json', rt => rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(man.filter(k => k !== 'story_quarks_c4' && k !== 'story_debt_c1')) }));
+      await p.route(/story_kestrel_s2_c4\.webp/, rt => rt.fulfill({ status: 200, contentType: 'image/webp', body: 'not a webp' })); }, NEW.filter(x => ['story_quarks_c4', 'story_debt_c1', 'story_kestrel_s2_c4'].includes(x[2])), {});
+    ok(B.fb.length === 3 && B.fb.every(x => x.hit && x.art === x.before && x.art !== x.file && x.w === 1080 && x.op === 1), 'P35 fallback to the main scene ' + JSON.stringify(B.fb)); }
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
     const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage();
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
