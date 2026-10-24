@@ -7,8 +7,8 @@ import { log, toast, shipNews, fx, cheerful, cheer } from "./bus.js";
 import { spawnFault } from "./faults.js";
 import { ZONE } from "./crew.js";
 import { startBattle as _sb, battleAllowed } from "./battle.js";
-import { PACE, PACE_RT, rr, travelS } from "./pacing.js";
-import { legStory, tickStoryDock, storyLeg } from "./story.js";   // E1 story events (story.js never imports events.js)
+import { PACE, PACE_RT, rr, travelS, STORY } from "./pacing.js";
+import { legStory, tickStoryDock, storyLeg, storyTick } from "./story.js";   // E1 story events (story.js never imports events.js)
 
 // pass 09 (4): light events skipped in the quiet period after a death (bus.js cheerful gate)
 const LIGHT_EVENTS = ["crewmoment", "ferengi"];
@@ -30,8 +30,9 @@ function storySlot() {
 }
 function pickEvent() {
   const ev = G.sp.ev, pool = EV_POOL.filter(e => e.id !== ev.lastId && !(LIGHT_EVENTS.includes(e.id) && !cheerful()));   // pass 08 (5): no birthday / mail call in the quiet period after a death
-  let r = Math.random() * pool.reduce((a, e) => a + e.w, 0);
-  for (const e of pool) { r -= e.w; if (r <= 0) return e.id; }
+  const wOf = e => e.w * (STORY.textWeight[e.id] ?? 1);   // P34: halved where a story version exists
+  let r = Math.random() * pool.reduce((a, e) => a + wOf(e), 0);
+  for (const e of pool) { r -= wOf(e); if (r <= 0) return e.id; }
   return cheerful() ? "crewmoment" : "warnews";
 }
 function evTask(nodeId, need, dur, label) {
@@ -113,6 +114,7 @@ export function fireEvent(id) {
 }
 export function tickEvents(dt) {
   const SP = G.sp, ev = SP.ev, act = ev.active, L = G.lt;
+  storyTick();   // E3: one 'the moment passed' line for a story step dropped at load
   if (act) {
     // NEW-06: offline nobody can answer a deck task, so the bridge handles it at once (same outcome as letting it
     // expire, without the countdown warning or the "window closed" line cluttering the shift report)

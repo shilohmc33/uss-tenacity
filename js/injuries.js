@@ -378,7 +378,7 @@ hooks.shipHit.push(({ sys, hit }) => {
   if ((B.injN || 0) >= I.perBattle || Math.random() >= I.battleHit * (offRules() ? I.nightMult : 1)) return;
   const crit = Object.values(G.ship.faults).some(f => f.sev === "crit");
   const where = sys ? SYSTEMS[sys].deck : pick(["engineering", "bridge", "berthing", "medical", "lounge"]);
-  if (injure("battle", { deck: where, sys, crit, src: (B.enemies && B.enemies[0] && B.enemies[0].ship) || "", what: `${hit || "a hit"} that came through the shields on the ${where === "engineering" ? "engineering deck" : where}` })) B.injN = (B.injN || 0) + 1;
+  if (injure("battle", { deck: where, sys, crit, ...(B.soft ? { sev: "minor" } : {}), src: (B.enemies && B.enemies[0] && B.enemies[0].ship) || "", what: `${hit || "a hit"} that came through the shields on the ${where === "engineering" ? "engineering deck" : where}` })) B.injN = (B.injN || 0) + 1;
 });
 hooks.hazard.push(({ kind, sys, bonus }) => {
   const I = K().injury; if (Math.random() >= I.hazard * (bonus ? I.hazardBonusMult : 1) * (offRules() ? I.nightMult : 1)) return;

@@ -48,11 +48,13 @@ export function dutyItems() {
   items.sort((a, b) => a.pri - b.pri || (a.sev ? SEV_RANK[a.sev] : -1) - (b.sev ? SEV_RANK[b.sev] : -1) || b.t - a.t);
   return items;
 }
+export const FAULT_RT = { soft: false };   // E3: set by towToDS9 while it faults the ship after a soft fight
 export function spawnFault(src = "ambient", forceId, forceSev) {
   const free = Object.keys(SYSTEMS).filter(k => !G.ship.faults[k]);
   if (!free.length) return null;
   const id = forceId && free.includes(forceId) ? forceId : pick(free);
-  const sev = forceSev || rollSeverity(src);
+  let sev = forceSev || rollSeverity(src);
+  if (sev === "crit" && !forceSev && ((G.sp.battle && G.sp.battle.soft) || FAULT_RT.soft)) sev = "med";   // E3: a soft (story) fight never makes a CRIT fault
   G.ship.faults[id] = { t: 0, sev, cost: sevCost(sev), escT: 0 };
   const s = SYSTEMS[id];
   log(`${s.fault} — ${s.name} degrading. [${SEV_LABEL[sev]}]`, "fault");

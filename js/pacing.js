@@ -183,15 +183,29 @@ export const CARE = {
 };
 // ---- E1: illustrated story events (js/story.js, notes/2026-10-23-story-events-plan.md sections 4 and 6) ----
 export const STORY = {
-  legChance: 0.35,          // a voyage event slot becomes a story event (the total event rate does not grow)
+  legChance: 0.35,          // a voyage event slot becomes a story event at full ramp (the total event rate does not grow: an old text event fills any slot a story doesn't take)
+  // P33 frequency ramp by play days: [from playDay, share of voyage event slots, story events per ship's day]. Before the first
+  // row (day 0-1) none. Easy to tune: edit the rows.
+  ramp: [[2, 0.10, 1], [5, 0.20, 1], [10, 0.35, 2]],   // P33 fix 4: 1 story a ship's day on days 2-9, 2 from day 10
   dockPerHour: 0.6,         // docked at DS9: chance per present ship-hour (dt-scaled roll), at most one per dock visit
   minLegs: 2,               // legs started since the last story event before the next one in travel (one quiet leg between; so at most 1 per leg)
   perDay: 2,                // story events per ship's day (PROG.dayLength)
   graceDays: 2, gentleUntil: 5,   // play days: none before 2, only the gentle pool before 5
   odds: { base: 0.35, skill: 0.06, rel: 0.15, friend: 0.10, rival: -0.05, partner: 0.05, min: 0.10, max: 0.90, success: 0.6,
     words: { likely: 0.5, fair: 0.33, long: 0.15, partialHint: 0.6 } },   // P32 #6: the word is on FULL success (0.6p): likely >= 50% (p >= .834), fair odds >= 33% (p >= .55), a long shot >= 15% (p >= .25), else unlikely; '· partial likely' when p (not failing) >= 60% and the word isn't 'likely'
-  relSkillDiv: 10,          // a relationship check rolls opinion instead of a skill: max(0, opinion) / 10 stands in for the 0-10 skill level
+  chain: { min: 1, max: 3, expire: 5 },   // E3 follow-ups: due 1 to 3 seen legs after the parent, expire after 5 seen legs (frozen while away)
+  relSkillDiv: 10,          // (pre-P34 opinion checks; every roll is now an Lt skill)
+  tier: { low: 3, high: 7 },   // P34: Lt skill tier for the outcome text: 0-3 low (inexperience), 4-6 mid, 7+ high (bad luck despite doing it right)
+  // P34: skill-locked bonus choices (one per event or step, key "<id>" or "<id>:<step>"): the Lt skill level that unlocks it
+  bonus: { default: 6, coolant_cascade: 6, mess_hall_feud: 5, letter_home: 6, ferengi_salvage: 6, "kestrel_derelict:1": 6, "kestrel_derelict:2": 6, "kestrel_derelict:3": 5,
+    "subspace_echo:1": 6, "subspace_echo:2": 6, vorta_offer: 6, bajoran_relic: 5, cardassian_codes: 6, jemhadar_wreck: 6, holo_ghost: 5, shore_trouble: 6 },
+  // P34: old text events with a story version now weigh half (events.js pickEvent)
+  textWeight: { distress: 0.5, refugee: 0.5, defector: 0.5, anomaly: 0.5, ferengi: 0.5, crewmoment: 0.5 },          // a relationship check rolls opinion instead of a skill: max(0, opinion) / 10 stands in for the 0-10 skill level
 };
+// P33: the story share of a voyage event slot / the per-ship's-day cap at a play day (STORY.ramp)
+const rampRow = pd => { let r = null; for (const x of STORY.ramp) if ((Number.isFinite(+pd) ? +pd : 0) >= x[0]) r = x; return r; };
+export const storyShare = pd => { const r = rampRow(pd); return r ? r[1] : 0; };
+export const storyPerDay = pd => { const r = rampRow(pd); return r ? r[2] : 0; };
 export const HOLO = {
   // cost FR, min (session length, ship seconds = min x 60), group = up to 4, fit = quirks that love it
   progs: {

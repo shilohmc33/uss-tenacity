@@ -8,7 +8,7 @@ import { MOOD } from "./pacing.js";
 const MOOD_XP = MOOD.skill;
 
 import { chooseEncounter, chooseWingmen, noteEncounter, noteBcEnd } from "./encounters.js";
-import { spawnFault, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
+import { spawnFault, FAULT_RT, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
 import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
 import { hooks } from "./progression.js";
@@ -73,7 +73,9 @@ const OPEN = { convoy: "{A} breaks from the convoy's shadow — weapons free! Re
   hulk: "Ambush from the hulk's shadow — {a} was holding station in the wreck's blind spot. Red alert!",
   defector: "Trap sprung — {a} drops out of warp. T'Ren: 'Eighteen percent, Lieutenant. We drew it.' Red alert!",
   shadow: "The shadow commits — the tailing {short} turns in and opens fire. Red alert!",
-  debug: "Simulation drill — {a} engaging. Red alert!" };
+  debug: "Simulation drill — {a} engaging. Red alert!",
+  story_wreck: "The wreck's beacon brings {a} out of warp, weapons hot. Red alert!",   // E4: S9's hand-off (a soft fight)
+  story_echo: "The probe's handler — {a} — comes about out of the static, weapons hot. Red alert!" };   // E3: S4's hand-off (story.js; a soft fight)
 const openLine = (kind, d) => (OPEN[kind] || "Long-range sensors scream — {a} on an attack vector, dropping us out of warp. Red alert!")
   .replace("{A}", d.a.charAt(0).toUpperCase() + d.a.slice(1)).replace("{a}", d.a).replace("{short}", d.short);
 // Battles are rare set pieces: none in a session's first 10 minutes, a long gap between fights, and a hard
@@ -353,14 +355,14 @@ function officerOrders() {
   }
 }
 export function towToDS9() {
-  const SP = G.sp, S = G.ship;
+  const SP = G.sp, S = G.ship, soft = !!(SP.battle && SP.battle.soft);
   recBc(SP.battle, "towed", 0);
   SP.battle = null; SP.travel = null; SP.travelPaused = false; SP.evasiveT = 0; SP.visit = null; G.stats.tows++; clearShipFx(); moodAll("tow");
   SP.location = "ds9"; SP.escortDone = true;
   Object.assign(SP.cap, { decideT: PACE.dockDwell[0], dest: "convoy", holdLogged: false, reason: "Towed home to Deep Space Nine — holding for repairs. Departure pending my hull minimum of 40%." });
   S.hull = 20; S.shields = 0; S.power = Math.min(S.power, 30);
   log("The Tenacity goes dark — main power gone, drifting, guns silent. Disabled.", "fault");
-  for (let i = 0; i < 3; i++) spawnFault("battle");
+  FAULT_RT.soft = soft; try { for (let i = 0; i < 3; i++) spawnFault("battle"); } finally { FAULT_RT.soft = false; }
   log("A runabout out of Deep Space Nine takes her under tow. She'll fly again — Mirandas always do.", "comm");
   toast("Disabled — towed to Deep Space Nine", "crit");
   shipNews("<b>Disabled and towed to Deep Space Nine.</b> Hull at 20%, systems faulted — the Lieutenant has work to do.");
