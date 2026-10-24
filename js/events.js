@@ -54,7 +54,7 @@ function evScheduleNext() {
 }
 export function fireEvent(id) {
   const SP = G.sp;
-  if (SP.ev.active || SP.battle) return false;
+  if (SP.ev.active || SP.battle || SP.alert) return false;
   const S = G.ship;
   switch (id) {
     case "distress":

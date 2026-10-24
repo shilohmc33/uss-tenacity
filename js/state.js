@@ -1,5 +1,5 @@
 // Single source of truth: everything that matters lives in G and is JSON-serialisable.
-import { migrateBattle14, hardenBattle } from "./ships.js";
+import { migrateBattle14, hardenBattle, hardenAlert } from "./ships.js";
 import { freshEnc, hardenEnc, seedEnc } from "./encounters.js";
 import { DECKS, NODEMAP, SYSTEMS, DESTS } from "./data.js";
 import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, migrateProg8, migrateProg9, migrateProg10, migrateProg11, migrateProg12, migrateProg13, clampProg, clampResources } from "./progression.js";
@@ -140,6 +140,7 @@ function sanitize(base) {
     if (SP.cap && SP.cap.dest && !DESTS[SP.cap.dest]) SP.cap.dest = null;
     SP.enc = hardenEnc(SP.enc);   // encounter weighting: last encounter / spacing (missing in older v14 saves -> fresh)
     { const d = +SP.awayDefer; SP.awayDefer = Number.isFinite(d) && d > 0 ? Math.min(d, 7 * 86400) : 0; }   // pass 16 B1: catch-up held behind a live fight
+    hardenAlert(SP);   // RA(a): a held red alert survives a reload (no reward dodge), junk drops
     hardenBattle(SP);   // battle groundwork: combatant arrays (v14), junk enemy types / hulls (pass-03 N-3: never a negative enemy hull)
     if (SP.ev && SP.ev.active && SP.ev.active.task && !NODEMAP[SP.ev.active.task.node]) SP.ev.active = null;
   }

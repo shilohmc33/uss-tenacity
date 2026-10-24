@@ -438,3 +438,78 @@ body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height
 /* P32 #1 one playing tab; #7 debug panel moves left while a story scene is open (the scene's close button is top-right) */
 #tabLock,body>.modal.tablock{z-index:90}.tablock{z-index:90;background:rgba(0,0,0,.82)}.tablock .card{max-width:min(92vw,420px)}.tablock button{background:var(--lc1);color:#141a2a;font-weight:700;border-radius:22px;padding:0 18px;margin-top:8px}
 body.story-open #debug{right:auto;left:calc(4px + var(--safe-l));z-index:63}
+/* ---- Q1 (2026-10-24) ---- */
+#redThreat{font-style:normal;font-weight:600;letter-spacing:.02em;font-size:12px;opacity:.95}
+#redThreat:empty{display:none}
+.pring{display:inline-block;width:14px;height:14px;flex:none;border-radius:50%;margin-right:6px;vertical-align:-2px;--rc:#7fe08a;background:conic-gradient(var(--rc) calc(var(--f,1) * 360deg),rgba(255,255,255,.18) 0);-webkit-mask:radial-gradient(circle,transparent 3.5px,#000 4.5px);mask:radial-gradient(circle,transparent 3.5px,#000 4.5px)}
+.pring.amber{--rc:#ffb347}.pring.red{--rc:#ff5a4a}
+.alert-pill .pring{box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+#bgPanel .bgopts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}
+#bgPanel .bgopt{display:flex;flex-direction:column;gap:3px;text-align:left;min-height:56px;padding:8px 10px;border-radius:12px;background:#1c2a45;color:#e8eefc;border:1px solid #3a5a8a}
+#bgPanel .bgopt b{font-size:15px;letter-spacing:.04em}#bgPanel .bgopt small{font-size:12px;opacity:.85}
+#bgPanel .bgopt:active,#bgPanel .bgopt:hover{background:#27406a}
+#wbCard{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:45;width:min(92vw,460px);background:#13233a;color:#e8f2ff;border:1px solid #6fb3ff;border-radius:14px;padding:10px 14px;box-shadow:0 6px 24px rgba(0,0,0,.5);cursor:pointer}
+#wbCard .k{font-size:11px;letter-spacing:.18em;color:#9fd0ff;font-weight:700}#wbCard p{margin:4px 0;font-size:14px;line-height:1.35}#wbCard .tap{font-size:10px;opacity:.6;letter-spacing:.12em}
+.scrap{display:grid;grid-template-columns:54px minmax(0,1fr);gap:10px;padding:8px 2px;border-bottom:1px solid #1d2a44}
+.scrap img,.scrap .noimg{width:54px;height:96px;object-fit:cover;border-radius:6px;background:#0d1626}
+.scrap b{display:block;font-size:14px}.scrap small{font-size:11px;opacity:.7}.scrap p{margin:3px 0;font-size:13px;line-height:1.3}
+.scrap .sc.dim{opacity:.6}.scrap .sr i{font-style:normal;font-weight:700}.scrap .sr.success i{color:#8fe0a0}.scrap .sr.partial i{color:#ffcc66}.scrap .sr.fail i{color:#ff8a7a}.scrap .sr.safe i{color:#9fb6d8}
+/* ---- RA(a) red alert: the held-alert button and the battle view (CSS only) ---- */
+#raBtn{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;z-index:6;display:flex;flex-direction:column;align-items:center;gap:1px;min-height:52px;min-width:200px;max-width:calc(100% - 24px);padding:6px 16px;border-radius:16px;background:#b3150c;color:#fff;border:2px solid #ff8a7a;box-shadow:0 0 0 3px rgba(179,21,12,.35),0 6px 18px rgba(0,0,0,.45);animation:raPulse 1s infinite alternate;cursor:pointer}
+#raBtn b{letter-spacing:.18em;font-size:14px}#raBtn span{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}#raBtn small{font-size:11px;letter-spacing:.08em;opacity:.9}
+#raBtn[disabled]{animation:none;opacity:.7;cursor:default}
+@keyframes raPulse{from{box-shadow:0 0 0 2px rgba(255,80,60,.3),0 6px 18px rgba(0,0,0,.45)}to{box-shadow:0 0 0 8px rgba(255,80,60,.0),0 6px 18px rgba(0,0,0,.45);background:#d42214}}
+#raSheet{position:fixed;left:0;right:0;bottom:0;z-index:44;display:flex;justify-content:center;pointer-events:none}
+#raSheet[hidden]{display:none}
+#raSheet .ra-card{pointer-events:auto;width:min(100%,560px);max-height:62vh;overflow:auto;background:rgba(14,20,34,.96);color:#e8eefc;border:1px solid #c0392b;border-bottom:0;border-radius:16px 16px 0 0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -8px 28px rgba(0,0,0,.55)}
+@media (orientation:landscape) and (max-height:500px){#raSheet{justify-content:flex-end}#raSheet .ra-card{width:min(52vw,460px);max-height:calc(100vh - 8px);border-radius:16px 0 0 0;border-right:0}}
+#raSheet .ra-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px}#raSheet .ra-h b{color:#ff7a66;letter-spacing:.18em;font-size:15px}#raSheet .ra-h small{font-size:12px;opacity:.8}
+#raSheet .ra-sec{font-size:11px;letter-spacing:.16em;color:#9fb6d8;margin:8px 0 2px}
+#raSheet .ra-row{display:grid;grid-template-columns:minmax(0,1fr) 34% 42px;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+#raSheet .ra-row .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#raSheet .ra-row .nm small{display:block;font-size:11px;opacity:.7}
+#raSheet .ra-row.dead{opacity:.45}#raSheet .ra-row b{text-align:right;font-size:12px}
+#raSheet .hb{height:8px;border-radius:4px;background:#2a3450;overflow:hidden}#raSheet .hb i{display:block;height:100%;background:linear-gradient(90deg,#ff6b4a,#ffb347)}
+#raSheet .ra-tren{margin:8px 0 4px;font-size:14px;color:#ffd9a0}#raSheet .ra-st{margin:0 0 6px;font-size:13px}#raSheet .ra-st i{font-style:normal;color:#9fd0ff;letter-spacing:.08em;margin-right:4px}
+#raSheet .ra-left{margin:2px 0 6px;font-size:12px;opacity:.8}
+#raSheet .ra-btns{display:flex;gap:8px;margin-top:6px}#raSheet .ra-btns button{flex:1;min-height:48px;border-radius:24px;font-weight:700;letter-spacing:.12em}
+#raSheet .ra-go{background:#d42214;color:#fff}#raSheet .ra-x{background:#2a3a5a;color:#e8eefc}
+/* ---- RA(b) damage-control call card ---- */
+.dccard{z-index:64;display:flex;align-items:center;justify-content:center;background:rgba(4,6,12,.72)}
+.dccard[hidden]{display:none}
+.dcwrap{display:flex;flex-direction:column;width:min(100%,560px);max-height:100%;background:#0e1422;border:1px solid #c0392b;border-radius:16px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+.dcframe{position:relative;flex:none;height:30vh;max-height:300px;background:#000}
+.dcframe img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 40%}
+.dcframe img.sl{position:absolute;inset:0;opacity:0;transition:opacity .4s ease}.dcframe img.sl.on{opacity:1}
+.dccard.noart .dcframe{display:none}
+.dcpanel{padding:10px 14px 12px;overflow:auto;color:#e8eefc;min-height:0}
+.dctitle{display:block;color:#ff7a66;letter-spacing:.14em;font-size:14px}
+.dctext{margin:6px 0;font-size:14px;line-height:1.35}.dctext i.band{font-style:normal;font-weight:700;color:#ffd27a}.dctext.out.fail i.band{color:#ff8a7a}.dctext.out.success i.band{color:#8ff0b0}
+.dcbar{height:5px;border-radius:3px;background:#2a3450;overflow:hidden;margin:4px 0 2px}.dcbar i{display:block;height:100%;background:#ff7a66;transition:width .2s linear}.dcbar.out{display:none}
+.dcleft{display:block;font-size:12px;opacity:.8;margin-bottom:6px}
+.dcchoices{display:flex;flex-direction:column;gap:6px}
+.dcc{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-height:48px;padding:6px 12px;border-radius:12px;background:#1d2a44;color:#e8eefc;border:1px solid #34507e;text-align:left}
+.dcc b{font-size:14px}.dcc small{font-size:12px;color:#9fd0ff}.dcc em{font-size:12px;font-style:normal;color:#ffb3a6}
+.dcc.safe{background:#22283a;border-color:#4a5470}.dcc:hover,.dcc:focus-visible{border-color:#ff9a7a;outline:none}
+.dcchips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.dcgo{width:100%;min-height:48px;border-radius:24px;background:#d42214;color:#fff;font-weight:700;letter-spacing:.12em}
+.ra-buf{display:block;font-size:12px;color:#8ff0b0;margin:2px 0 4px}
+@media (orientation:landscape) and (max-height:500px){
+  .dcwrap{flex-direction:row;width:min(100%,780px);height:calc(100vh - 12px)}
+  .dcframe{height:100%;max-height:none;width:30%}
+  .dcchoices{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .dctext{font-size:13px;margin:4px 0}.dcpanel{padding:8px 12px}
+}
+@media (min-width:900px) and (min-height:600px){ .dcwrap{flex-direction:row;width:min(92vw,820px);max-height:88vh}.dcframe{height:auto;max-height:none;width:300px} }
+/* RA-a #5: while the Red Alert button is up, the toast stack ends above it (any toast position), so it never covers a toast */
+body.ra-held #toasts{bottom:var(--ra-h,76px)!important;overflow:hidden}
+body.ra-held #toasts:not(.top):not(.side){top:auto}
+/* Q1b #3: the red-alert pill on two lines (the odds word never clips); the banner never spills past the stage */
+.alert-pill.rapill{display:flex;flex-direction:column;justify-content:center;line-height:1.15;padding-top:3px;padding-bottom:3px}
+.alert-pill.rapill .ra1{font-size:11px;font-weight:700;letter-spacing:.1em;overflow:hidden;text-overflow:ellipsis}
+.alert-pill.rapill .ra2{display:flex;min-width:0;font-size:12px;font-weight:600}
+.alert-pill.rapill .ra2 .nm{min-width:0;overflow:hidden;text-overflow:ellipsis}.alert-pill.rapill .ra2 .w{flex:none}
+#redBanner{max-width:calc(100% - 8px);box-sizing:border-box}
+#redBanner>span{flex:none}#redThreat{min-width:0;overflow:hidden;text-overflow:ellipsis}#redBanner button{flex:none}
+/* Q1b #5: the welcome-back card docks at the top of the stage (over the deck view), never over the chip or button rows */
+#stage #wbCard{position:absolute;top:36px;bottom:auto;width:min(calc(100% - 16px),460px);max-height:calc(100% - 44px);overflow:hidden;z-index:8;padding:8px 12px}
+@media (max-height:500px){#stage #wbCard p{font-size:13px;margin:2px 0}}

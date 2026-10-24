@@ -5,7 +5,8 @@
 // pauses while one is open (main.js frame). Save: G.prog.story (v16), hardened through addHardener (no static import from
 // progression's graph).
 import { G, saveSoon } from "./state.js";
-import { STORY, MOOD, isPresent, offRules, storyShare, storyPerDay } from "./pacing.js";
+import { addScrap, scrapList, SCRAP_MAX } from "./scrapbook.js";   // Q1 #10
+import { STORY, MOOD, isPresent, offRules, storyShare, storyPerDay, oddsWord } from "./pacing.js";
 import { addHardener, nudge, opinionOf, spend, canAfford, awardXP, addr, costText } from "./progression.js";
 import { pr, SLOTMAP } from "./roster.js";
 import { log, cheerful } from "./bus.js";
@@ -32,6 +33,7 @@ const slotIds = slots => slots.map(s => P().crew.slots[s]).filter(free);
 const crewFree = (ex = []) => Object.values(P().crew.slots).filter(id => free(id) && !ex.includes(id));
 const juniors = (ex = []) => { const all = crewFree(ex), j = all.filter(id => !(SLOTMAP[occ(id).slot] || {}).senior); return j.length ? j : all; };
 const slotName = (slot, d) => { const id = P().crew.slots[slot]; return id && occ(id) ? occ(id).short : d; };
+export const kit = { fill: (t, c) => fill(t, c), slotIds, juniors, nm, occ, free, slotName };   // RA(b): the damage-control calls (dc.js) reuse the story machinery
 
 // ---- the events (E1: S2, S6, S7, S11). Tokens: {lead} {other} {sub} {obj} {pos} {s} {is} {has} {does} (the lead's pronouns),
 // {osub} {oobj} {opos} (the other's), {chief} {captain} {addr}; a capitalised token is capitalised. No fixed she / her in any line.
@@ -193,12 +195,12 @@ export const EV = {
             success: { fx: { xp: 40, rep: 1, op: 1, sxp: 20 }, text: "You lead the team through the airlock and down the dead corridors, wrist-lights finding the way. Past the wreckage, a cargo hold is sealed from the inside, and the life signs are behind it." },
             partial: { fx: { xp: 20, sxp: 10, power: -6 }, text: "The airlock fights you, but you get aboard and find the sealed hold where the life signs are.", lines: { power: "Cycling it costs the Tenacity {pw} percent of its power." } },
             fail: { fx: { op: -1, injure: "a gash from a buckled deck plate" }, text: "A deck plate gives way in the dark and the team goes down in a tangle of debris. You reach the sealed hold anyway, slower and sorer.",
-              lines: { injured: "{lead} {has} a gash across one shoulder, patched on the spot.", unhurt: "{lead} is shaken but unhurt." } } } },
+              lines: { injured: "{lead} has a gash across one shoulder, patched on the spot.", unhurt: "{lead} is shaken but unhurt." } } } },
           { k: "sweep", label: "Lead a security sweep ahead, {lead} on your flank", skill: "tactical", act: "leading a sweep through a booby-trapped ship", risk: "{lead} could be hurt by a booby trap", grisk: "{lead} shaken", next: { success: 1, partial: 1, fail: 1 }, res: {
             success: { fx: { xp: 30, rep: 1, sxp: 20, mlet: "storyGood" }, text: "You sweep the freighter deck by deck with {lead} on your flank, call it clear in under ten minutes, and find a cargo hold sealed from the inside." },
             partial: { fx: { xp: 15, sxp: 10, parts: -2 }, text: "You get the team through to the sealed hold, but a booby-trapped hatch you missed eats a tricorder on the way.", lines: { parts: "Replacing it costs {lost}." } },
             fail: { fx: { op: -1, injure: "a plasma burn from a booby-trapped hatch" }, text: "A booby-trapped hatch you didn't spot goes off as {lead} reaches it. The sweep still makes it to the sealed hold.",
-              lines: { injured: "{lead} {has} a plasma burn across one hand.", unhurt: "{lead} is shaken but unhurt." } } } },
+              lines: { injured: "{lead} has a plasma burn across one hand.", unhurt: "{lead} is shaken but unhurt." } } } },
           { k: "scan", label: "Scan from the Tenacity and keep your distance", safe: true, res: {
             safe: { fx: {}, text: "You hold the Tenacity at a safe distance, log the Kestrel for the Bajoran Militia and pass on the life signs. A Bajoran rescue ship is on its way." } } },
           { k: "eva", bonus: true, label: "Spacewalk to the bridge hatch and restore power from outside", skill: "fitness", act: "a spacewalk across a tumbling hull", risk: "{lead} shaken", grisk: "{lead} shaken", next: { success: 1, partial: 1, fail: 1 }, res: {
@@ -219,7 +221,7 @@ export const EV = {
             success: { fx: { xp: 40, rep: 2, sxp: 20 }, text: "The cutter bites clean and the door swings open on eleven frightened Bajorans, alive and wrapped in every blanket they own." },
             partial: { fx: { xp: 20, sxp: 10, parts: -3 }, text: "The seal fights you, but the door opens on eleven Bajoran refugees, cold and alive.", lines: { parts: "It burns through cutter heads worth {lost}." } },
             fail: { fx: { op: -1, injure: "a flash burn from the cutter" }, text: "The seal flashes back along the cutter and the hold vents a gout of frozen air before it opens. The refugees inside are frightened but alive.",
-              lines: { injured: "{lead} {has} a flash burn on one forearm.", unhurt: "{lead} is shaken but unhurt." } } } },
+              lines: { injured: "{lead} has a flash burn on one forearm.", unhurt: "{lead} is shaken but unhurt." } } } },
           { k: "knock", label: "Knock and talk them out", skill: "composure", act: "talking frightened people through a door", risk: "{lead} shaken, the refugees frightened", grisk: "{lead} shaken", next: { success: 2, partial: 2, fail: 2 }, res: {
             success: { fx: { xp: 40, rep: 2, op: 1, sxp: 20, mlet: "storyGood" }, text: "You answer the prayer rhythm with the next line, and after a long minute the seal hisses open from inside. Eleven refugees, cold and wary, and alive." },
             partial: { fx: { xp: 20, sxp: 10, power: -5 }, text: "It takes an hour of talking through the door, but they open up.", lines: { power: "Keeping the corridor warm costs the ship {pw} percent of its power." } },
@@ -424,7 +426,7 @@ export const EV = {
         success: { fx: { xp: 60, rep: 4, op: 2, sxp: 30, mlet: "storyGood" }, text: "You lead the team through the tunnels in low gravity and carry the draped ark out between you. The refugees sing when it beams aboard their ship." },
         partial: { fx: { xp: 30, sxp: 15, power: -6 }, text: "You get the ark out, though a tunnel collapse forces a long way round.", lines: { power: "Holding the transporter lock costs the Tenacity {pw} percent of its power." } },
         fail: { fx: { op: -1, injure: "a wrenched knee in a tunnel collapse" }, text: "A tunnel ceiling gives way behind you and the team has to dig out. The ark comes up later, on the refugees' own shuttle.",
-          lines: { injured: "{lead} {has} a wrenched knee from the collapse.", unhurt: "{lead} is shaken but unhurt." } } } },
+          lines: { injured: "{lead} has a wrenched knee from the collapse.", unhurt: "{lead} is shaken but unhurt." } } } },
       { k: "beam", label: "Beam the shrine up piece by piece, {lead} on the pad", skill: "engineering", act: "beaming up a fragile relic", risk: "a small fault in the transporter", grisk: "{lead} shaken", res: {
         success: { fx: { xp: 50, rep: 3, sxp: 25 }, text: "You lock on to each fragment in turn, holding the patterns steady through the moon's ore interference, and the shrine rematerialises whole on the refugees' pad." },
         partial: { fx: { xp: 25, sxp: 10, parts: -3 }, text: "Most of the shrine comes through cleanly; one carved panel arrives in two pieces.", lines: { parts: "Boosting the pattern buffers costs {lost}." } },
@@ -479,7 +481,7 @@ export const EV = {
         success: { fx: { xp: 60, rep: 3, sxp: 30 }, chain: "debt_repaid", text: "You kneel and talk to him, soldier to soldier, while a sedative from the field kit takes the edge off the withdrawal. He lives, and before the Dominion rescue beacon collects him he says your name once, as if filing it." },
         partial: { fx: { xp: 30, sxp: 15, mlet: "storyRough" }, chain: "debt_repaid", text: "He fights the sedative and the field kit is half spent before he settles, but he lives to be collected." },
         fail: { fx: { op: -1, injure: "a blow from a soldier in withdrawal" }, text: "The withdrawal takes hold mid-sentence and he lashes out before the sedative finally drops him. A Dominion beacon collects him; the rest is out of your hands.",
-          lines: { injured: "{lead} {has} a cracked rib from the blow.", unhurt: "{lead} is shaken but unhurt." } } } },
+          lines: { injured: "{lead} has a cracked rib from the blow.", unhurt: "{lead} is shaken but unhurt." } } } },
       { k: "secure", label: "Secure the wreck's weapons first, {lead} covering you", skill: "tactical", act: "stripping a Jem'Hadar weapons rack", risk: "the wreck's beacon could bring a fighter", grisk: "{lead} shaken", res: {
         success: { fx: { xp: 50, rep: 3, sxp: 25 }, text: "You strip the polaron rifles from the rack while {lead} covers the soldier, and the wreck is no danger to anyone now. His own people collect him later." },
         partial: { fx: { xp: 25, sxp: 10, parts: -2 }, text: "You get most of the weapons clear; one rack is trapped and goes up in a puff of green smoke.", lines: { parts: "It takes {lost} of your kit with it." } },
@@ -605,7 +607,7 @@ export function oddsP(skill, opinion, tier) {
 }
 // P32 #6: the story odds word describes FULL success (0.6p), with a 'partial likely' hint when not failing is likely
 export function storyOdds(p) {
-  const O = STORY.odds, W = O.words, sc = O.success * numIn(p, O.min, O.max, O.base), word = sc >= W.likely ? "likely" : sc >= W.fair ? "fair odds" : sc >= W.long ? "a long shot" : "unlikely";
+  const O = STORY.odds, W = O.words, { word, full: sc } = oddsWord(numIn(p, O.min, O.max, O.base));   // Q1: shared with the battle threat read
   return { word, hint: word !== "likely" && numIn(p, 0, 1, 0) >= W.partialHint ? "partial or better likely" : "", full: sc };
 }
 export function bandOf(p, r) { const O = STORY.odds; p = numIn(p, O.min, O.max, O.base); r = numIn(r, 0, 1, 0.999); return r < O.success * p ? "success" : r < p ? "partial" : "fail"; }
@@ -631,6 +633,7 @@ export function gateWhy(where = "leg") {   // P33 fix 1: follow-ups obey every g
   if (!isPresent()) return "away";
   if (offRules()) return "night";
   if (G.sp.battle) return "battle";
+  if (G.sp.alert) return "alert";   // RA(a): a held red alert
   if (S().fight) return "fight pending";   // P34c: no new story (voyage, dock or follow-up) while a story fight waits
   if (P().jobs && P().jobs.active) return "job";
   if (G.sp.ev && G.sp.ev.active) return "task";
@@ -687,7 +690,7 @@ export function startStory(id, opts = {}) {
   const bands = relBands(cast.lead), tier = bands[0][0];
   cur = { id, cast, tier, node: 0, pend: null, where: opts.where || "debug", res: null, at: ++seq }; enterNode(cur, 0);
   const d = P().day; if (opts.chain || (s.chain && s.chain.id === id)) s.chain = null;
-  s.last = id; s.seen[id] = (s.seen[id] || 0) + 1; s.legsSince = 0; if (s.dayCount.d !== d) s.dayCount = { d, n: 0 }; s.dayCount.n++; s.n.fired++; s.step = { id, node: 0, pend: null };
+  seedScrap(); s.last = id; s.seen[id] = (s.seen[id] || 0) + 1; s.legsSince = 0; if (s.dayCount.d !== d) s.dayCount = { d, n: 0 }; s.dayCount.n++; s.n.fired++; s.step = { id, node: 0, pend: null };
   log(`${E.title}: ${fill("{lead}", cast)} needs a decision from you.`, "comm");
   if (storyUI.show) storyUI.show(cur);
   return true;
@@ -783,6 +786,7 @@ export function choose(k) {
   else { s.step = null; if (cur.pend && !battle) setChain(cur.pend, cur.cast); }
   if (battle) s.fight = battle;   // P33 fix 2: the hand-off is saved with the roll. P34c: only ever set here; cleared only when the battle starts
   log(`${titleOf(cur)}: ${T.text}`, band === "fail" ? "fault" : band === "safe" ? "comm" : "good");
+  addScrap({ id: cur.id, title: titleOf(cur), art: artOf(cur).main, label: fill(ch.label, cur.cast), band, res: firstSentence(T.text), day: P().day, sd: G.ship.stardate });   // Q1 #10
   saveSoon("story");   // right after the roll (P31 rule): no reload reroll
   return { ok: true, ...cur.res };
 }
@@ -790,6 +794,17 @@ export function choose(k) {
 // E3: Continue on a step with a next one moves on (next()); closing early = the safe choice of the step on screen, and closing
 // an outcome whose next step is waiting = that step's safe choice. A battle hand-off starts once the scene is closed.
 export function next() { if (!cur || !cur.res || cur.res.next == null) return false; enterNode(cur, cur.res.next); cur.at = ++seq; if (storyUI.show) storyUI.show(cur); return true; }
+const firstSentence = t => { const m = String(t || "").match(/^.*?[.!?](\s|$)/); return (m ? m[0] : String(t || "")).trim().slice(0, 200); };
+// Q1 #10: the scrapbook (newest first). An old save is seeded once from the seen counts (no choice recorded for those).
+// Q1b #4: seeded BEFORE the first new story starts (startStory), so the seen counts are only pre-scrapbook stories: a story that was
+// played and later dropped by the cap never comes back as "Choice not recorded". Deduped by id, then capped at SCRAP_MAX.
+export function seedScrap() {
+  const p = P(), L = scrapList(); if (p.scrapSeeded === true) return; p.scrapSeeded = true;
+  const have = new Set(L.map(e => e.id)), old = Object.keys(S().seen || {}).filter((id, i, a) => EV[id] && !have.has(id) && a.indexOf(id) === i);
+  L.unshift(...old.map(id => ({ id, title: EV[id].title, art: EV[id].nodes ? (EV[id].nodes[0].art || EV[id].art) : EV[id].art, label: null, band: null, res: null, day: null, sd: null, old: true })));
+  while (L.length > SCRAP_MAX) L.shift();
+}
+export function scrapbook() { seedScrap(); return scrapList().slice().reverse(); }
 export function closeStory() {
   if (!cur) return;
   if (cur.res && cur.res.next != null) next();
@@ -802,8 +817,9 @@ const PENDING_LINE = { story_echo: "Sensors still tracking the echo contact. The
 // until the player can see it and a fight is normally allowed: present, not under the night rules, no panel / modal / overlay open
 // (story scene, Shift Report, holo, tab lock...), travelling (not docked), out of the post-load calm, battleAllowed.
 export const FIGHTS = ["story_echo", "story_wreck"];
-export const fightReady = ctx => !cur && !G.sp.battle && isPresent() && !offRules() && !(storyUI.blocked && storyUI.blocked()) && !!G.sp.travel && !atDS9() && battleAllowed(ctx);
-function startFight(ctx) { if (!fightReady(ctx)) return false; const ok = startBattle(ctx, { enemies: ["jh_fighter"], mission: "none" }); if (ok && G.sp.battle) { G.sp.battle.soft = true; S().fight = null; } saveSoon("story"); return !!ok; }
+export const fightReady = ctx => !cur && !G.sp.battle && !G.sp.alert && isPresent() && !offRules() && !(storyUI.blocked && storyUI.blocked()) && !!G.sp.travel && !atDS9() && battleAllowed(ctx);
+function startFight(ctx) { if (!fightReady(ctx)) return false; const ok = startBattle(ctx, { enemies: ["jh_fighter"], mission: "none", soft: true });   // RA(a): present -> a held (soft) red alert
+  if (ok === "held" && G.sp.alert) S().fight = null; else if (ok && G.sp.battle) { G.sp.battle.soft = true; S().fight = null; } saveSoon("story"); return !!ok; }
 // tests: every line of an event filled for a cast (blurb, all variants, labels, risks, outcomes) for the pronoun scan
 export function allTexts(id, cast) {
   const x = { fsys: "coolant line", lost: "three spare parts", got: "two spare parts", pw: "8" }, cx = { ...cast, x }, out = [];

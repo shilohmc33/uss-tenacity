@@ -14,6 +14,7 @@ import { ZONE, LIFT_T, HEAD_Y } from "../crew.js";
 import { drawCabin, slots as cabinSlots } from "../cabin.js";
 import { isWalkable } from "../path.js";
 import { activeJob } from "../oddjobs.js";
+import { ringBand, RING_COL } from "../pacing.js";   // Q1 countdown rings
 import { PROG } from "../progression.js";
 import { bandOf } from "../mood.js";
 import { TORP_BUILD_T } from "../crew.js";
@@ -351,17 +352,18 @@ export function drawDeck(ctx, t, dt) {
   // event task ring with countdown
   const act = G.sp.ev.active;
   if (act && act.task && act.task.deck === L.deck) {
-    const tk = act.task, x = tk.x * DW, y = tk.y * DH, low = tk.t <= 10;
-    ring(ctx, x, y, 26 * K, tk.t / tk.dur, low ? "#ff5a4a" : "#ff9900", 3);
+    const tk = act.task, x = tk.x * DW, y = tk.y * DH, fr = tk.t / tk.dur, band = ringBand(fr), low = band === "red";   // Q1: drains green -> amber -> red
+    ring(ctx, x, y, 26 * K, fr, RING_COL[band], 3);
     ring(ctx, x, y, 20 * K, tk.acc / tk.need, "#9fe8b1", 3);
-    ctx.fillStyle = low ? "#ff6a5a" : "#ffb347"; ctx.font = "bold 13px Antonio, sans-serif"; ctx.textAlign = "center";
+    ctx.fillStyle = low ? "#ff6a5a" : band === "amber" ? "#ffb347" : "#bff5c6"; ctx.font = "bold 13px Antonio, sans-serif"; ctx.textAlign = "center";
     ctx.fillText(`TASK ${Math.ceil(tk.t)}s`, x, y - 12 * K); ctx.textAlign = "left";
   }
   // pt04: odd job marker (soft teal ring + label; progress ring while the Lt works it)
   const job = activeJob();
-  if (job && job.deck === L.deck) {
+  if (job && job.deck === L.deck && !G.sp.battle && !G.sp.alert) {   // Q1 #6: parked (hidden) during a battle
     const n = NODEMAP[job.node], x = n.x * DW, y = n.y * DH;
     ring(ctx, x, y, 22 * K, 0.5 + 0.5 * Math.sin(t * 2.4), "rgba(120,230,210,0.75)", 2);
+    if (job.dur > 0) { const fr = Math.max(0, job.t / job.dur); ring(ctx, x, y, 27 * K, fr, RING_COL[ringBand(fr)], 2.5); }   // Q1: the expiry ring drains
     if (job.acc > 0) ring(ctx, x, y, 17 * K, job.acc / job.need, "#9fe8b1", 3);
     ctx.fillStyle = "#9ff0de"; ctx.font = `bold ${7 * K}px Antonio, sans-serif`; ctx.textAlign = "center";
     if (job.kind !== "incident") ctx.fillText("ODD JOB", x, y + 14 * K);   // under his feet so the Lt never hides it; INCIDENT is drawn after the mood icons (P29 #8)
@@ -391,7 +393,7 @@ export function drawDeck(ctx, t, dt) {
   if (!L.lift) for (const c of cast) if (c.id && c.id !== "lt" && G.prog && G.prog.needs && G.prog.needs[c.id]) { const b = bandOf(c.id); if (b >= 2) { const y0 = (c.y - HEAD_Y * (c.seat ? 0.78 : 1.02)) * DH, sx = (c.x * DW - cam.x) * cam.scale + cam.w / 2, res = sx < 260 ? 34 : 4, top = cam.y - (cam.h / 2 - res) / cam.scale + 9 * K;
     const yy = Math.max(y0, top), side = yy - y0 > 6 * K ? 13 * K : 0;   /* P30: clear of the deck label only where it is; still pushed onto the head -> sit beside it, never over the face */
     moodIcon(ctx, c.x * DW + side, yy, b, t, y0 < top); } }   // P28: never above the top edge (34 px clears the deck label)   // N2: Strained or worse
-  { const job = activeJob(); if (job && job.kind === "incident" && job.deck === L.deck && !L.lift) { const n = NODEMAP[job.node], x = n.x * DW, y = n.y * DH;
+  { const job = activeJob(); if (job && job.kind === "incident" && job.deck === L.deck && !L.lift && !G.sp.battle && !G.sp.alert) { const n = NODEMAP[job.node], x = n.x * DW, y = n.y * DH;
     ctx.font = `bold ${8 * K}px Antonio, sans-serif`; ctx.textAlign = "center"; ctx.lineWidth = 3 * K; ctx.strokeStyle = "rgba(10,14,24,0.9)"; ctx.strokeText("INCIDENT", x, y + 14 * K);
     ctx.fillStyle = "#ffb86b"; ctx.fillText("INCIDENT", x, y + 14 * K); ctx.textAlign = "left"; } }   // P29 #8: above mood icons
   // NEW-08: room glow and low-power darkening go over the characters too, so the Lt dims with his deck

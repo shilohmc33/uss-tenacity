@@ -23,7 +23,13 @@ import * as IN from "../insight.js";
 import * as RM from "../romance.js";
 import { GIFT, GIFT_ITEMS } from "../gift-data.js";
 import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering, ltStatus } from "../crew.js";
-import { BR, missionText } from "../battle.js";
+import { BR, missionText, threatRead, alertBattle as BT_alert } from "../battle.js";
+import { ringBand, PACE_RT } from "../pacing.js";   // Q1
+import * as BG from "../background.js";
+import { tickWelcome, welcomeDue } from "../welcome.js";
+import { scrapbook } from "../story.js";
+import * as RA from "./redalert.js";   // RA(a)
+import { updateDC } from "./dccall.js";   // RA(b)
 import { foe, shipOf, hullPct, combatantRows, FACTIONS } from "../ships.js";
 let hudRowsKey = "";
 import * as CC from "../crewcare.js";
@@ -65,6 +71,12 @@ export function buildHud() {
   // Personal Log phase 4: romance scenes (the signal, a date with the fade, the disclosure)
   document.body.insertAdjacentHTML("beforeend", `<div id="romPanel" class="modal" hidden><div class="card beat rom"><div id="romBody"></div></div></div>`);
   $("#romPanel").addEventListener("click", romClick);
+  RA.initRedAlert();
+  // Q1 #9: the one-time Academy background pick; Q1 #8: the welcome-back card (non-modal, tap or ~9 s)
+  document.body.insertAdjacentHTML("beforeend", `<div id="bgPanel" class="modal" hidden><div class="card"><div id="bgBody"></div></div></div><div id="wbCard" hidden role="status"></div>`);
+  BG.bgUI.shown = () => !$("#bgPanel").hidden; BG.bgUI.hide = () => { $("#bgPanel").hidden = true; };   // Q1b #1
+  $("#bgPanel").addEventListener("click", e => { const b = e.target.closest("[data-bg]"); if (!b) return; if (b.dataset.bg !== "later") BG.pickBackground(b.dataset.bg); $("#bgPanel").hidden = true; renderCareer(true); });
+  $("#wbCard").addEventListener("click", () => { $("#wbCard").hidden = true; });
   $("#specPanel").addEventListener("click", specClick);
   $("#crewBar").innerHTML = OFFICERS.map(o => `<div class="crew" id="crew-${o.id}"><img src="assets/${o.img}.webp" alt="${o.who}"><div><div class="n">${o.who}</div><div class="r">${o.role}</div><div class="a">${o.ability} — <span class="r">${o.desc}</span></div><div class="s" id="cs-${o.id}"></div></div></div>`).join("");
   on("log", addLogLine);
@@ -108,7 +120,7 @@ export function showAlertCard(c) {
   clearTimeout(alertTimer); if (c.delay > 0) { alertTimer = setTimeout(() => showAlertCard({ ...c, delay: 0 }), c.delay); return; }
   el.querySelector(".k").textContent = "⚠ " + (c.kicker || "RED ALERT");
   el.querySelector(".t").textContent = c.title || "";
-  el.querySelector(".c").textContent = c.cls || "";
+  el.querySelector(".c").textContent = (c.cls || "") + (c.kicker2 ? ` · ${c.kicker2}` : "");   // Q1 #4: T'Ren's threat read
   el.querySelector(".l").innerHTML = (c.lines || []).map(x => `<p>${x.replace(/[<>&]/g, "")}</p>`).join("");
   el.hidden = false; el.classList.remove("in"); void el.offsetWidth; el.classList.add("in");
   // pass 15: the sensor (crit) toast stays up alongside the card, and the card never covers a toast
@@ -201,6 +213,11 @@ export function showToast(msg, kind = "") {
   fitAlertCard();
 }
 let lastChips = "", lastDuty = "";
+// Q1b #3: the red-alert pill on two lines; the name may ellipsize, the odds word never does
+function setRaPill(pill, tr, held) {
+  const h = `<span class="ra1">RED ALERT${held ? " · TAP TO RESPOND" : ""}</span>` + (tr ? `<span class="ra2"><span class="nm">${esc(tr.tag)}</span><span class="w">&nbsp;· ${esc(tr.word)}</span></span>` : held ? `<span class="ra2"><span class="nm">contact holding</span></span>` : "");
+  if (pill.dataset.ra !== h || !pill.classList.contains("rapill")) { pill.innerHTML = h; pill.dataset.ra = h; }
+}
 export function updateHud() {
   const S = G.ship, SP = G.sp, L = G.lt;
   const val = { hull: S.hull, shields: S.shields, power: S.power, parts: S.parts, torps: S.torps, energy: S.energy, rep: SP.rep, level: G.prog.level, rations: G.prog.rations };
@@ -229,11 +246,17 @@ export function updateHud() {
   } else if (ms && ms.phase === "surgery") {
     pill.innerHTML = `<b class="mx">✚</b> SURGERY — ${ms.short.toUpperCase()} · sickbay`; pill.className = "alert-pill med";
     pill.onclick = () => { $("#medPanel").hidden = false; };
+  } else if (G.sp.alert && !G.sp.battle) {   // RA(a): a held red alert outranks every duty item
+    const tr = threatRead(BT_alert()); setRaPill(pill, tr, true); pill.className = "alert-pill pri-1 ra rapill";
+    pill.onclick = () => { if (RA.canRespond()) RA.openView(); };
   } else if (items.length) {
-    const top = items[0];
-    pill.textContent = top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `${top.job.kind === "incident" ? "INCIDENT" : "ODD JOB"} — ${top.job.label}` : `${PRI_LABEL[top.pri]} — ${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`;
+    const top = items[0], rf = top.kind === "task" ? top.task.t / (top.task.dur || 1) : top.kind === "job" && top.job.dur > 0 ? top.job.t / top.job.dur : null;
+    const rg = rf == null ? "" : `<i class="pring ${ringBand(rf)}" style="--f:${Math.max(0, Math.min(1, rf)).toFixed(3)}"></i>`;   // Q1: countdown ring (drains green -> amber -> red)
+    pill.innerHTML = rg + esc(top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}` : `${PRI_LABEL[top.pri]} — ${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`);
     pill.className = "alert-pill pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : "");
     pill.onclick = () => top.kind === "task" ? sendUse(top.task.node) : top.kind === "job" ? sendUse(top.job.node) : sendRepair(top.id);
+  } else if (G.sp.battle) {   // Q1 #6: in a fight with no faults the pill is the red alert and T'Ren's read (never a parked odd job)
+    const tr = threatRead(); setRaPill(pill, tr, false); pill.className = "alert-pill pri-1 rapill"; pill.onclick = () => RA.openView();   // RA(a): the battle view (batch (b) hangs its call here)
   } else { pill.textContent = "All systems nominal"; pill.className = "alert-pill"; pill.onclick = null; }
   $("#dutyBadge").textContent = items.length || "";
   // duty list
@@ -282,11 +305,13 @@ export function updateHud() {
   }
   // task pill
   const act = SP.ev.active, tp = $("#taskPill");
-  if (act && act.task) { tp.hidden = false; tp.textContent = `TASK ${Math.ceil(act.task.t)}s · ${NODEMAP[act.task.node].chip}`; tp.classList.toggle("low", act.task.t <= 10); tp.onclick = () => sendUse(act.task.node); }
+  if (act && act.task) { tp.hidden = false; const rf = act.task.t / (act.task.dur || 1); tp.innerHTML = `<i class="pring ${ringBand(rf)}" style="--f:${Math.max(0, Math.min(1, rf)).toFixed(3)}"></i>${esc(`TASK ${Math.ceil(act.task.t)}s · ${NODEMAP[act.task.node].chip}`)}`; tp.classList.toggle("low", ringBand(rf) === "red"); tp.onclick = () => sendUse(act.task.node); }
   else tp.hidden = true;
   // battle
   const B = SP.battle;
   $("#redBanner").hidden = !B || document.body.classList.contains("view-space");
+  { const th = $("#redThreat"), tr = B && threatRead(); if (th) th.textContent = tr ? `${tr.tag} — ${tr.word}` : ""; }   // Q1b #3: the short name   // Q1 #4
+  RA.updateRedAlert(); updateDC();
   $("#battleHud").hidden = !B || !document.body.classList.contains("view-space");
   if (B) { const E = foe(B), d = shipOf(E), p = hullPct(E); $("#enemyName").textContent = d.name.toUpperCase(); $("#enemyPct").textContent = p + "%"; $("#enemyBar").style.width = p + "%"; $("#enemyBar").style.background = (FACTIONS[d.faction] || {}).trim || "";
     // battle groundwork: the per-combatant HUD rows (stub): rendered into the hidden #combatantRows list, unused by the one-on-one HUD
@@ -507,12 +532,23 @@ function renderSafetyPrompt() {
     <div class="mbtns"><button class="close" data-safety="standard">KEEP STANDARD</button><button class="close alt" data-safety="gentle">GENTLE MODE</button></div>`;
   $("#safetyPanel").hidden = false;
 }
+let wbTimer = 0;
+function showWelcome(w) { const el = $("#wbCard"); if (!el) return; { const st = $("#stage"); if (st && el.parentNode !== st) st.appendChild(el); } /* Q1b #5: docked at the top of the stage, clear of the chip / button rows */ el.innerHTML = `<div class="k">WELCOME BACK</div><p>${esc(w.line)}</p><div class="tap">TAP TO DISMISS</div>`; el.hidden = false; clearTimeout(wbTimer); wbTimer = setTimeout(() => { el.hidden = true; }, 9000); }
+function renderBgPrompt() {
+  $("#bgBody").innerHTML = `<h3>ACADEMY RECORD</h3><p class="cnote">Before your first watch: which track did you take at the Academy? It's a small lean, picked once.</p>
+    <div class="bgopts">${Object.entries(BG.BACKGROUNDS).map(([k, b]) => `<button class="bgopt" data-bg="${k}"><b>${b.name}</b><small>${esc(b.blurb)}</small></button>`).join("")}</div>
+    <div class="mbtns"><button class="close alt" data-bg="none">NO SPECIALTY</button><button class="close" data-bg="later">LATER</button></div>`;
+  $("#bgPanel").hidden = false;
+}
 function autoModals() {
   renderMedScene();
   const busy = !$("#report").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden
     || !$("#bcCard").hidden;   // pass 15 L3: the safety prompt / board / spec / disclosure wait while the red-alert card is up (dismissed or auto-hidden after 7 s)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && MD.gentlePromptDue()) { renderSafetyPrompt(); return; }
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && RM.pendingDisc()) { openRom({ mode: "disc" }); return; }
+  const anyModal = [...document.querySelectorAll(".modal")].some(m => !m.hidden);
+  if (!anyModal && !G.sp.battle && welcomeDue()) { const w = tickWelcome(); if (w) showWelcome(w); }   // Q1 #8: after RESUME DUTY, present, nothing open
+  if (!anyModal && !G.sp.battle && BG.promptDue() && PACE_RT.sessionT >= 3) { BG.markAsked(); renderBgPrompt(); return; }   // Q1 #9: once
   if (!busy && $("#boardPanel").hidden && BD.boardWaiting() && !G.sp.battle) openBoard();   // pass 16 B2: never mid-fight (it waits for the all-clear, like the others)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && BD.specPending() && (G.prog.specOffered || 0) < BD.specOwed() && !G.sp.battle) { G.prog.specOffered = BD.specOwed(); openSpec(); }
 }
@@ -603,7 +639,7 @@ function plogClick(e) {
   if (D.plGive) { const id = plogView.id, r = GF.giveGift(id, D.plGive); plogView = { id, result: r.ok ? r : { why: r.why } }; renderPlog(); card.scrollTop = 0; renderCareer(true); return; }
   if (D.plBuy) { GF.buyForLocker(D.plBuy); renderPlog(); renderCareer(true); return; }
   if (D.plCare) { const r = GF.sendCare(D.plCare); plogView = { id: D.plCare, result: r.ok ? { line: `Care package sent. ${r.r === "pleased" ? "Packed with things you know they like." : "A reply comes back, polite and brief."}` } : { why: r.why } }; renderPlog(); card.scrollTop = 0; renderCareer(true); return; }
-  if (D.pl === "index") openPlog(); else if (D.pl === "insight") { plogView = { mode: "insight" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "locker") { plogView = { mode: "locker" }; renderPlog(); card.scrollTop = 0; } else openPlog(D.pl);
+  if (D.pl === "index") openPlog(); else if (D.pl === "insight") { plogView = { mode: "insight" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "locker") { plogView = { mode: "locker" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "scrap") { plogView = { mode: "scrap" }; renderPlog(); card.scrollTop = 0; } else openPlog(D.pl);
 }
 // ---- Personal Log phase 2: gift screens ----
 const FR = () => PROG.currency.short;
@@ -620,6 +656,15 @@ function renderGiftPicker(body, id) {
   body.innerHTML = `<button class="plback" data-pl="${id}">‹ BACK</button><h3>A GIFT FOR ${esc(w.short.toUpperCase())}</h3>
     <p class="cnote">${G.prog.rations} ${FR()} · ship-wide today ${Math.min(shipN, PROG.gifts.shipFull)} of ${PROG.gifts.shipFull} at full value${occ ? ` · <b class="occ">${esc(occ.note)} (×${PROG.gifts.occasion})</b>` : ""}. ♥ marks what you know ${pr(w)} like${pr(w, "s")}.</p>
     ${locker ? `<div class="plh">FROM YOUR GIFT LOCKER</div>${locker}` : ""}<div class="plh">DELGADO'S GALLEY REPLICATOR</div>${galley}<div class="plh">ASHORE (VIA THE GIFT LOCKER)</div>${ashore}`;
+}
+// Q1 #10: the story scrapbook (each painted scene seen, the choice made and how it went; newest first)
+const SCRAP_BAND = { success: "Success", partial: "Partly", fail: "It went wrong", safe: "Played it safe" };
+function scrapRow() { const n = scrapbook().length; return `<button class="plrow scrapb" data-pl="scrap"><span class="badge" style="background:#5a3f7a">📖</span><span class="nm">STORY SCRAPBOOK<small>${n ? `${n} scene${n > 1 ? "s" : ""}` : "no scenes yet"}</small></span><span class="pls">›</span></button>`; }
+function renderScrap(body) {
+  const L = scrapbook();
+  const rows = L.map(e => `<div class="scrap">${e.art ? `<img loading="lazy" src="assets/story/${e.art}.webp" alt="" onerror="this.style.visibility='hidden'">` : `<span class="noimg"></span>`}<div><b>${esc(e.title)}</b><small>${e.day ? `Day ${e.day}` : "Before the scrapbook"}${e.sd != null ? ` · SD ${e.sd.toFixed(1)}` : ""}</small>
+    ${e.label ? `<p class="sc">You chose: ${esc(e.label)}</p>` : `<p class="sc dim">Choice not recorded.</p>`}${e.band ? `<p class="sr ${e.band}"><i>${SCRAP_BAND[e.band]}.</i> ${esc(e.res || "")}</p>` : ""}</div></div>`).join("");
+  body.innerHTML = `<button class="plback" data-pl="index">‹ BACK</button><h3>STORY SCRAPBOOK</h3><p class="cnote">The moments worth keeping, newest first.</p>${rows || `<p class="plnote">No story scenes yet. They start from your second day aboard.</p>`}`;
 }
 function renderLocker(body) {
   const sh = GF.shopState(), inv = G.prog.gifts.inv, n = GF.lockerCount();
@@ -784,12 +829,13 @@ function renderPlog() {
     const memRows = mem.map(m => `<button class="plrow lost" data-pl="${m.id}"><span class="badge" style="background:#3a4560">${m.partner && RM.enabled() ? "♥" : "✦"}</span><span class="nm">${esc(m.name)}<small>${m.role} · lost ship's day ${m.day}${m.partner ? (RM.enabled() ? " · your partner" : " · a close friend") : ""}</small></span><span class="pls"></span></button>`).join("");
     body.innerHTML = `<h3>PERSONAL LOG</h3><p class="cnote">Stardate ${G.ship.stardate.toFixed(1)}. My own notes on the people I serve with. Tap a name.</p>
       <button class="plrow lockerb" data-pl="locker"><span class="badge" style="background:#3a4f7a">🎁</span><span class="nm">GIFT LOCKER<small>${GF.lockerCount()}/${PROG.gifts.invMax} · ${GF.shopState().docked ? "the DS9 Promenade is open" : GF.shopState().homeworld ? "homeworld shops open" : "Promenade and homeworld gifts"}</small></span><span class="pls">›</span></button>
-      ${romanceRows()}${insightRow()}
+      ${romanceRows()}${insightRow()}${scrapRow()}
       <div class="plh">ABOARD · ${list.length}</div>${rows}
       ${alRows ? `<div class="plh">FORMER SHIPMATES · ${alU.length}</div>${alRows}` : ""}${memRows ? `<div class="plh">IN MEMORIAM</div>${memRows}` : ""}`;
     return;
   }
   if (plogView.mode === "locker") return renderLocker(body);
+  if (plogView.mode === "scrap") return renderScrap(body);
   if (plogView.mode === "insight") return renderInsight(body);
   if (plogView.mode === "gift") return renderGiftPicker(body, plogView.id);
   const id = plogView.id, w = PL.whoOf(id), aboard = w.where === "aboard", c = aboard ? crewList().find(x => x.id === id) : null;

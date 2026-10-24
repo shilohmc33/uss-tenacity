@@ -222,3 +222,27 @@ export const HOLO = {
   groupMax: 4, opinion: 1, groupOpinion: 2, crewCheapFr: 20, crewPerHour: 0.5,
   overuse: { perDay: 2, days: 2 }, nightOwl: 1.25, addict: 1.5, recent: 3,
 };
+// ---- Q1 (2026-10-24) ----
+// #5 odd jobs: no repeat inside the last noRepeat labels, 3-5 min of quiet between jobs, every chainEvery-th job a 2-step
+// mini-chain with a named crewmate (oddjobs.js CHAINS). #8 welcome-back: an absence of welcomeAfter s or more earns one
+// short positive crew beat after RESUME DUTY (welcome.js). #4 threat read: T'Ren's win chance, logistic in
+// ln(our strength / theirs), strength = effective hp x dps summed over every ship on a side (battle.js threatRead).
+PACE.oddjobs = { gap: [180, 300], noRepeat: 6, chainEvery: 3 };
+PACE.welcomeAfter = 8 * 3600;
+PACE.threat = { a: 2.5, b: -2.85 };   // full ship, 4 torps: fighter "likely", Galor "fair odds", 2 Galors "a long shot", battlecruiser "unlikely" (she wins ~1 in 8)
+// Q1 countdown rings (deck markers and the alert pill): the ring drains with the time left; amber at <= amber, red at <= red
+PACE.ring = { amber: 0.5, red: 0.25 };
+export const ringBand = f => f <= PACE.ring.red ? "red" : f <= PACE.ring.amber ? "amber" : "ok";
+export const RING_COL = { ok: "#7fe08a", amber: "#ffb347", red: "#ff5a4a" };
+// the story odds words (STORY.odds.words) for any probability p; full = the FULL-success share the word describes
+export function oddsWord(p) {
+  const O = STORY.odds, W = O.words, x = Math.min(O.max, Math.max(O.min, Number.isFinite(p) ? p : O.base)), sc = O.success * x;
+  return { word: sc >= W.likely ? "likely" : sc >= W.fair ? "fair odds" : sc >= W.long ? "a long shot" : "unlikely", full: sc };
+}
+// RA(a) the held red alert (battle.js raiseAlert / tickAlert / engageAlert): T'Ren engages after holdPresent s of PRESENT time;
+// a non-story alert breaks off after awayBreakOff s of continuous away time (no penalty, no reward)
+PACE.alert = { holdPresent: 90, awayBreakOff: 1800,
+  // RA(b) damage-control calls: the first at hull or shields <= first % (after minT s of fighting), an optional second on a long fight
+  // (>= longFight s) with hull < second %; the fight holds while the card is open and T'Ren's (safe) call is taken after pause s
+  dc: { first: 60, second: 35, longFight: 60, minT: 8, pause: 20, epsShields: 25, epsPartial: 12, epsRegen: 0.5, powerDip: 15,
+    xp: { success: [25, 10], partial: [15, 10], fail: [10, 5] } } };

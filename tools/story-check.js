@@ -23,7 +23,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
     try {
       p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`)); p.on('request', r => reqs.push(r.url())); p.on('requestfailed', r => errs.push(`${tag}: failed ${r.url()}`));
       await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
-      await p.evaluate(() => { window.__noSave = true; });
+      await p.evaluate(() => { window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } });
       const pick = async (id, k) => { await p.evaluate(([id, k]) => { __T.ST.closeStory(); __T.ST.forceStory(id); }, [id, k]); await sleep(300); const before = await p.evaluate(() => document.querySelector('#storyScene .storyframe').dataset.art);
         if (k) await p.evaluate(k => { const rnd = Math.random; Math.random = () => 0.01; try { document.querySelector(`#storyScene [data-story-pick="${k}"]`).click(); } finally { Math.random = rnd; } }, k);
         await sleep(200); const mid = await p.evaluate(() => { const on = document.querySelector('#storyScene img.sl.on'); return +getComputedStyle(on).opacity; }); await sleep(600);
@@ -61,10 +61,10 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`)); p.on('requestfailed', r => errs.push(`${tag}: failed ${r.url()}`));
       if (route) await route(p);
       try { await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
-        await p.evaluate(() => { window.__noSave = true; const L = (__T.G.prog.skills.lt = __T.G.prog.skills.lt || {}); for (const k of ['engineering', 'tactical', 'fitness', 'composure', 'science', 'medical']) L[k] = 6000; __T.G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; __T.G.sp.location = 'convoy'; });
+        await p.evaluate(() => { window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } const L = (__T.G.prog.skills.lt = __T.G.prog.skills.lt || {}); for (const k of ['engineering', 'tactical', 'fitness', 'composure', 'science', 'medical']) L[k] = 6000; __T.G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; __T.G.sp.location = 'convoy'; });
         const click = sel => p.evaluate(sel => { const rnd = Math.random; Math.random = () => 0.01; try { const b = document.querySelector('#storyScene ' + sel); if (b) b.click(); return !!b; } finally { Math.random = rnd; } }, sel);
         for (const [id, step, file, k] of list) {
-          await p.evaluate(id => { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); __T.G.sp.battle = null; __T.G.prog.story.fight = null; __T.ST.closeStory(); __T.ST.forceStory(id); }, id); await sleep(250);
+          await p.evaluate(id => { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); __T.G.sp.battle = null; __T.G.sp.alert = null; __T.G.prog.story.fight = null; __T.ST.closeStory(); __T.ST.forceStory(id); }, id); await sleep(250);
           for (let s = 1; s < step; s++) { await click('.stc:not(.safe):not(.bonus):not(.locked)'); await sleep(150); await click('[data-story-continue]'); await sleep(250); }
           const at = await p.evaluate(() => { const c = __T.ST.current(); return c && c.node != null ? c.node + 1 : 1; });
           const before = await p.evaluate(() => document.querySelector('#storyScene .storyframe').dataset.art);
@@ -83,7 +83,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
     const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage();
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
-    await p.evaluate(() => { window.__noSave = true; __T.G.prog.rations = 500; });
+    await p.evaluate(() => { window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } __T.G.prog.rations = 500; });
     const R = res[tag] = {};
     // ---- shore chip (docked at DS9 on a fresh shift) ----
     R.shore = await p.evaluate(() => { const b = [...document.querySelectorAll('[data-shore]')].find(x => x.getBoundingClientRect().height > 0); if (!b) return null; const r = b.getBoundingClientRect(), s = b.querySelector('small'), sr = s && s.getBoundingClientRect();
@@ -154,7 +154,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       document.querySelector('#debug .t').click(); r.expanded = hit(); document.querySelector('#debug .t').click(); return r; });
     ok(!R.debugX.collapsed && !R.debugX.expanded && R.debugX.xOnTop, `${tag} debug overlap ${JSON.stringify(R.debugX)}`);
     await p.screenshot({ path: OUT + `p32-debug-x-${tag}.png` });
-    await p.evaluate(() => { __T.ST.closeStory(); window.__noSave = true; });
+    await p.evaluate(() => { __T.ST.closeStory(); window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } });
     if (tag !== '1280x800') { await c.close(); continue; }
     // ---- logic ----
     R.logic = await p.evaluate(async () => {
@@ -177,7 +177,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
         const r = withR(f(ch.p), () => ST.choose('words')); bands[k] = r.band; saves.push(SS.SAVE_RT.n - n0 === 1 && SS.SAVE_RT.why === 'story' && !G.prog.story.step); ST.closeStory();
       }
       out.bands = bands; out.saveAfterRoll = saves;
-      { window.__noSave = false; ST.forceStory('letter_home'); const t0 = (JSON.parse(localStorage.getItem(SS.SAVE_KEY) || '{}').savedAt) || 0; await new Promise(r => setTimeout(r, 5)); withR(0.01, () => ST.choose('words')); const sv = JSON.parse(localStorage.getItem(SS.SAVE_KEY) || '{}'); out.realSave = sv.savedAt > t0 && sv.prog.story.n.fired === G.prog.story.n.fired && sv.version === 16; ST.closeStory(); window.__noSave = true; }
+      { window.__noSave = false; ST.forceStory('letter_home'); const t0 = (JSON.parse(localStorage.getItem(SS.SAVE_KEY) || '{}').savedAt) || 0; await new Promise(r => setTimeout(r, 5)); withR(0.01, () => ST.choose('words')); const sv = JSON.parse(localStorage.getItem(SS.SAVE_KEY) || '{}'); out.realSave = sv.savedAt > t0 && sv.prog.story.n.fired === G.prog.story.n.fired && sv.version === 16; ST.closeStory(); window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } }
       // 3. no spend on the safe choice (picked, or closed with no choice); costs only on choices that show them
       const wal = () => [G.prog.rations, G.sp.rep, G.ship.parts, G.ship.torps, G.prog.latinum || 0, G.ship.power].join(','), safe = [];
       for (const id of Object.keys(ST.EV)) { ST.closeStory(); ST.forceStory(id); const w0 = wal(), sk = ST.choicesOf().find(x => x.safe).k; const r = ST.choose(sk); safe.push(r.band === 'safe' && wal() === w0 && r.chips.length === 0); ST.closeStory();
@@ -196,7 +196,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
         open: gate(nop, nop),
         offRules: gate(() => { PC.PACE_RT.idleT = 1e6; }, () => { PC.PACE_RT.idleT = 0; }),
         offline: gate(() => { PC.PACE_RT.offline = true; }, () => { PC.PACE_RT.offline = false; }),
-        battle: gate(() => { G.sp.battle = { live: true }; }, () => { G.sp.battle = null; }),
+        battle: gate(() => { G.sp.battle = { live: true }; }, () => { G.sp.battle = null; G.sp.alert = null; }),
         incident: gate(() => { G.prog.jobs.active = { kind: 'incident', who: C.slots.ops }; }, () => { G.prog.jobs.active = null; }),
         deckTask: gate(() => { G.sp.ev.active = { id: 'storm', task: null }; }, () => { G.sp.ev.active = null; }),
         day1: gate(() => { G.prog.playDays = 1; }, () => { G.prog.playDays = 10; }),
@@ -260,7 +260,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
     R.e3 = await p.evaluate(async () => {
       const ST = __T.ST, PC = await import('/js/pacing.js'), SS = await import('/js/state.js'), PG = await import('/js/progression.js'), FT = await import('/js/faults.js'), BT = await import('/js/battle.js'), MD = await import('/js/injuries.js');
       const G = __T.G, C = G.prog.crew, out = {}, rnd = Math.random, withR = (v, f) => { Math.random = typeof v === 'function' ? v : () => v; try { return f(); } finally { Math.random = rnd; } }, S = () => G.prog.story;
-      __T.app.paused = true; window.__noSave = true; PC.PACE_RT.idleT = 0; PC.PACE_RT.offline = false; G.prog.playDays = 10; G.prog.jobs.active = null; G.sp.ev.active = null; G.sp.battle = null; MD.M().hushUntil = 0; MD.M().gentle = false;
+      __T.app.paused = true; window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } PC.PACE_RT.idleT = 0; PC.PACE_RT.offline = false; G.prog.playDays = 10; G.prog.jobs.active = null; G.sp.ev.active = null; G.sp.battle = null; G.sp.alert = null; MD.M().hushUntil = 0; MD.M().gentle = false;
       const travel = () => { G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy'; }, reset = () => { ST.closeStory(); S().fight = null; S().chain = null; S().legsSince = 99; S().dayCount = { d: 0, n: 0 }; };
       travel(); reset();
       const labels = id => (ST.EV[id].nodes || [ST.EV[id]]).map(n => n.choices.map(c => c.label));
@@ -278,17 +278,18 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       // S4: step 1 success / partial -> step 2, fail / safe end; a success pends probe_maker, set when it ends (also on the safe ending)
       out.s4 = { succJam: walk('subspace_echo', [['analyse', 0.01], ['jam', 0.999]]), partSafe: walk('subspace_echo', [['grid', 'part'], ['leave', 0.01]]), fail: walk('subspace_echo', [['analyse', 0.999], ['jam', 0.01]]), safe: walk('subspace_echo', [['log', 0.01]]), succSafe: walk('subspace_echo', [['grid', 0.01], ['leave', 0.01]]) };
       // battle hand-off guard: blocked (battle gap) -> the non-battle text and no fight; allowed -> a soft one-on-one story_echo fight, no follow-up
-      const hand = allowed => { reset(); travel(); G.sp.battle = null; PC.PACE_RT.sessionT = allowed ? 1e6 : 0; G.sp.lastBattleT = allowed ? -1e9 : G.ship.elapsed; G.ship.faults = {};
-        ST.forceStory('subspace_echo', { lead }); withR(0.01, () => ST.choose('grid')); ST.next(); const allow = BT.battleAllowed('story_echo'), x = withR(0.01, () => ST.choose('track')); const chips = x.chips.map(c => c[1]); ST.closeStory(); const B = G.sp.battle;
+      const hand = allowed => { reset(); travel(); G.prog.background = G.prog.background || 'none'; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); G.sp.battle = null; G.sp.alert = null; PC.PACE_RT.sessionT = allowed ? 1e6 : 0; G.sp.lastBattleT = allowed ? -1e9 : G.ship.elapsed; G.ship.faults = {};
+        ST.forceStory('subspace_echo', { lead }); withR(0.01, () => ST.choose('grid')); ST.next(); const allow = BT.battleAllowed('story_echo'), x = withR(0.01, () => ST.choose('track')); const chips = x.chips.map(c => c[1]); ST.closeStory(); if (G.sp.alert) BT.engageAlert('lt'); const B = G.sp.battle;   /* RA(a): a hand-off is a held alert; the Lt taps ENGAGE */
         return { allow, battle: x.battle === false ? false : x.battle === 'story_echo' ? true : x.battle, red: chips.some(c => /red alert/.test(c)), alt: /goes to warp/.test(x.text), chain: S().chain && S().chain.id, fight: B ? { ctx: B.ctx, soft: B.soft, enemies: B.enemies.map(e => e.ship), allies: B.allies.length } : null }; };
       out.handBlocked = hand(false); out.handAllowed = hand(true);
       { // the soft caps: no CRIT fault from the fight's hits, the ambient battle faults or the tow; injuries from hits are minor
         const sev = []; for (let i = 0; i < 20; i++) { G.ship.faults = {}; withR(0.99, () => FT.spawnFault('battle')); sev.push(...Object.values(G.ship.faults).map(f => f.sev)); }
-        const n0 = MD.M().inj.length, K = PG.PROG.deaths; let ij = []; for (let i = 0; i < 6; i++) { G.sp.battle.injN = 0; withR(0, () => PG.hooks.shipHit.forEach(f => f({ sys: null, hit: 'a test hit' }))); }
+        if (!G.sp.battle) { PC.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; G.sp.ev.active = null; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); BT.startBattle('story_echo', { enemies: ['jh_fighter'], mission: 'none' }); } if (G.sp.alert) BT.engageAlert('lt'); if (G.sp.battle) G.sp.battle.soft = true;   // Q1: harden (a fight that already ended, or one held by a panel)
+        const n0 = MD.M().inj.length, K = PG.PROG.deaths; let ij = []; for (let i = 0; i < 6; i++) { if (G.sp.battle) G.sp.battle.injN = 0; withR(0, () => PG.hooks.shipHit.forEach(f => f({ sys: null, hit: 'a test hit' }))); }
         ij = MD.M().inj.slice(n0).map(x => x.sev); MD.M().inj = MD.M().inj.slice(0, n0); for (const id of Object.keys(C.occ)) { /* clear the test injuries */ }
         G.ship.faults = {}; withR(0.99, () => BT.towToDS9()); const tow = Object.values(G.ship.faults).map(f => f.sev);
         out.soft = { hitSev: [...new Set(sev)], injuries: ij, tow, after: (G.ship.faults = {}, G.sp.battle) };
-        G.sp.battle = { soft: false }; G.ship.faults = {}; const hard = []; for (let i = 0; i < 20; i++) { G.ship.faults = {}; withR(0.99, () => FT.spawnFault('battle')); hard.push(...Object.values(G.ship.faults).map(f => f.sev)); } G.sp.battle = null; G.ship.faults = {};
+        G.sp.battle = { soft: false }; G.ship.faults = {}; const hard = []; for (let i = 0; i < 20; i++) { G.ship.faults = {}; withR(0.99, () => FT.spawnFault('battle')); hard.push(...Object.values(G.ship.faults).map(f => f.sev)); } G.sp.battle = null; G.sp.alert = null; G.ship.faults = {};
         out.soft.unsoftHasCrit = hard.includes('crit'); }
       travel(); G.sp.lastBattleT = G.ship.elapsed;
       // chains: wait 1..3 seen legs, due only after, at most one pending, frozen while away / night rules, expire after 5
@@ -318,26 +319,26 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       G.prog.story = ST.freshStory(); G.prog.story.passed = 'kestrel_derelict'; const lg0 = JSON.stringify(G.log || []).length; ST.storyTick(); ST.storyTick();
       out.hard.tickLog = { cleared: G.prog.story.passed === null, lines: (JSON.stringify(G.log || []).match(/the moment passed/g) || []).length };
       // a real save mid-step: the step is in the save; a load drops it (passed), and nothing is rerolled
-      { window.__noSave = false; reset(); travel(); ST.forceStory('kestrel_derelict'); withR(0.01, () => ST.choose('board')); const sv = JSON.parse(localStorage.getItem(SS.SAVE_KEY)); window.__noSave = true;
+      { window.__noSave = false; reset(); travel(); ST.forceStory('kestrel_derelict'); withR(0.01, () => ST.choose('board')); const sv = JSON.parse(localStorage.getItem(SS.SAVE_KEY)); window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; }
         out.realStep = { saved: sv.prog.story.step, ok: SS.loadGame(), after: { step: __T.G.prog.story.step, passed: __T.G.prog.story.passed } }; ST.closeStory(); localStorage.removeItem(SS.SAVE_KEY); }
       // P33 fix 2: a story fight is saved with its roll; a reload (in the calm period, cur gone) starts it from storyTick, soft
-      { window.__noSave = false; reset(); travel(); G.sp.battle = null; MD.M().gentle = false; PC.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; ST.forceStory('jemhadar_wreck'); withR(0.999, () => ST.choose('secure'));
-        const sv = localStorage.getItem(SS.SAVE_KEY), f = { saved: JSON.parse(sv).prog.story.fight }; window.__noSave = true; ST.closeStory(); G.sp.battle = null; localStorage.setItem(SS.SAVE_KEY, sv);
-        f.ok = SS.loadGame(); const G2 = __T.G, tr = G2.sp.travel; f.kept = G2.prog.story.fight; G2.sp.lastBattleT = -1e9; G2.sp.battle = null;
+      { window.__noSave = false; reset(); travel(); G.sp.battle = null; G.sp.alert = null; MD.M().gentle = false; PC.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; ST.forceStory('jemhadar_wreck'); withR(0.999, () => ST.choose('secure'));
+        const sv = localStorage.getItem(SS.SAVE_KEY), f = { saved: JSON.parse(sv).prog.story.fight }; window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } ST.closeStory(); G.sp.battle = null; G.sp.alert = null; localStorage.setItem(SS.SAVE_KEY, sv);
+        f.ok = SS.loadGame(); const G2 = __T.G, tr = G2.sp.travel; f.kept = G2.prog.story.fight; G2.sp.lastBattleT = -1e9; G2.sp.battle = null; G2.sp.alert = null;
         // P34b: it stays pending (saved, hardened, never expiring) while docked, in the calm period, under the Shift Report or any panel
         const tick = () => { ST.storyTick(); return [G2.prog.story.fight, !!G2.sp.battle]; };
         G2.sp.travel = null; G2.sp.location = 'ds9'; PC.PACE_RT.sessionT = 1e6; f.docked = tick(); for (let i = 0; i < 40; i++) { ST.storyLeg(); tick(); } f.dockedLong = tick();
         G2.sp.travel = tr; G2.sp.location = 'convoy'; PC.PACE_RT.sessionT = 0; f.calmAllowed = BT.battleAllowed('story_wreck'); f.calm = tick();
         PC.PACE_RT.sessionT = 1e6; document.querySelector('#report').hidden = false; f.report = tick(); document.querySelector('#report').hidden = true;
         document.querySelector('#plogPanel').hidden = false; f.panel = tick(); document.querySelector('#plogPanel').hidden = true;
-        G2.prog.story = JSON.parse(JSON.stringify(G2.prog.story)); PG.clampProg(); f.hardKept = G2.prog.story.fight; ST.storyTick(); const B = G2.sp.battle;
-        f.started = B && { ctx: B.ctx || B.kind, soft: B.soft }; f.cleared = G2.prog.story.fight; f.junk = hz({ fight: 'bogus' }).fight; G2.sp.battle = null; localStorage.removeItem(SS.SAVE_KEY); out.fightLoad = f; }
+        G2.prog.story = JSON.parse(JSON.stringify(G2.prog.story)); PG.clampProg(); f.hardKept = G2.prog.story.fight; ST.storyTick(); f.held = !!(G2.sp.alert && G2.sp.alert.soft); if (G2.sp.alert) BT.engageAlert('lt'); const B = G2.sp.battle;
+        f.started = B && { ctx: B.ctx || B.kind, soft: B.soft }; f.cleared = G2.prog.story.fight; f.junk = hz({ fight: 'bogus' }).fight; G2.sp.battle = null; G2.sp.alert = null; localStorage.removeItem(SS.SAVE_KEY); out.fightLoad = f; }
       __T.app.paused = false; return out; });
     // ---- P33 frequency ramp: the share of voyage event slots by play day, the 1-a-day cap on days 2-4, the total event rate unchanged ----
     R.ramp = await p.evaluate(async () => {
       const ST = __T.ST, PC = await import('/js/pacing.js'), EVM = await import('/js/events.js'), G = __T.G, S = () => G.prog.story, out = {}, rnd = Math.random;
       let seed = 12345; const rng = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-      __T.app.paused = true; window.__noSave = true; PC.PACE_RT.idleT = 0; PC.PACE_RT.offline = false; G.prog.jobs.active = null; G.sp.ev.active = null; G.sp.battle = null; ST.closeStory(); S().chain = null;
+      __T.app.paused = true; window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } PC.PACE_RT.idleT = 0; PC.PACE_RT.offline = false; G.prog.jobs.active = null; G.sp.ev.active = null; G.sp.battle = null; G.sp.alert = null; ST.closeStory(); S().chain = null;
       const travel = () => { G.sp.travel = { dest: 'convoy', t: 0, dur: 600 }; G.sp.location = 'convoy'; G.sp.travelPaused = false; };
       out.share = Object.fromEntries([1, 3, 7, 12].map(d => [d, PC.storyShare(d)])); out.perDay = Object.fromEntries([1, 3, 7, 12].map(d => [d, PC.storyPerDay(d)]));
       // measured: 3000 slot offers per play day with the other gates open
@@ -349,15 +350,15 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       // the real slot loop (events.js tickEvents), seeded: every scheduled slot is filled, a story or an old text event
       out.rate = {}; for (const d of [1, 3, 7, 12]) { G.prog.playDays = d; seed = 99; S().chain = null; let target = 0, filled = 0, stories = 0, f0 = S().n.fired; const e0 = G.stats.events; Math.random = rng;
         try { for (let leg = 0; leg < 80; leg++) { travel(); S().dayCount = { d: 0, n: 0 }; EVM.evResetLeg('convoy'); const ev = G.sp.ev; target += ev.legTarget;
-          for (let t = 0; t < 700 && ev.legFired < ev.legTarget; t++) { if (G.sp.ev.active) EVM.resolveEvent(false); if (ST.storyOpen()) ST.closeStory(); G.sp.battle = null; G.sp.travelPaused = false; G.sp.travel.t = 0; EVM.tickEvents(1); }
-          if (G.sp.ev.active) EVM.resolveEvent(false); if (ST.storyOpen()) ST.closeStory(); G.sp.battle = null; filled += ev.legFired; } } finally { Math.random = rnd; }
+          for (let t = 0; t < 700 && ev.legFired < ev.legTarget; t++) { if (G.sp.ev.active) EVM.resolveEvent(false); if (ST.storyOpen()) ST.closeStory(); G.sp.battle = null; G.sp.alert = null; G.sp.travelPaused = false; G.sp.travel.t = 0; EVM.tickEvents(1); }
+          if (G.sp.ev.active) EVM.resolveEvent(false); if (ST.storyOpen()) ST.closeStory(); G.sp.battle = null; G.sp.alert = null; filled += ev.legFired; } } finally { Math.random = rnd; }
         stories = S().n.fired - f0; out.rate[d] = { target, filled, stories, textEvents: filled - stories, statsEvents: G.stats.events - e0, storyShareOfSlots: +(stories / Math.max(1, filled)).toFixed(3) }; }
       G.prog.playDays = 10; G.sp.travel = null; G.sp.location = 'ds9'; __T.app.paused = false; return out; });
     // ---- P34 logic: every roll an Lt skill (help = composure + the crewmate's opinion), the odds line, bonus locks, tier text, dock ramp, E4 ----
     R.p34 = await p.evaluate(async () => {
       const ST = __T.ST, PC = await import('/js/pacing.js'), PG = await import('/js/progression.js'), MD = await import('/js/injuries.js'), BT = await import('/js/battle.js'), EVM = await import('/js/events.js');
       const G = __T.G, C = G.prog.crew, S = () => G.prog.story, out = {}, rnd = Math.random, withR = (v, f) => { Math.random = typeof v === 'function' ? v : () => v; try { return f(); } finally { Math.random = rnd; } };
-      __T.app.paused = true; window.__noSave = true; PC.PACE_RT.idleT = 0; PC.PACE_RT.offline = false; G.prog.playDays = 12; G.prog.jobs.active = null; G.sp.ev.active = null; G.sp.battle = null; MD.M().hushUntil = 0; const gen0 = MD.M().gentle; MD.M().gentle = false;
+      __T.app.paused = true; window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } PC.PACE_RT.idleT = 0; PC.PACE_RT.offline = false; G.prog.playDays = 12; G.prog.jobs.active = null; G.sp.ev.active = null; G.sp.battle = null; G.sp.alert = null; MD.M().hushUntil = 0; const gen0 = MD.M().gentle; MD.M().gentle = false;
       const sk = G.prog.skills || (G.prog.skills = {}), lt0 = JSON.stringify(sk.lt || {}), setLt = o => { sk.lt = sk.lt || { tactical: 0, engineering: 0, fitness: 0, composure: 0 }; for (const [k, v] of Object.entries(o)) sk.lt[k] = 50 * v * (v + 1); };
       const reset = () => { ST.closeStory(); S().fight = null; S().chain = null; S().legsSince = 99; S().dayCount = { d: 0, n: 0 }; }, travel = () => { G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy'; };
       const lead = C.slots['engineer-1']; MD.M().inj = MD.M().inj.filter(x => x.id !== lead);
@@ -385,10 +386,10 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       const chainOf = (id, k, lv) => { reset(); travel(); if (lv) setLt(lv); ST.forceStory(id); withR(0.01, () => ST.choose(k)); ST.closeStory(); return S().chain && S().chain.id; };
       out.chains = { treat: chainOf('jemhadar_wreck', 'treat', { composure: 2 }), white: chainOf('jemhadar_wreck', 'white', { engineering: 6 }), secure: chainOf('jemhadar_wreck', 'secure'), hear: chainOf('vorta_offer', 'hear'), trace: chainOf('vorta_offer', 'trace') };
       const wreck = (allowed, gentle) => { reset(); travel(); document.querySelectorAll('.modal').forEach(m => { m.hidden = true; });   // P34b: an open panel (the spec offer) would hold the fight
-        G.sp.battle = null; MD.M().gentle = gentle; PC.PACE_RT.sessionT = allowed ? 1e6 : 0; G.sp.lastBattleT = allowed ? -1e9 : G.ship.elapsed; ST.forceStory('jemhadar_wreck'); const x = withR(0.999, () => ST.choose('secure')); ST.closeStory(); const B = G.sp.battle;
-        const r = { band: x.band, battle: x.battle, alt: /circles the clearing/.test(x.text), fight: B ? { ctx: B.ctx, soft: B.soft, enemies: B.enemies.map(e => e.ship) } : null }; G.sp.battle = null; G.ship.faults = {}; MD.M().gentle = false; return r; };
+        G.sp.battle = null; G.sp.alert = null; MD.M().gentle = gentle; PC.PACE_RT.sessionT = allowed ? 1e6 : 0; G.sp.lastBattleT = allowed ? -1e9 : G.ship.elapsed; ST.forceStory('jemhadar_wreck'); const x = withR(0.999, () => ST.choose('secure')); ST.closeStory(); if (G.sp.alert) BT.engageAlert('lt'); const B = G.sp.battle;   /* RA(a): a hand-off is a held alert; the Lt taps ENGAGE */
+        const r = { band: x.band, battle: x.battle, alt: /circles the clearing/.test(x.text), fight: B ? { ctx: B.ctx, soft: B.soft, enemies: B.enemies.map(e => e.ship) } : null }; G.sp.battle = null; G.sp.alert = null; G.ship.faults = {}; MD.M().gentle = false; return r; };
       // P34c: a pending fight survives later stories (safe choice, rolled choice, the ✕), blocks new ones ("fight pending"), logs once, then fires
-      { reset(); travel(); document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); G.sp.battle = null; MD.M().gentle = false; G.sp.lastBattleT = -1e9; PC.PACE_RT.sessionT = 1e6;
+      { reset(); travel(); document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); G.sp.battle = null; G.sp.alert = null; MD.M().gentle = false; G.sp.lastBattleT = -1e9; PC.PACE_RT.sessionT = 1e6;
         const lines = () => (JSON.stringify(G.log || []).match(/beacon is still calling/g) || []).length, q = {}, l0 = lines();
         ST.forceStory('jemhadar_wreck'); withR(0.999, () => ST.choose('secure')); document.querySelector('#plogPanel').hidden = false; ST.closeStory(); q.pend = S().fight; q.noBattle = !G.sp.battle;
         for (let i = 0; i < 5; i++) ST.storyTick(); q.lines = lines() - l0; document.querySelector('#plogPanel').hidden = true; PC.PACE_RT.sessionT = 0;   // calm: it keeps waiting while we test
@@ -398,7 +399,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
         ST.forceStory('letter_home'); await new Promise(r => setTimeout(r, 50)); q.safeBtn = pick('.stc.safe[data-story-pick]'); await new Promise(r => setTimeout(r, 50)); q.safeRes = !!(ST.current() && ST.current().res); pick('[data-story-close]'); ST.closeStory(); q.afterSafe = S().fight;
         ST.forceStory('mess_hall_feud'); await new Promise(r => setTimeout(r, 50)); q.xBtn = pick('.storyx'); q.xClosed = !ST.storyOpen(); ST.closeStory(); q.afterX = S().fight;
         ST.forceStory('coolant_cascade'); withR(0.01, () => ST.choose('seal')); ST.closeStory(); q.afterRoll = S().fight;
-        PC.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; ST.storyTick(); q.fired = G.sp.battle && { ctx: G.sp.battle.ctx, soft: G.sp.battle.soft }; q.cleared = S().fight; G.sp.battle = null; q.gAfter = ST.gateWhy('leg'); out.pend34c = q; reset(); }
+        PC.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; ST.storyTick(); q.held = !!(G.sp.alert && G.sp.alert.soft); if (G.sp.alert) BT.engageAlert('lt'); q.fired = G.sp.battle && { ctx: G.sp.battle.ctx, soft: G.sp.battle.soft }; q.cleared = S().fight; G.sp.battle = null; G.sp.alert = null; q.gAfter = ST.gateWhy('leg'); out.pend34c = q; reset(); }
       out.wreck = { allowed: wreck(true, false), blocked: wreck(false, false), gentle: wreck(true, true) };
       out.textWeight = Object.entries(PC.STORY.textWeight).every(([k, v]) => v === 0.5 && EVM.EV_POOL.some(e => e.id === k)) && !('shadow' in PC.STORY.textWeight);
       sk.lt = JSON.parse(lt0); MD.M().gentle = gen0; G.sp.lastBattleT = G.ship.elapsed; travel(); reset(); __T.app.paused = false; return out; });

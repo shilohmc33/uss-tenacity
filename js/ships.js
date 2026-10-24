@@ -90,6 +90,17 @@ export function migrateBattle14(sp) {
 }
 const fin = (v, d, lo = -Infinity, hi = Infinity) => typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 // returns false when the battle is beyond repair (the caller drops it: the ship simply isn't at red alert any more)
+// RA(a): a held red alert (battle.js raiseAlert). Junk drops it; a valid one keeps its roster and clocks. Never with a live battle.
+export function hardenAlert(sp, K = { holdPresent: 90, awayBreakOff: 1800 }) {
+  const A = sp && sp.alert; if (A == null) { if (sp) sp.alert = null; return true; }
+  const isE = id => SHIPS[id] && SHIPS[id].side === "enemy", isA = id => SHIPS[id] && SHIPS[id].side === "ally" && id !== "tenacity", num = (v, lo, hi) => Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo;
+  if (typeof A !== "object" || Array.isArray(A) || sp.battle || !Array.isArray(A.enemies) || !A.enemies.length || !A.enemies.every(isE) || typeof A.kind !== "string" || !/^[a-z_]{1,24}$/.test(A.kind)) { sp.alert = null; return false; }
+  const m = A.mission && typeof A.mission === "object" && typeof A.mission.id === "string" ? { id: A.mission.id, lead: isA(A.mission.lead) ? A.mission.lead : null, protect: isA(A.mission.protect) ? A.mission.protect : null, failed: false } : null;
+  sp.alert = { kind: A.kind, enemies: A.enemies.slice(0, SLOTS), wing: A.wing !== false, allies: (Array.isArray(A.allies) ? A.allies : []).filter(isA).slice(0, SLOTS - 1), mission: m && m.lead ? m : null,
+    soft: A.soft === true, t: num(A.t, 0, K.holdPresent), at: Number.isFinite(A.at) ? A.at : 0, away: num(A.away, 0, K.awayBreakOff) };
+  if (sp.travel) sp.travelPaused = true;
+  return true;
+}
 export function hardenBattle(sp) {
   const B = sp && sp.battle; if (!B) return true;
   if (typeof B !== "object" || Array.isArray(B)) { sp.battle = null; return false; }
@@ -116,6 +127,8 @@ export function hardenBattle(sp) {
   B.allyDying = fin(B.allyDying, 0, 0, SLOTS) | 0;
   if (B.mission && typeof B.mission === "object" && typeof B.mission.id === "string") B.mission = { id: B.mission.id, lead: String(B.mission.lead || ""), protect: typeof B.mission.protect === "string" ? B.mission.protect : null, failed: B.mission.failed === true }; else B.mission = null;   // P3
   for (const k of ["enterT", "dying", "inflight", "injN"]) if (B[k] !== undefined) B[k] = fin(B[k], 0, 0, k === "inflight" ? 1000 : 100);
+  if (B.by !== undefined) B.by = B.by === "tren" ? "tren" : "lt";
+  hardenDC(B);   // RA(b)
   return true;
 }
 
@@ -145,4 +158,24 @@ export function combatantRows(B, ship) {
 export function previewFormation(B, allies, enemies) {
   if (!B) return;
   B.allies = allies.map((s, i) => makeAlly(s, i)); B.enemies = enemies.map((s, i) => makeEnemy(s, i)); B.target = 0; B.preview = true;
+}
+
+// RA(b): the damage-control call state saved with the battle (dc.js). n = calls fired (0-2), due = a threshold call waiting to be
+// shown (1 or 2), open = the call on screen (its cast is fixed when it opens, so a reload reopens the SAME call, never a reroll;
+// res = its outcome, already applied), buf = the won buffs for the rest of the fight.
+const DC_KEYS = ["eps", "loader", "core", "tren"], idOk = v => typeof v === "string" && /^[\w-]{1,40}$/.test(v);
+export function hardenDC(B) {
+  if (!B || B.dc === undefined) return true;
+  const d = B.dc; if (!d || typeof d !== "object" || Array.isArray(d)) { B.dc = { n: 0, due: null, open: null, buf: {} }; return false; }
+  const n = fin(d.n, 0, 0, 2) | 0, due = d.due === 1 || d.due === 2 ? d.due : null, b = d.buf && typeof d.buf === "object" ? d.buf : {};
+  let open = null; const o = d.open;
+  if (o && typeof o === "object" && (o.i === 1 || o.i === 2)) {
+    const cast = {}; for (const k of ["eps", "loader", "core"]) if (idOk(o.cast && o.cast[k])) cast[k] = o.cast[k];
+    let res = null; const r = o.res;
+    if (r && typeof r === "object" && DC_KEYS.includes(r.k) && ["success", "partial", "fail", "safe"].includes(r.band)) res = { k: r.k, band: r.band, auto: r.auto === true, word: String(r.word || "").slice(0, 40), text: String(r.text || "").slice(0, 900),
+      chips: Array.isArray(r.chips) ? r.chips.filter(c => Array.isArray(c) && typeof c[1] === "string").slice(0, 8).map(c => [c[0] === "good" ? "good" : "bad", c[1].slice(0, 60)]) : [] };
+    open = { i: o.i, t: fin(o.t, 0, 0, 3600), cast, res };
+  }
+  B.dc = { n, due: open ? null : due, open, buf: { eps: b.eps === true, core: b.core === true } };
+  return true;
 }

@@ -225,7 +225,7 @@ export function tickVoyage(dt) {
 export function sceneText() {
   const SP = G.sp;
   if (SP.battle) return `Red alert — ${shipOf(foe(SP.battle)).name} engaged`;
-  if (SP.travel) return `At warp — course for ${DESTS[SP.travel.dest].name}${SP.travelPaused ? " · holding for battle" : ""}`;
+  if (SP.travel) return `At warp — course for ${DESTS[SP.travel.dest].name}${SP.alert ? " · all stop: red alert" : SP.travelPaused ? " · holding for battle" : ""}`;
   const t = { ds9: "Deep Space Nine — holding station", convoy: "Convoy Route — on escort station", nebula: "Omarion Nebula — sensor sweeps",
     hulk: "Derelict Hulk — alongside the wreck", earth: "Earth — in spacedock", qonos: "Qo'noS — in orbit", romulus: "Romulus — in orbit", vulcan: "Vulcan — in orbit" };
   return t[SP.location] || "Deep space — holding position";

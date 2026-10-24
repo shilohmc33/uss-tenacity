@@ -44,13 +44,14 @@ export function dutyItems() {
   const items = Object.entries(G.ship.faults).map(([id, f]) => ({ kind: "fault", id, pri: faultPriority(id), sev: f.sev, t: f.t }));
   const act = G.sp.ev.active;
   if (act && act.task) items.push({ kind: "task", id: act.id, pri: 1, sev: null, t: 0, task: act.task });
-  const job = activeJob(); if (job) items.push({ kind: "job", id: job.id, pri: job.kind === "incident" ? 3 : 4, sev: null, t: 0, job });   // pt04: odd jobs sit below every fault
+  const job = activeJob(); if (job && !G.sp.battle && !G.sp.alert) items.push({ kind: "job", id: job.id, pri: job.kind === "incident" ? 3 : 4, sev: null, t: 0, job });   // pt04: odd jobs sit below every fault
   items.sort((a, b) => a.pri - b.pri || (a.sev ? SEV_RANK[a.sev] : -1) - (b.sev ? SEV_RANK[b.sev] : -1) || b.t - a.t);
   return items;
 }
 export const FAULT_RT = { soft: false };   // E3: set by towToDS9 while it faults the ship after a soft fight
 export function spawnFault(src = "ambient", forceId, forceSev) {
-  const free = Object.keys(SYSTEMS).filter(k => !G.ship.faults[k]);
+  const hold = G.sp && G.sp.battle && G.sp.battle.dc && G.sp.battle.dc.buf && G.sp.battle.dc.buf.core;   // RA(b): 'Hold the core' won - no core fault for the rest of the fight
+  const free = Object.keys(SYSTEMS).filter(k => !G.ship.faults[k] && !(hold && k === "warpcore"));
   if (!free.length) return null;
   const id = forceId && free.includes(forceId) ? forceId : pick(free);
   let sev = forceSev || rollSeverity(src);

@@ -17,9 +17,14 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
       if (deck === 'engineering') await p.screenshot({ path: `shots/smoke-wrapup-engineering-${vp}.png` });
     }
     R.battle = await p.evaluate(async () => { const BT = await import('/js/battle.js'); BT.startBattle('debug', { enemy: 'galor' }); const B = __T.G.sp.battle; return B && B.enemies ? B.enemies.map(e => e.ship) : 'legacy'; });
-    await p.waitForSelector('#watchBattle', { state: 'visible', timeout: 5000 }); await p.click('#watchBattle'); await L.sleep(10000);
+    // Q1b #1: the Academy prompt (left unanswered, it opens ~3 s in) steps aside for the battle: nothing covers WATCH BATTLE, and it is asked again after
+    await p.waitForSelector('#watchBattle', { state: 'visible', timeout: 5000 });
+    R.overlap = await p.evaluate(() => { const w = document.querySelector('#watchBattle').getBoundingClientRect(), t = document.elementFromPoint(w.left + w.width / 2, w.top + w.height / 2); return { bgHidden: document.querySelector('#bgPanel').hidden, top: t ? (t.id || t.className) : null, ok: !!t && !!t.closest('#watchBattle') }; });
+    if (!R.overlap.ok || !R.overlap.bgHidden) errs.push('Academy prompt over the battle: ' + JSON.stringify(R.overlap));
+    await p.click('#watchBattle'); await L.sleep(10000);
     R.battleAfter = await p.evaluate(() => { const B = __T.G.sp.battle; return B ? { over: !!B.over, hull: Math.round(__T.G.ship.hull) } : 'ended'; });
     await p.screenshot({ path: `shots/smoke-wrapup-battle-${vp}.png` });
+    if (R.battleAfter === 'ended') { await L.sleep(800); R.bgBack = await p.evaluate(() => !document.querySelector('#bgPanel').hidden || __T.G.prog.background != null); if (!R.bgBack) errs.push('Academy prompt not asked again after the battle'); }
     rep.errors[vp] = errs; await ctx.close();
   }
   fs.writeFileSync('shots/smoke-wrapup.json', JSON.stringify(rep, null, 1));

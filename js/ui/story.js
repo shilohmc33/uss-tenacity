@@ -16,6 +16,7 @@ let MAN = null;
 const manP = (typeof fetch === "function" ? fetch("assets/story/manifest.json", { cache: "no-cache" }).then(r => (r.ok ? r.json() : [])).catch(() => []) : Promise.resolve([]))
   .then(a => { MAN = new Set(Array.isArray(a) ? a.map(String) : []); return MAN; });
 export const artReady = () => manP;
+export const hasArt = k => !!MAN && MAN.has(k);   // RA(b): the damage-control call card (ui/dccall.js)
 const has = k => !!MAN && MAN.has(k);
 const url = k => `assets/story/${k}.webp`;
 const pre = {};

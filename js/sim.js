@@ -4,11 +4,13 @@ import { clamp } from "./util.js";
 import { log, setQuiet, capture } from "./bus.js";
 import { tickFaults, impairing, syncFaultEffects, tickNightCrew, nightHandover } from "./faults.js";
 import { stepLt } from "./crew.js";
-import { tickBattle } from "./battle.js";
+import { tickBattle, tickAlert } from "./battle.js";
+import { tickDC, dcPaused } from "./dc.js";   // RA(b)
 import { tickEvents } from "./events.js";
 import { tickJobs } from "./oddjobs.js";
 import { tickVoyage } from "./voyage.js";
 import { PACE, PACE_RT, nightActive, offRules } from "./pacing.js";
+import { noteAbsence } from "./welcome.js";
 import { tickDay, offlineXP, tickProg, rankShort } from "./progression.js";
 import { tickNeeds } from "./needs.js";
 import { tickCrew, endOffline } from "./crewlife.js";
@@ -63,7 +65,9 @@ export function stepSim(dt) {
   if (S.energy < 15 && !S.energyWarned) { S.energyWarned = true; log("The Lieutenant is running on fumes — biobed, mess hall, or his bunk will put him right.", "fault"); }
   if (S.energy > 40) S.energyWarned = false;
   if (SP.battle) S.alertT = Math.max(S.alertT, 2); else S.alertT = Math.max(0, S.alertT - dt);
-  tickBattle(dt);
+  if (!dcPaused()) tickBattle(dt);   // RA(b): the fight holds while a damage-control call is open
+  tickDC(dt);
+  tickAlert(dt);   // RA(a): a held red alert (frozen away; T'Ren engages after 90 s present; a long absence lets it go)
   syncFaultEffects();
   tickEvents(dt);
   tickJobs(dt);   // pt04: odd jobs between repairs
@@ -114,6 +118,7 @@ export function catchUp(seconds) {
     if (!deferred) endOffline(sim);   // phase 3: a Starbase 375 loaner team covers one offline stretch
     offlineXP(sim);    // progression: watch-officer XP for the night crew's work (1/min first 2 h, then 0.25/min)
   } finally { setQuiet(false); capture.list = null; PACE_RT.offline = false; PACE_RT.idleT = 0; }
+  if (!deferred) noteAbsence(seconds);   // Q1 #8: a long absence earns a welcome-back crew beat after RESUME DUTY
   if (bcCur) bcFights.push({ out: "ongoing", hull: Math.round(S.hull), lost: Math.max(0, Math.round(bcCur.hull - S.hull)) });
   const st = G.stats;
   // highlights: keep the latest copy of each repeated line, listed in chronological order
