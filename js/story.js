@@ -494,7 +494,7 @@ export const EV = {
     ],
   },
   debt_repaid: {
-    title: "A debt repaid", art: "story_generic_space", ckey: "story_debt", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1,
+    title: "A debt repaid", art: "story_debt", ckey: "story_debt", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1,
     cast: () => { const l = slotIds(["tactical", "security", "ops", "conn"]); const a = l.length ? l : juniors(); return a.length ? { lead: pick(a) } : null; },
     blurb: "A Jem'Hadar fighter drops out of warp off the bow and does not raise its weapons. On the viewscreen is the soldier from the wreck, alive, armour mended. He says he has a warning for the officer who spared him, and only for that officer. {lead} has a hand hovering over the red alert.",
     vars: { partner: ["{lead} doesn't take {pos} eyes off you."], friend: ["{lead} whispers that this is not in any manual."], rival: ["{lead} wants shields up, and says so."], solo: ["The fighter holds perfectly still."] },
