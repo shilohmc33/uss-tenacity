@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Progression pacing sim (phase 1): runs the REAL game sim headless (stepSim live, catchUp offline) and reports
 // against the design memo's targets (playtest/2026-10-17-design-progression.md):
 //   A) per-mode rates: XP / rep / parts per hour for ACTIVE play, AUTO (app open, hands off) and OFFLINE (2 h / 3.5 h / 8 h)

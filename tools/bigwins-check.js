@@ -6,9 +6,9 @@
 // Usage: node tools/bigwins-check.js   (SHOTS=0 to skip the proof shots)
 const { chromium } = require('playwright-core'); const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = __dirname + '/../shots/';
 const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHOTS !== '0';
-const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.idleT = 0; T.PACE_RT.offline = false; T.PACE_RT.sessionT = 1e6;
+const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.idleT = 0; T.PACE_RT.sessionT = 1e6;
   G.prog.background = G.prog.background || 'none'; G.prog.bgDone = true; if (G.lt) G.lt.nameDone = true; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); const pc = document.querySelector('#promCard'); if (pc) pc.hidden = true;
-  G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.ev.active = null; G.ship.faults = {}; G.ship.hull = 100; if (G.prog.jobs) G.prog.jobs.active = null; };
+  G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.sp.ev.active = null; G.ship.faults = {}; G.ship.hull = 100; if (G.prog.jobs) G.prog.jobs.active = null; };
 (async () => {
   const br = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
   const errs = [], net = [], newArt = [], fails = [], res = {}, ok = (c, m) => { if (!c) fails.push(m); }, J = JSON.stringify, host = new URL(BASE).host;
@@ -36,7 +36,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
         s.pilot.t = 950; ST.pilotTick(0); o.notFromStart = !ST.storyOpen();   // 950 s since the start but 450 since the repair: waits
         s.pilot.t = 500 + 898; ST.pilotTick(1); o.at899 = !ST.storyOpen();
         // the gates: Shift Report, a sheet, a red alert
-        document.querySelector('#report').hidden = false; o.gReport = ST.gateWhy('pilot'); ST.pilotTick(5); o.heldReport = !ST.storyOpen(); document.querySelector('#report').hidden = true;
+        document.querySelector('#plogPanel').hidden = false; o.gReport = ST.gateWhy('pilot'); ST.pilotTick(5); o.heldReport = !ST.storyOpen(); document.querySelector('#plogPanel').hidden = true;
         document.body.classList.add('sheet-open', 'sheet-duty'); o.gSheet = ST.gateWhy('pilot'); document.body.classList.remove('sheet-open', 'sheet-duty');
         G.sp.alert = { t: 0, enemies: ['galor'] }; o.gAlert = ST.gateWhy('pilot'); G.sp.alert = null;
         o.gLegDay1 = ST.gateWhy('leg');   // a normal story is still held by the grace days
@@ -116,24 +116,24 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
         // more enemies win the tie
         G.prog.moments = []; MO.pushMoment('win', 'one', { n: 1 }); MO.pushMoment('win', 'three', { n: 3 }); MO.pushMoment('win', 'two', { n: 2 }); o.tie = MO.bestMoment().txt;
         // a real won fight pushes a moment; a tow does not
-        G.prog.moments = []; T.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy';
+        G.prog.moments = []; T.PACE_RT.sessionT = 1e6; G.sp.lastBattleT = -1e9; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy';
         BT.startBattle('enroute', { enemies: ['galor'] }); BT.engageAlert('lt'); const B = G.sp.battle; o.battle = !!B;
         if (B) { B.enemies.forEach(e => { e.hull = 0; e.dead = true; e.dying = 0.01; }); B.dying = 0.05; for (let i = 0; i < 5 && G.sp.battle; i++) BT.tickBattle(0.1); }
         o.winMoment = MO.moments().map(m => m.k + ':' + m.txt);
-        G.prog.moments = []; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 };
+        G.prog.moments = []; G.sp.lastBattleT = -1e9; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 };
         BT.startBattle('enroute', { enemies: ['galor'] }); BT.engageAlert('lt'); o.towBattle = !!G.sp.battle; if (G.sp.battle) BT.towToDS9(); o.towMoments = MO.moments().length; o.towBest = (MO.bestMoment() || { k: 'quiet' }).k;
         G.sp.battle = null; G.sp.alert = null; return o; });
       // render: a headline, then the quiet fallback, in the real report
       R.report = await p.evaluate(async () => { const MO = await import('/js/moments.js'), HUD = await import('/js/ui/hud.js'), SIM = await import('/js/sim.js'), ART = await import('/js/ui/story.js'), T = __T, G = T.G, o = {};
         await ART.artReady();
-        const r = SIM.catchUp(120); G.prog.moments = []; MO.markReported(); G.ship.elapsed += 1;
+        G.prog.moments = []; MO.markReported(); G.ship.elapsed += 1;
         MO.pushMoment('win', "You beat off a Cardassian Galor at 64% hull", { n: 1 }); MO.pushMoment('rescue', 'You escorted six hundred Bajoran colonists clear');
-        HUD.showReport(r); await new Promise(z => setTimeout(z, 200));
-        const hd = () => { const e = document.querySelector('#reportBody .rhead'); const im = e && e.querySelector('img'); return e ? { mk: e.dataset.mk, tag: e.querySelector('small').textContent, txt: e.querySelector('b').textContent, img: im ? im.getAttribute('src') : null, first: document.querySelector('#reportBody').firstElementChild === e || document.querySelector('#reportBody').firstElementChild.classList.contains('bcHead') } : null; };
+        HUD.showBackOnWatch(8 * 3600); await new Promise(z => setTimeout(z, 200));
+        const hd = () => { const e = document.querySelector('#wbCard .rhead'); const im = e && e.querySelector('img'); return e ? { mk: e.dataset.mk, tag: e.querySelector('small').textContent, txt: e.querySelector('b').textContent, img: im ? im.getAttribute('src') : null, first: document.querySelector('#wbCard .k').nextElementSibling === e } : null; };
         o.head = hd(); o.reportT = G.prog.reportT;
-        document.querySelector('#report').hidden = true; HUD.showReport(r); await new Promise(z => setTimeout(z, 200)); o.quiet = hd();
+        document.querySelector('#wbCard').hidden = true; HUD.showBackOnWatch(8 * 3600); await new Promise(z => setTimeout(z, 200)); o.quiet = hd();
         o.manifestOk = [o.head && o.head.img, o.quiet && o.quiet.img].filter(Boolean).every(src => ART.hasArt(src.replace(/^assets\/story\//, '').replace(/\.webp$/, '')));
-        document.querySelector('#report').hidden = true; return o; });
+        document.querySelector('#wbCard').hidden = true; return o; });
       // ---- 12. the Promenade card: once per visit, the four buttons ----
       R.prom = await p.evaluate(async () => { const VY = await import('/js/voyage.js'), CC = await import('/js/crewcare.js'), PM = await import('/js/ui/promenade.js'), NX = await import('/js/ui/next.js'), HUD = await import('/js/ui/hud.js'), T = __T, G = T.G, o = {}, wait = ms => new Promise(z => setTimeout(z, ms)), card = () => document.querySelector('#promCard'), vis = () => !!card() && !card().hidden;
         document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); G.sp.battle = null; G.sp.alert = null; G.prog.rations = 444; G.ship.faults = {}; G.ship.nextFault = 1e6; if (G.prog.jobs) { G.prog.jobs.active = null; G.prog.jobs.next = 1e9; } G.sp.ev.active = null;
@@ -153,7 +153,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
         G.sp.travel = { dest: 'convoy', t: 0, dur: 600 }; CC.tickCare(); o.leave = { due: G.sp.promDue, seen: G.sp.promSeen };
         G.sp.travel = { dest: 'ds9', t: 599, dur: 600 }; VY.arriveAtDest(); HUD.updateHud(); await wait(80); o.again = vis();
         // held behind a modal (the Shift Report)
-        PM.hideProm(); G.sp.promSeen = false; G.sp.promDue = true; document.querySelector('#report').hidden = false; HUD.updateHud(); await wait(50); o.heldByReport = !vis(); document.querySelector('#report').hidden = true; HUD.updateHud(); await wait(50); o.afterReport = vis();
+        PM.hideProm(); G.sp.promSeen = false; G.sp.promDue = true; document.querySelector('#plogPanel').hidden = false; HUD.updateHud(); await wait(50); o.heldByReport = !vis(); document.querySelector('#plogPanel').hidden = true; HUD.updateHud(); await wait(50); o.afterReport = vis();
         return o; });
       first = false;
       // ---- v16 -> v17 migration (old save skips the pilot; new fields default) ----
@@ -210,10 +210,39 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     if (SHOTS) await p.screenshot({ path: OUT + `bw-promenade-${tag}.png` });
     if (w !== 844) {   // the Shift Report headline shot (390 + 1280)
       await p.evaluate(async () => { const MO = await import('/js/moments.js'), HUD = await import('/js/ui/hud.js'), SIM = await import('/js/sim.js'), G = __T.G; document.querySelector('#promCard').hidden = true;
-        const r = SIM.catchUp(90); G.prog.moments = []; MO.markReported(); G.ship.elapsed += 1; MO.pushMoment('bc', "You beat off a Jem'Hadar battlecruiser at 38% hull"); HUD.showReport(r); });
+        G.prog.moments = []; MO.markReported(); G.ship.elapsed += 1; MO.pushMoment('bc', "You beat off a Jem'Hadar battlecruiser at 38% hull"); HUD.showBackOnWatch(8 * 3600); });
       await sleep(400); if (SHOTS) await p.screenshot({ path: OUT + `bw-report-${tag}.png` });
-      R.reportFit = await p.evaluate(() => { const e = document.querySelector('#reportBody .rhead'), r = e.getBoundingClientRect(); return { h: Math.round(r.height), inView: r.right <= innerWidth + 1, img: !!e.querySelector('img') }; });
-      await p.evaluate(() => { document.querySelector('#report').hidden = true; });
+      R.reportFit = await p.evaluate(() => { const e = document.querySelector('#wbCard .rhead'), r = e.getBoundingClientRect(); return { h: Math.round(r.height), inView: r.right <= innerWidth + 1, img: !!e.querySelector('img') }; });
+      await p.evaluate(() => { document.querySelector('#wbCard').hidden = true; });
+    }
+    // fix (b): a picture that fails to decode (200 + garbage bytes = no 404 / failed request) falls back to its stand-in, else no picture; never a broken image.
+    // 390: main + stand-in both broken (-> no picture); the other sizes: only the picture itself broken (-> stand-in shown)
+    {
+      const all = w === 390, junk = ['story_firstwatch_a', 'story_report_rescue', 'story_promenade'].concat(all ? ['story_coolant_c4', 'story_kestrel_b', 'story_quarks_v2'] : []);
+      const c2 = await br.newContext({ viewport: { width: w, height: h } }); await c2.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; });
+      await c2.route(u => junk.some(k => u.pathname.endsWith('/' + k + '.webp')), rt => rt.fulfill({ status: 200, contentType: 'image/webp', body: Buffer.from('this is not a webp image at all '.repeat(40)) }));
+      const q = await c2.newPage(), btag = tag + ' broken-art';
+      q.on('console', m => { if (m.type() === 'error') errs.push(`${btag}: ${m.text()}`); }); q.on('pageerror', e => errs.push(`${btag}: ${e.message}`));
+      q.on('response', r => { if (r.status() >= 400) net.push(`${btag}: ${r.status()} ${r.url()}`); });
+      q.on('requestfailed', r => { if (new URL(r.url()).host !== host) return; net.push(`${btag}: failed ${r.url()} ${r.failure() && r.failure().errorText}`); });
+      await q.goto(BASE + '?reset=1'); await q.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await q.evaluate(PREP);
+      R.broken = await q.evaluate(async () => { const ST = await import('/js/story.js'), HUD = await import('/js/ui/hud.js'), PM = await import('/js/ui/promenade.js'), MO = await import('/js/moments.js'), SIM = await import('/js/sim.js'), ART = await import('/js/ui/story.js'), G = __T.G, o = {};
+        const wait = ms => new Promise(z => setTimeout(z, ms));
+        const brokenImgs = root => [...root.querySelectorAll('img')].filter(i => i.getAttribute('src') && i.complete && i.naturalWidth === 0 && i.offsetParent && getComputedStyle(i).visibility !== 'hidden' && getComputedStyle(i).display !== 'none').map(i => i.getAttribute('src'));
+        await ART.artReady();
+        document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); ST.startStory('first_watch'); await wait(900);
+        const sc = document.querySelector('#storyScene'), shown = [...sc.querySelectorAll('.storyframe img')].filter(i => i.getAttribute('src') && i.naturalWidth > 0 && getComputedStyle(i).visibility !== 'hidden').map(i => i.getAttribute('src'));
+        o.fw = { open: !sc.hidden, noart: sc.classList.contains('noart'), shown, broken: brokenImgs(sc), err: (sc.querySelector('.storyframe') || {}).dataset && sc.querySelector('.storyframe').dataset.err };
+        sc.hidden = true;
+        G.prog.moments = []; MO.markReported(); G.ship.elapsed += 1; MO.pushMoment('rescue', 'You escorted six hundred Bajoran colonists clear'); HUD.showBackOnWatch(8 * 3600); await wait(900);
+        const sp = document.querySelector('#wbCard .rpic'), ri = sp && sp.querySelector('img');
+        o.rep = { none: !!sp && sp.classList.contains('none'), img: ri ? ri.getAttribute('src') : null, ok: ri ? ri.naturalWidth > 0 : null, broken: brokenImgs(document.querySelector('#wbCard')) };
+        document.querySelector('#wbCard').hidden = true;
+        G.sp.battle = null; G.sp.alert = null; PM.openProm(); await wait(900);
+        const pc = document.querySelector('#promCard'), pp = pc.querySelector('.pcpic'), pi = pp && pp.querySelector('img');
+        o.prom = { shown: !pc.hidden, none: !!pp && pp.classList.contains('none'), img: pi ? pi.getAttribute('src') : null, ok: pi ? pi.naturalWidth > 0 : null, broken: brokenImgs(pc) };
+        o.anyBroken = brokenImgs(document); return o; });
+      await c2.close();
     }
     await c.close();
   }
@@ -223,7 +252,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   ok(P.fresh.done === false && P.fresh.t >= 0, 'fresh pilot flag ' + J(P.fresh)); ok(!P.inPool, 'pilot in a story pool');
   ok(P.noRepair && P.at899 && P.stamp === 500 && P.notFromStart, 'pilot fired early / repairT ' + J([P.noRepair, P.at899, P.stamp, P.notFromStart]));
   ok(J(P.harden) === J([300, -1, 200]), 'repairT harden ' + J(P.harden));
-  ok(P.gReport === 'report' && P.heldReport && P.gSheet === 'panel' && P.gAlert === 'alert', 'pilot gates ' + J([P.gReport, P.heldReport, P.gSheet, P.gAlert]));
+  ok(P.gReport === 'panel' && P.heldReport && P.gSheet === 'panel' && P.gAlert === 'alert', 'pilot gates ' + J([P.gReport, P.heldReport, P.gSheet, P.gAlert]));
   ok(P.gLegDay1 === 'grace', 'normal stories still in grace on day 1: ' + P.gLegDay1);
   ok(P.fired.open && P.fired.id === 'first_watch' && P.fired.done && P.fired.dayCount && P.fired.legsSince === 0 && P.fired.steps === 3, 'pilot fire ' + J(P.fired));
   ok(P.choices.length === 3 && !P.choices.some(c => c[2] === 'bonus') && P.choices[2][2] === 'careful' && P.choices[2][1] === 3, 'pilot choices ' + J(P.choices));
@@ -247,7 +276,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   ok(C.full.band === 'success' && C.half.band === 'success' && C.half.half && !C.full.half && C.half.line && C.half.xp > 0 && C.half.xp <= Math.ceil(C.full.xp * 0.5) + 1 && C.half.rep <= Math.ceil(C.full.rep * 0.5), 'half pay ' + J([C.full, C.half]));
   ok(C.carefulXp.xp === Math.round(0.4 * (40 + 30) / 2), 'careful xp ' + J(C.carefulXp));
   ok(L.carefulUI.band === 'Carefully.' && L.carefulUI.cont && /story_kestrel_s1_c3/.test(L.carefulUI.img || ''), 'careful UI ' + J(L.carefulUI));
-  const G2 = L.goal; ok(G2.freshFault === 45 && G2.ver === 17, 'fresh fault / version ' + J([G2.freshFault, G2.ver]));
+  const G2 = L.goal; ok(G2.freshFault === 45 && G2.ver === 18, 'fresh fault / version ' + J([G2.freshFault, G2.ver]));
   ok(G2.first === 'first' && /FIRST WATCH/.test(G2.pillFirst) && G2.alertOverFault === 'alert' && G2.fault === 'duty' && /TAP TO REPAIR/.test(G2.pillFault), 'goal top ' + J(G2));
   ok((G2.job === 'job' || G2.job === 'no job offered') && G2.board === 'board' && (G2.spec === 'spec' || G2.spec === 'no spec owed') && G2.firstAgain === 'first' && G2.after === 'ready' && G2.ds9 === 'ds9', 'goal order ' + J(G2));
   ok(L.stripFit.inView && L.stripFit.h >= 44 && /^FIRST WATCH/.test(L.stripText), 'strip fit ' + J([L.stripFit, L.stripText]));
@@ -271,7 +300,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   ok(PR.shore.used && PR.shore.card && PR.shore.off, 'shore leave ' + J(PR.shore));
   ok((PR.letters.alumni ? !PR.letters.disabled : PR.letters.disabled) && PR.letters.plog, 'letters home ' + J(PR.letters));
   ok(PR.stayHidden && !PR.leave.due && !PR.leave.seen && PR.again && PR.heldByReport && PR.afterReport, 'once per visit ' + J(PR));
-  const MG = L.mig; ok(MG.veteran.v === 17 && MG.veteran.pilot.done === true && MG.seenStory.pilot.done === true && MG.newbie.pilot.done === false && MG.newbie.pilot.repairT === 0 && MG.newbie.pilot.t < 1 && ['veteran', 'seenStory', 'newbie'].every(k => MG[k].moments && MG[k].reportT === 0 && MG[k].tab === 'orders' && J(MG[k].prom) === '[false,false]'), 'migration ' + J(MG));
+  const MG = L.mig; ok(MG.veteran.v === 18 && MG.veteran.pilot.done === true && MG.seenStory.pilot.done === true && MG.newbie.pilot.done === false && MG.newbie.pilot.repairT === 0 && MG.newbie.pilot.t < 1 && ['veteran', 'seenStory', 'newbie'].every(k => MG[k].moments && MG[k].reportT === 0 && MG[k].tab === 'orders' && J(MG[k].prom) === '[false,false]'), 'migration ' + J(MG));
   const T = res['1280x800'];
   ok(T.tabs.mode && T.tabs.bar && T.tabs.def.orders && T.tabs.def.chips && !T.tabs.def.duty && !T.tabs.def.log, 'tabs default ' + J(T.tabs));
   ok(T.tabs.duty.cls && T.tabs.duty.duty && !T.tabs.duty.orders && T.tabs.duty.saved === 'duty' && T.tabs.duty.on === 'duty' && T.tabs.btnH >= 44, 'tab duty ' + J(T.tabs.duty));
@@ -280,6 +309,11 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   for (const t of Object.keys(res)) { const f = res[t].fit; ok(f.shown && f.inStage && !f.scroll && f.btn >= 44 && /story_promenade\.webp/.test(f.img || ''), 'promenade fit ' + t + ' ' + J(f)); }
   for (const t of ['390x844', '1280x800']) { const f = res[t].reportFit; ok(f.h <= 112 && f.inView && f.img, 'report headline fit ' + t + ' ' + J(f)); }
   ok(planArt && planArt.missing.length === 0 && planArt.bad.length === 0 && planArt.n === 28 && planArt.fb.length === 0, 'plan art resolves (28 pictures in the manifest, each 200) ' + J(planArt));
+  for (const t of Object.keys(res)) { const B = res[t].broken, all = t === '390x844';
+    ok(B && B.fw.open && !B.fw.broken.length && (all ? B.fw.noart && !B.fw.shown.length : !B.fw.noart && B.fw.shown.some(s => /story_coolant_c4\.webp/.test(s))), 'first watch main scene fallback ' + t + ' ' + J(B && B.fw));
+    ok(B && !B.rep.broken.length && (all ? B.rep.none && !B.rep.img : !B.rep.none && /story_kestrel_b\.webp/.test(B.rep.img || '') && B.rep.ok), 'report headline fallback ' + t + ' ' + J(B && B.rep));
+    ok(B && B.prom.shown && !B.prom.broken.length && (all ? B.prom.none && !B.prom.img : !B.prom.none && /story_quarks_v2\.webp/.test(B.prom.img || '') && B.prom.ok), 'promenade fallback ' + t + ' ' + J(B && B.prom));
+    ok(B && !B.anyBroken.length, 'no broken image anywhere ' + t + ' ' + J(B && B.anyBroken)); }
   ok(!net.length, 'failed / 4xx requests ' + J(net));
   ok(!errs.length, 'console errors ' + J(errs));
   console.log(J(res, null, 1).slice(0, 6000));

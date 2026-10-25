@@ -8,6 +8,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const issues = [], report = {};
 async function mk(b, w, h, mobile, tag) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+  await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
   const p = await ctx.newPage();
   p.on('console', m => { if (['error', 'warning'].includes(m.type())) issues.push(`[${tag}] console.${m.type()}: ${m.text()}`); });
   p.on('pageerror', e => issues.push(`[${tag}] pageerror: ${e.message}`));
@@ -116,12 +117,12 @@ const measure = p => p.evaluate(() => {
   report.buttonsDesk = await measure(p);
   await p.click('#btnFull'); await sleep(600); await p.screenshot({ path: `${OUT}fix01_desk_full_buttons.png` });
   report.buttonsDeskFull = await measure(p);
-  await p.evaluate(() => { __T.G.savedAt = Date.now() - 3 * 3600 * 1000; localStorage.setItem('tenacity.save.v1', JSON.stringify(__T.G)); window.__noSave = true; });
+  await p.evaluate(() => { __T.G.savedAt = Date.now() - 3 * 3600 * 1000; __T.G.prog.lastSeen = __T.G.savedAt; localStorage.setItem('tenacity.save.v1', JSON.stringify(__T.G)); window.__noSave = true; });
   await p.reload(); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 30000 }); await sleep(800);
-  report.offlineReport = await p.evaluate(() => document.querySelector('#reportBody').innerText);
+  report.offlineReport = await p.evaluate(() => { const e = document.querySelector('#wbCard'); return e && !e.hidden && e.classList.contains('bow') ? e.innerText : null; });   // v18: the BACK ON WATCH card (the Shift Report is gone)
   await p.screenshot({ path: `${OUT}fix01_desk_offline_3h_report.png` });
   await p.close();
-  for (const [tag, base] of [['before', ORIG], ['after', BASE]]) {
+  for (const [tag, base] of [...(process.argv[3] ? [['before', ORIG]] : []), ['after', BASE]]) {   // the 'before' build only when one is given (argv[3])
     const q = await mk(b, 390, 844, true, 'scale-' + tag);
     await boot(q, base, '?reset=1'); await calm(q); await q.evaluate(() => { __T.app.timeScale = 4; });
     for (const [d, n] of [['engineering', 'core'], ['lounge', 'mess'], ['lounge', 'bar'], ['berthing', 'bunk'], ['bridge', 'chair']]) {

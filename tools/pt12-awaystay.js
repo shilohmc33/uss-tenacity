@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 12 HOLD 2 metric: pt11-awaystay with large n and the tester's send-then-leave case. A staged serious injury (Kovac, coolant,
 // Lt on the bridge), acked, clock fast-forwarded to LEFT s; then per cell:
 //   stay           - the player stays and sends the Lt now

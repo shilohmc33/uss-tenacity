@@ -8,7 +8,7 @@ import { log, toast, fx, shipNews, cheerful, cheerLog } from "./bus.js";
 import { stationEff, ltRepairSkill, addSkillXp } from "./mood.js";
 import { MOOD } from "./pacing.js";
 import { faultPriority, shieldCap, medFrozen } from "./faults.js";
-import { PACE, PACE_RT, nightActive } from "./pacing.js";
+import { PACE } from "./pacing.js";
 import { ltChatPartner } from "./npc-ambient.js";
 import { drainMult } from "./cabin.js";
 import { PROG, repairOutcome, awardXP, repairMult, taskMult, walkMult, tickStationXP, chatXP, milestone, addr } from "./progression.js";
@@ -254,14 +254,13 @@ export function stepLt(dt) {
     if (nd.rest) S.energy = clamp(S.energy + nd.rest * dt, 0, 100);
     else {
       S.energy = clamp(S.energy - D.station * eTempo * dt, 0, 100);
-      tickStationXP(dt);   // station work: 1 XP / 10 s (40% when hands-off; none offline)
+      tickStationXP(dt);   // station work: 1 XP / 10 s
       if (L.node === "locker") {
         S.lockerT += dt;
         if (S.lockerT >= 2.5 / taskMult()) {
           S.lockerT = 0;
-          const fillTo = nightActive() ? Math.ceil(S.partsCap * (PROG.sinks.lockerAwayFill ?? 1)) : S.partsCap;   // away: stock the night crew, don't flood the locker
-          if (S.parts < fillTo) { S.parts++; fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "+1 PART", color: "#e6b8ff" }); }
-          else fx("floater", { x: L.x, y: L.y - HEAD_Y, text: fillTo < S.partsCap ? "STOCKED" : "LOCKER FULL", color: "#93a5c4" });
+          if (S.parts < S.partsCap) { S.parts++; fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "+1 PART", color: "#e6b8ff" }); }
+          else fx("floater", { x: L.x, y: L.y - HEAD_Y, text: "LOCKER FULL", color: "#93a5c4" });
         }
       }
     }

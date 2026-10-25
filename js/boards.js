@@ -7,7 +7,6 @@
 import { G } from "./state.js";
 import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, hooks, promote, nextRank, computeReadiness, addr, rankName, crewList, opinionOf } from "./progression.js";
-import { PACE_RT } from "./pacing.js";
 
 const P = () => G.prog;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -68,10 +67,10 @@ export function scheduleBoard(n, reason) {
   const p = P(), ch = chairOf(n.id), friend = crewList().filter(c => c.id !== ch).sort((a, b) => opinionOf(b.id) - opinionOf(a.id))[0];
   const ctx = { addr: addr(), rank: n.name, friend: friend ? friend.short : "Diallo", lvl: p.level };
   const L = BOARD_LINES[ch] || BOARD_LINES.tren, opener = [...L.open].sort(() => Math.random() - 0.5).slice(0, 2).map(s => fill(s, ctx));
-  p.board = { to: n.id, reason, chair: ch, day: p.day, playDays: p.playDays, queued: !!PACE_RT.offline, lines: opener, ctx };
+  p.board = { to: n.id, reason, chair: ch, day: p.day, playDays: p.playDays, queued: false, lines: opener, ctx };
   const C = CHAIR[ch];
   log(`${C.name} convenes a promotion board: ${n.name}.${p.board.queued ? " It will sit when you're back aboard." : ""}`, "comm");
-  if (!PACE_RT.offline) { toast(`Promotion board — ${n.short}`, "info"); fx("board", { to: n.id }); }
+  toast(`Promotion board — ${n.short}`, "info"); fx("board", { to: n.id });
 }
 // the summary the modal shows (and the sim logs)
 export function boardSummary() {
@@ -91,7 +90,7 @@ export function boardSummary() {
 }
 // the player faces the board (modal button; the sim calls it when the player is present). Never offline.
 export function resolveBoard(force = null) {
-  const p = P(), b = p.board; if (!b || PACE_RT.offline) return null;
+  const p = P(), b = p.board; if (!b) return null;
   const n = nextRank(); if (!n || n.id !== b.to) { p.board = null; p.promo.pending = false; return null; }
   const r = computeReadiness(), o = boardOdds(r), forcedPass = !!guaranteed(n, b.reason);
   let outcome = force;
@@ -123,7 +122,7 @@ export function resolveBoard(force = null) {
 }
 // failed-board penalty fades daily
 hooks.newDay.push(() => { const p = P(); if (p.boardMalus > 0) { p.boardMalus = Math.max(0, p.boardMalus - PROG.boards.failMalusDecay); computeReadiness(); } });
-export const boardWaiting = () => !!(P().board && !PACE_RT.offline && !(PROG.boards.waitInBattle && G.sp.battle));
+export const boardWaiting = () => !!(P().board && !(PROG.boards.waitInBattle && G.sp.battle));
 
 // ---------------- specialisations ----------------
 const SK = () => PROG.specs;
@@ -146,5 +145,5 @@ export function pickSpec(id) {
   return true;
 }
 export const specLabel = () => Object.entries(P().spec || {}).map(([id, t]) => { const f = SK().focus[id]; return f ? `${f.icon} ${f.name}${t > 1 ? ` ${"I".repeat(t)}` : ""}` : ""; }).filter(Boolean);
-hooks.levelUp.push(L => { if (SK().picks.includes(L) && !PACE_RT.offline) { toast("Specialisation available", "good"); fx("spec", { level: L }); } });
+hooks.levelUp.push(L => { if (SK().picks.includes(L)) { toast("Specialisation available", "good"); fx("spec", { level: L }); } });
 export { CHAIR, rankName };

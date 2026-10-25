@@ -9,6 +9,7 @@ const issues = {}, R = {};
 async function mk(b, w, h, mobile) {
   const tag = `${w}x${h}`; issues[tag] = issues[tag] || [];
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+  await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
   const p = await ctx.newPage();
   p.on('console', m => { if (['error', 'warning'].includes(m.type())) issues[tag].push(`console.${m.type()}: ${m.text()}`); });
   p.on('pageerror', e => issues[tag].push(`pageerror: ${e.message}`));
@@ -27,7 +28,7 @@ const career = (p, rank = 1, xp = 26000) => p.evaluate(async ([rank, xp]) => {
   PR.awardXP(xp, 'manual'); G.prog.rank = rank; __T.CB.applyTier();
   G.prog.specOffered = 99;   // keep the spec picker out of the board shots
   Object.assign(G.prog.opinions, { tren: 58, okafor: 81, diallo: 66, hale: 40, thelev: 77, tull: 52, kovac: 61, rhovan: 70, mollo: 44 });
-  G.prog.perf.q = 0.9; G.prog.perf.resp = 0.9; G.prog.service = 5; G.prog.repLifetime = 12000; G.prog.rankSince.rep = 0; G.sp.rep = 1400; G.prog.playDays = 20; G.stats.repairs = 412; G.prog.quality.excellent = 96;
+  G.prog.perf.q = 0.9; G.prog.perf.resp = 0.9; G.prog.service = 5; G.prog.repLifetime = 12000; G.prog.rankSince.rep = 0; G.sp.rep = 1400; G.prog.playDays = 20; if (G.prog.med) G.prog.med.prompt12 = true; G.stats.repairs = 412; G.prog.quality.excellent = 96;
   return PR.computeReadiness();
 }, [rank, xp]).then(async r => { await sleep(1500); return r; });
 const callBoard = p => p.evaluate(async () => { const PR = await import('/js/progression.js'); const ok = PR.promotionDue('readiness'); return { ok, board: __T.G.prog.board && { to: __T.G.prog.board.to, chair: __T.G.prog.board.chair, queued: __T.G.prog.board.queued } }; }).then(async r => { await sleep(900); return r; });
@@ -95,13 +96,13 @@ const modalFits = (p, sel) => p.evaluate(sel => { const c = document.querySelect
     Object.assign(G.prog.opinions, { tren: 58, okafor: 81, diallo: 66, hale: 40, thelev: 77, tull: 52 });
     G.prog.perf.q = 0.9; G.prog.perf.resp = 0.9; G.prog.service = 5; G.prog.repLifetime = 12000; G.prog.rankSince.rep = 0; G.prog.playDays = 20;
     G.prog.spec = { warp: 1 }; G.prog.specPicks = 2;
-    G.savedAt = Date.now() - 3 * 3600 * 1000; localStorage.setItem(St.SAVE_KEY, JSON.stringify(G));
+    G.savedAt = Date.now() - 3 * 3600 * 1000; G.prog.lastSeen = G.savedAt; localStorage.setItem(St.SAVE_KEY, JSON.stringify(G));
   });
   await p.goto(BASE + '?debug=1'); await ready(p); await sleep(1200);
-  R.queued = await p.evaluate(() => ({ board: __T.G.prog.board, report: !document.querySelector('#report').hidden, boardModal: !document.querySelector('#boardPanel').hidden, reportLine: [...document.querySelectorAll('#reportBody li')].map(l => l.innerText).find(t => /promotion board/i.test(t)) || null, rank: __T.G.prog.rank }));
+  R.queued = await p.evaluate(() => ({ board: __T.G.prog.board, report: !!document.querySelector('#wbCard.bow:not([hidden])'), boardModal: !document.querySelector('#boardPanel').hidden, reportLine: null,   /* v18: no Shift Report */ rank: __T.G.prog.rank }));
   await p.evaluate(() => { window.__noSave = true; const d = document.querySelector('#debug'); if (d) d.hidden = true; });
   await shot(p, 'board-queued-report');
-  await p.evaluate(() => document.querySelector('[data-close="report"]').click()); await sleep(800);
+  await p.evaluate(() => { const e = document.querySelector('#wbCard'); if (e) e.hidden = true; }); await sleep(800);
   R.queued.afterReport = await p.evaluate(() => ({ boardModal: !document.querySelector('#boardPanel').hidden, text: document.querySelector('#boardBody').innerText.slice(0, 200) }));
   await shot(p, 'board-queued');
   await p.evaluate(() => document.querySelector('#boardPanel').hidden = true);
@@ -110,7 +111,7 @@ const modalFits = (p, sel) => p.evaluate(sel => { const c = document.querySelect
     const St = await import('/js/state.js'), PR = await import('/js/progression.js'), sim = await import('/js/sim.js'), BD = __T.BD, G = __T.G, out = {};
     // a board never resolves offline: catch-up with a board pending leaves it queued
     St.resetState(); PR.awardXP(3200, 'manual'); G.prog.specOffered = 99; PR.promotionDue('readiness');
-    const rep = sim.catchUp(4 * 3600); out.offlineHold = { board: !!G.prog.board, rank: G.prog.rank, boards: G.prog.boardLog.length, promoted: rep.prog.promoted };
+    out.offlineHold = { board: !!G.prog.board, rank: G.prog.rank, boards: G.prog.boardLog.length, promoted: false };   // v18: no catch-up (nothing runs while away), so a pending board simply waits
     // Lt guarantee: a weak Lt jg on play day 7 is forced through (and a fail before day 7 can't block it)
     St.resetState(); PR.awardXP(3200, 'manual'); G.prog.specOffered = 99; G.prog.playDays = 5; PR.promotionDue('readiness');
     const mr = Math.random; Math.random = () => 0.999; const f1 = BD.resolveBoard(); Math.random = mr;

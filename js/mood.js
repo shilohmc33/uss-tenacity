@@ -4,7 +4,7 @@
 // Everything rides on the needs record (G.prog.needs[id]: mood, band, stress, ml, wins, slip) and G.prog.skills (save v15,
 // additive; hardenNeeds / hardenSkills fill defaults). Quirks are derived (START_QUIRKS / tags), never saved.
 import { G } from "./state.js";
-import { MOOD, HOLO, PACE_RT, offRules, isPresent } from "./pacing.js";
+import { MOOD, HOLO, isPresent } from "./pacing.js";
 import { PROG } from "./progression.js";
 import { QUIRKS, START_QUIRKS, TAG_QUIRK, SLOTMAP } from "./roster.js";
 import { needsOf, NEED_KEYS } from "./needs.js";
@@ -43,7 +43,7 @@ export function addSkillXp(id, k, n) {
   if (!id || !SKILL_KEYS.includes(k) || !(n > 0)) return;
   const r = skillRec(id), L0 = levelOfXp(r[k]); r[k] = Math.min(r[k] + n, 50 * MOOD.skill.max * (MOOD.skill.max + 1));
   const L1 = levelOfXp(r[k]);
-  if (L1 > L0 && id === "lt" && !PACE_RT.offline) log(`Your ${SKILL_LABEL[k]} skill rises to ${L1}.`, "good");
+  if (L1 > L0 && id === "lt") log(`Your ${SKILL_LABEL[k]} skill rises to ${L1}.`, "good");
 }
 export function hardenSkills(p) {
   if (!p) return;
@@ -145,7 +145,7 @@ export function tickMood(id, r, h, on) {
   if (r.act === "duty" && on) addSkillXp(id, DEPT_SKILL[dept] || "composure", MOOD.skill.duty * h);
   else if (r.act === "fun") addSkillXp(id, "fitness", MOOD.skill.fun * h);
   rollIncident(id, r, h);   // N3: medium / major (own gates and caps)
-  if (offRules() || !isPresent() || !cheerful() ||   // P28: nothing bad happens unseen (idle / night crew / away)
+  if (!isPresent() || !cheerful() ||   // P28: nothing bad happens unseen (idle / away)
       r.band < 2 || G.sp.battle) return;
   const I = G.prog.moodInc; if (I && now() - I.last < MOOD.minor.gapS) return;
   if (Math.random() < MOOD.minor.perHour * h) minorIncident(id, r);

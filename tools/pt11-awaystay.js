@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 11 HOLD 3 metric (the tester's playtest-11 script 111c, adapted): a staged near-expiry serious injury, the Lt walks to fix;
 // stay vs away 60/120/300 s at 4/6/8/10 s left, deaths per 100 (n per cell = N, default 250). Away must never beat staying.
 // BASE=http://127.0.0.1:8765/ TAG=before|after N=500 node tools/pt11-awaystay.js -> shots/pt11-awaystay-<TAG>.json

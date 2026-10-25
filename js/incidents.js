@@ -3,12 +3,12 @@
 // ("unwell": off duty resting; NOT an injury, never touches injuries.js). Major (Breaking, stress >= 4 h): a breakdown
 // (off duty 1 ship's day), insubordination (an Opinion hit with the Lt, captain's mast), or rarely a deliberately mis-set
 // console that spawns an ordinary LOW/MEDIUM fault at their station (never CRITICAL, never an injury).
-// Safeguards: seen only (!offRules() && isPresent(), not in battle, not in the quiet period), nothing above minor in the
+// Safeguards: seen only (isPresent(), not in battle, not in the quiet period), nothing above minor in the
 // first 7 play days, 1 medium per ship's day and 1 major per 5 ship's days ship-wide, gentle mode turns majors off.
 // The Lt's response rides the odd-job slot (oddjobs.js, kind "incident"): it shows on the alert pill / DUTY list / deck,
 // he walks there and talks it through for ~10 s. Left alone, it plays out (Hale breaks up the scuffle, T'Ren holds mast).
 import { G } from "./state.js";
-import { MOOD, offRules, isPresent } from "./pacing.js";
+import { MOOD, isPresent } from "./pacing.js";
 import { PROG, nudge, addr } from "./progression.js";
 import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, pr } from "./roster.js";
@@ -36,7 +36,7 @@ function postOf(id) {
   const n = sl.deck === "bridge" ? (sl.dept === "sec" ? "tactical" : sl.dept === "sci" ? "science2" : "ops") : sl.deck === "engineering" ? "core" : sl.deck === "medical" ? "biobed" : sl.deck === "lounge" ? "bar" : "mess";
   return NODEMAP[n] ? n : "mess";
 }
-export const seenGate = () => !offRules() && isPresent() && cheerful() && !G.sp.battle;
+export const seenGate = () => isPresent() && cheerful() && !G.sp.battle;
 export const activeIncident = () => { const a = J().active; return a && a.kind === "incident" ? a : null; };
 function post(job) {
   const k = PROG.jobs, j = J();

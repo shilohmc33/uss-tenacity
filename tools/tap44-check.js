@@ -53,6 +53,7 @@ async function mode(p, m) { await p.evaluate(m => document.querySelector(m === '
   for (const [w, h, mobile] of [[390, 844, true], [844, 390, true], [1280, 800, false]]) {
     const tag = `${w}x${h}`; report.errors[tag] = [];
     const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+    await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
     if (process.env.DEATHS === '1' || process.env.DEATHS === '0') await ctx.addInitScript(on => { window.__TENACITY_TEST_DEATHS = on; }, process.env.DEATHS === '1');   // phase 6: force deaths ON/OFF (default: the shipped PROG value, ON)
     const p = await ctx.newPage();
     p.on('console', m => { if (['error', 'warning'].includes(m.type())) report.errors[tag].push(m.text()); });
@@ -73,7 +74,7 @@ async function mode(p, m) { await p.evaluate(m => document.querySelector(m === '
     await closeAll(p);
     await p.evaluate(async () => { const PR = await import('/js/progression.js'); const G = __T.G; PR.awardXP(20000, 'manual'); Object.assign(G.prog.opinions, { tren: 58, okafor: 81, diallo: 66, hale: 40 }); G.prog.perf.q = 0.95; G.prog.perf.resp = 0.95; G.prog.service = 5; G.prog.repLifetime = 12000; G.prog.rankSince.rep = 0; G.prog.playDays = 20; PR.promotionDue('readiness'); }); await sleep(800);
     await opened(p, tag, 'board', '#boardPanel'); n += await measure(p, tag, 'board'); await closeAll(p);
-    await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.showReport(__T.catchUp(3 * 3600)); }); await sleep(800); await opened(p, tag, 'shift report', '#report'); n += await measure(p, tag, 'shift report'); await closeAll(p);
+    await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.showBackOnWatch(3 * 3600); }); await sleep(800); await opened(p, tag, 'back on watch', '#wbCard'); n += await measure(p, tag, 'back on watch'); await p.evaluate(() => { document.querySelector('#wbCard').hidden = true; });   // v18: the BACK ON WATCH card replaces the Shift Report await closeAll(p);
     await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.openLiftPanel(); }); await sleep(800); await opened(p, tag, 'turbolift', '#liftPanel'); n += await measure(p, tag, 'turbolift'); await closeAll(p);
     await p.evaluate(() => document.querySelector('#btnView').click()); await sleep(600); n += await measure(p, tag, 'space view');
     await p.evaluate(async () => { const B = await import('/js/battle.js'); B.startBattle(); }); await sleep(1500); n += await measure(p, tag, 'battle'); 

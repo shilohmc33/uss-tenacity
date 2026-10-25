@@ -1,21 +1,15 @@
 import { G } from "./state.js";
-import { nightCredit, PROG } from "./progression.js";
-import { SYSTEMS, SEV_LABEL, SEV_RANK, OKAFOR_SHORT, GATE_SYSTEMS, NODEMAP } from "./data.js";
+import { SYSTEMS, SEV_LABEL, SEV_RANK, OKAFOR_SHORT, GATE_SYSTEMS } from "./data.js";
 import { pick } from "./util.js";
 import { log, shipNews, toast } from "./bus.js";
-import { stationEff } from "./mood.js";
-import { sendRepair, cancelRepairIf } from "./crew.js";
-import { PACE, PACE_RT, rr, nightActive, offRules, isPresent } from "./pacing.js";
+import { PACE, rr, isPresent } from "./pacing.js";
 import { activeJob } from "./oddjobs.js";
 import { bindSpawn } from "./incidents.js";
-import { nightFixMult } from "./crewlife.js";
+import { upkeepFault } from "./upkeep.js";
 // phase 6: systems a seriously injured crewmate depends on (G.prog.med; read directly to avoid an import cycle with injuries.js)
 // pass 13 HOLD 2: every system an injured crewmate's clock or surgery depends on (warning or surgery, seen or not, present or not):
 // Miracle Worker never fixes these - the Lt does (memo "the Lt fixes it"); away and stay are treated alike.
 export const medDepends = () => { const m = G.prog && G.prog.med; return m && m.inj ? m.inj.filter(x => (x.state === "warning" || x.state === "surgery") && x.sys).map(x => x.sys) : []; };
-const medLinked = () => { const m = G.prog && G.prog.med; return m && m.inj ? m.inj.filter(x => x.state === "warning" && x.sys).map(x => x.sys) : []; };
-// pass 06 (c): offline the night crew ALWAYS takes the linked system too (crewStabilise 'always'); nothing is held back for the Lt
-const medHeldOffline = () => (PROG.deaths.crewStabilise >= 1 ? [] : medLinked());
 // pass 11 HOLD 3: away must never beat staying. A patient the player has seen live (seenT > 0) has their clock frozen
 // while the player is away / idle / hidden; the repair of their system is frozen with it (no night-crew fix, no
 // progress), so it resumes on return with exactly the odds the player left with.
@@ -65,16 +59,14 @@ export function spawnFault(src = "ambient", forceId, forceSev) {
     toast(`${sev === "crit" ? "CRITICAL" : "CHIEF"}: ${s.name} fault`, sev);
   }
   shipNews(`<b>${s.fault} [${SEV_LABEL[sev]}].</b> ` + (sev === "low" ? `${s.name} runs a little under par — nothing bleeds. Fix it when convenient.` : `Send the Lieutenant to the ${s.name} to repair.`));
-  const lt = G.lt;
-  if (lt.mode === "use" && lt.node && NODEMAP[lt.node].system === id) sendRepair(id);
+  upkeepFault(id);   // v18 (Q5): no repair on his own initiative - only by order, or inside an ordered UPKEEP round (upkeep.js)
   return id;
 }
 export function tickFaults(dt) {
   const S = G.ship;
   S.nextFault -= dt;
   if (S.nextFault <= 0) {
-    // NEW-06: while the night crew has the deck, the ambient roll is skipped once the backlog reaches the cap
-    if (!(nightActive() && !G.sp.battle && Object.keys(S.faults).length >= PACE.nightFaultCap)) spawnFault(G.sp.battle ? "battle" : "ambient");
+    spawnFault(G.sp.battle ? "battle" : "ambient");
     S.nextFault = rr(PACE.faultEvery);
   }
   for (const [k, f] of Object.entries(S.faults)) {
@@ -106,61 +98,6 @@ export function syncFaultEffects() {
   }
   if (now.warpcore !== C.warpcore) log(now.warpcore ? "Warp Core fault — evasive unavailable and disengage blocked. The bridge is committed to this fight." : "Warp Core repaired — evasive patterns and disengage available to the bridge again.", now.warpcore ? "fault" : "good");
   G.gates = now;
-}
-
-// ---- shift handover (end of an offline catch-up): the night crew works the backlog down to PACE.nightFaultCap,
-// LOW faults first, then MEDIUM (a spare each when the locker has one), stabilising CRITICALs to MEDIUM. Returns fixes.
-export function nightHandover() {
-  const S = G.ship, L = G.lt, rank = { low: 0, med: 1, crit: 2 };
-  let fixes = 0;
-  const held = [...medHeldOffline(), ...medFrozen()];
-  const open = () => Object.entries(S.faults).filter(([k]) => !(L.mode === "repair" && L.repairSys === k) && !held.includes(k));
-  for (let guard = 0; guard < 12 && Object.keys(S.faults).length > PACE.nightFaultCap; guard++) {
-    const list = open().sort((a, b) => rank[a[1].sev] - rank[b[1].sev] || b[1].t - a[1].t);
-    if (!list.length) break;
-    const [k, f] = list[0], s = SYSTEMS[k];
-    if (f.sev === "crit") { f.sev = "med"; f.cost = 1; f.escT = 0; continue; }
-    if (f.sev === "med" && S.parts >= PACE.nightMedParts) S.parts -= PACE.nightMedParts;
-    delete S.faults[k]; cancelRepairIf(k); fixes++; nightCredit(f.sev);
-    G.night.fixes = (G.night.fixes || 0) + 1; G.stats.nightFixes = (G.stats.nightFixes || 0) + 1;
-    log(`Shift handover: Okafor's night crew clears the ${s.name} fault (${SEV_LABEL[f.sev]}) before you come on watch.`, "good");
-  }
-  return fixes;
-}
-// ---- night-shift crew: while the player is away (offline catch-up, or idle), an off-screen damage-control team
-// under Okafor works the duty list one fault at a time: LOW faults quickly, MED slowly (spares if the locker has
-// them), CRITICAL ones get stabilised to MED. Never touches the fault the Lt is repairing. Tunables: PACE.nightFix.
-export function tickNightCrew(dt) {
-  const S = G.ship, N = G.night, L = G.lt;
-  if (!offRules()) { N.sys = null; N.t = 0; return; }   // pass 16 B1: no night-crew patching inside a live-started fight
-  if (N.sys && !S.faults[N.sys]) { N.sys = null; N.t = 0; }
-  if (N.sys && medFrozen().includes(N.sys)) { N.sys = null; N.t = 0; }   // pass 11 HOLD 3: hand it back, no progress kept
-  if (!N.sys) {
-    // triage: anything bleeding hull/power first (impairing coolant / warp core / EPS), then quick LOW fixes,
-    // then stabilising CRITICALs, then the remaining MEDIUMs; oldest first within a tier
-    const tier = ([k, f]) => (f.sev !== "low" && (k === "coolant" || k === "warpcore" || k === "eps")) ? 0 : f.sev === "low" ? 1 : f.sev === "crit" ? 2 : 3;
-    // phase 6: while the player is live but idle, a fault that a seriously injured crewmate's life hangs on is left for
-    // the Lt (memo: 'if the Lt fixes the relevant system in time, they live'). Offline the night crew still takes it.
-    const held = [...(PACE_RT.offline ? medHeldOffline() : medLinked()), ...medFrozen()];
-    const order = Object.entries(S.faults).filter(([k]) => !(L.mode === "repair" && L.repairSys === k) && !held.includes(k))
-      .sort((a, b) => tier(a) - tier(b) || b[1].t - a[1].t);
-    if (!order.length) return;
-    N.sys = order[0][0]; N.t = 0;
-  }
-  const f = S.faults[N.sys], need = f.sev === "low" ? PACE.nightFix.low : f.sev === "crit" ? PACE.nightFix.critToMed
-    : PACE.nightFix.med * (S.parts >= PACE.nightMedParts ? 1 : 2);
-  // (phase 3: a Starbase 375 loaner team cuts fix times for one offline stretch)
-  N.t += dt * (G.sp.battle ? 0.5 : 1) / nightFixMult() * stationEff(N.sys);   // N2: crew mood at the station
-  if (N.t < need) return;
-  const s = SYSTEMS[N.sys];
-  if (f.sev === "crit") { f.sev = "med"; f.cost = 1; f.escT = 0; nightCredit("crit", true); log(`Night watch: Okafor's damage-control team stabilises the ${s.name} — down from CRITICAL to MEDIUM.`, "good"); }
-  else {
-    if (f.sev === "med" && S.parts >= PACE.nightMedParts) S.parts -= PACE.nightMedParts;
-    delete S.faults[N.sys]; cancelRepairIf(N.sys); nightCredit(f.sev);   // the Lt's share of the rota: automated XP
-    N.fixes = (N.fixes || 0) + 1; G.stats.nightFixes = (G.stats.nightFixes || 0) + 1;
-    log(`Night watch: the damage-control team clears the ${s.name} fault (${SEV_LABEL[f.sev]}).`, "good");
-  }
-  N.sys = null; N.t = 0;
 }
 
 bindSpawn(spawnFault);   // N3: mis-set console incidents spawn an ordinary fault

@@ -4,7 +4,7 @@ import { freshEnc, hardenEnc, seedEnc } from "./encounters.js";
 import { DECKS, NODEMAP, SYSTEMS, DESTS } from "./data.js";
 import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, migrateProg8, migrateProg9, migrateProg10, migrateProg11, migrateProg12, migrateProg13, clampProg, clampResources } from "./progression.js";
 export const SAVE_KEY = "tenacity.save.v1";   // key kept; the schema version lives in G.version
-export const SAVE_VERSION = 17;   // v17: bigger wins (G.prog.story.pilot, moments, reportT, ui.tab; G.sp.promDue / promSeen; additive)     // v16: story events (G.prog.story, story.js; additive)   // v15: crew needs (G.prog.needs, needs.js; additive)
+export const SAVE_VERSION = 18;   // v18: no offline quests (G.prog.upkeep / lastSeen; maintainOn, night, awayDefer, alert.away, welcome cleared)   // v17: bigger wins (G.prog.story.pilot, moments, reportT, ui.tab; G.sp.promDue / promSeen; additive)     // v16: story events (G.prog.story, story.js; additive)   // v15: crew needs (G.prog.needs, needs.js; additive)
 //               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med); v8: Personal Log (G.prog.plog) + crew pronouns (memo 'v7'; memo v8/v9/v10 -> v9/v10/v11); v9: gifts + tastes known (G.prog.gifts / G.prog.know; memo 'v8'); v10: pass 06 presence-based injury clock, surgery outcome, play-day high-water mark (memo 'v9' Insight is now v11); v11: Insight (G.prog.insight, memo 'v9'), seeded second likes, avoid known; v12: romance (G.prog.romance, memo 'v10'); v13: pass 07 present-time play days (G.prog.dayPresent), paused surgery + assist; v14: battle combatants (G.sp.battle.allies[] / enemies[] / target, js/ships.js)
 export const G = {};
 export function freshState() {
@@ -23,7 +23,7 @@ export function freshState() {
       name: { first: "", last: "" }, nameDone: false,   // the player's name for the Lt (ltname.js; additive on v17, asked once)
     },
     sp: {
-      location: "ds9", travel: null, travelPaused: false, encAcc: 0, battle: null, awayDefer: 0, evasiveT: 0, rep: 0, lastBattleT: -1e9, torpT: 0,
+      location: "ds9", travel: null, travelPaused: false, encAcc: 0, battle: null, evasiveT: 0, rep: 0, lastBattleT: -1e9, torpT: 0,
       escortT: 0, escortDone: true, escortChecked: false, resupT: 0, visit: null, preScanned: false, promDue: false, promSeen: false, enc: freshEnc(),   // promDue / promSeen: #12 the DS9 Promenade card, once per visit
         // enc: encounter weighting (additive, v14 shape)
       cap: { dest: "convoy", reason: "Convoy escort — the ship's assigned duty, pending departure from Deep Space Nine.", decideT: 3, holdLogged: false, legCount: 0, lastDiplo: null, sinceDiplo: 0 },
@@ -42,7 +42,6 @@ export function freshState() {
     stats: { battles: 0, wins: 0, legs: 0, events: 0, repairs: 0, torpsBuilt: 0, tows: 0, nightFixes: 0 },
     log: [],
     news: null,          // latest ship news line ({html, sd}); restored on reload
-    night: { sys: null, t: 0, fixes: 0, battleTimes: [], avoided: 0 },
     prog: freshProg(),   // progression.js: level/XP, quality tallies, ship's day, phase 2-4 slots
     npc: {},             // ambient crew (npc-ambient.js): only chat-line / perk cooldown stamps per NPC id   // off-screen night-shift crew (pacing.js)
     savedAt: 0,
@@ -59,6 +58,8 @@ export const TAB_RT = { ro: false, why: "" };   // P32 #1 (tablock.js): a read-o
 // the boot marks the state live, or when G lacks its core sections, or when the text is far smaller than the last good save;
 // every good save is also kept as SAVE_KEY + ".bak" (loadGame falls back to it).
 export const BAK_KEY = SAVE_KEY + ".bak";
+// v18: what the last load migrated from (main.js bootGame logs one 'held station' line for a pre-v18 save with a gap)
+export const MIG_RT = { from: null };
 export const SAVE_GUARD = { live: false, len: 0, refused: 0, why: "", restored: false };
 const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
 export const hasCore = d => isObj(d) && typeof d.version === "number" && ["ship", "sp", "lt", "prog"].every(k => isObj(d[k]));
@@ -94,6 +95,7 @@ export function loadGame() {
       else if (!raw) return false;
       else data = JSON.parse(raw);   // no backup: the old path (an unreadable save is kept aside below)
     }
+    MIG_RT.from = Number.isFinite(data.version) ? data.version : null;
     SAVE_GUARD.len = 0;   // the size guard compares with saves written by this build from here on
     const base = freshState();
     // ---- migrations ----
@@ -113,6 +115,15 @@ export function loadGame() {
     if (data.version < 15) { if (data.prog) data.prog.needs = {}; data.version = 15; }
     if (data.version < 16) { if (data.prog && typeof data.prog === "object") data.prog.story = null; data.version = 16; }   // story events: the story.js hardener fills freshStory()   // crew needs: filled lazily (everyone starts rested and fed)   // battle groundwork: a saved battle's single enemy -> battle.enemies[] / allies[]
     if (data.version < 17) { if (data.prog && typeof data.prog === "object" && data.prog.story && typeof data.prog.story === "object") delete data.prog.story.pilot; data.version = 17; }   // v17 (bigger wins): story.js hardenStory derives the pilot flag (done for a veteran save: playDays >= 2 or any story seen); moments / reportT / ui.tab / promDue default
+    // v18 (no offline quests): in-flight timers are sim time and need nothing - they resume exactly where they were. The
+    // standing orders and the away / night state go: upkeep is ordered (prog.upkeep), the night crew and catch-up are gone.
+    if (data.version < 18) {
+      const P = data.prog && typeof data.prog === "object" ? data.prog : null, SP = data.sp && typeof data.sp === "object" ? data.sp : null;
+      if (P) { P.upkeep = { order: null, n: 0 }; if (P.sinks && typeof P.sinks === "object") { P.sinks.maintainOn = false; delete P.sinks.maintT; } P.welcome = null; P.lastSeen = Number.isFinite(data.savedAt) && data.savedAt > 0 ? data.savedAt : 0; if (P.fav && P.fav.fx) delete P.fav.fx.loaner; }
+      delete data.night;
+      if (SP) { SP.awayDefer = 0; delete SP.awayDefer; if (SP.alert && typeof SP.alert === "object") delete SP.alert.away; }
+      data.version = 18;
+    }
     // pass 13: a save without encounter memory (pre-encounter builds, or a junk value) rebuilds it from its battle + ship log; a valid one is kept as-is
     if (data.sp && typeof data.sp === "object" && !Array.isArray(data.sp) && !(data.sp.enc && typeof data.sp.enc === "object" && !Array.isArray(data.sp.enc))) data.sp.enc = seedEnc(data.sp, data.prog, data.log);
     for (const k of Object.keys(G)) delete G[k];
@@ -167,7 +178,6 @@ function sanitize(base) {
     if (SP.travel && !DESTS[SP.travel.dest]) { SP.travel = null; SP.travelPaused = false; }
     if (SP.cap && SP.cap.dest && !DESTS[SP.cap.dest]) SP.cap.dest = null;
     SP.enc = hardenEnc(SP.enc);   // encounter weighting: last encounter / spacing (missing in older v14 saves -> fresh)
-    { const d = +SP.awayDefer; SP.awayDefer = Number.isFinite(d) && d > 0 ? Math.min(d, 7 * 86400) : 0; }   // pass 16 B1: catch-up held behind a live fight
     hardenAlert(SP);   // RA(a): a held red alert survives a reload (no reward dodge), junk drops
     hardenBattle(SP);   // battle groundwork: combatant arrays (v14), junk enemy types / hulls (pass-03 N-3: never a negative enemy hull)
     if (SP.ev && SP.ev.active && SP.ev.active.task && !NODEMAP[SP.ev.active.task.node]) SP.ev.active = null;

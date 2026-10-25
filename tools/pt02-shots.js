@@ -9,6 +9,7 @@ const issues = {}, report = { base: BASE, tag: TAG };
 async function mk(b, w, h, mobile) {
   const tag = `${w}x${h}`; issues[tag] = issues[tag] || [];
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+  await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
   const p = await ctx.newPage();
   p.on('console', m => { if (['error', 'warning'].includes(m.type())) issues[tag].push(`console.${m.type()}: ${m.text()}`); });
   p.on('pageerror', e => issues[tag].push(`pageerror: ${e.message}`));
@@ -126,11 +127,11 @@ const ltFig = p => p.evaluate(async () => {
   // ===== offline report (real boot after 3 h away), phone =====
   p = await mk(b, 390, 844, true);
   await boot(p); await calm(p);
-  await p.evaluate(() => { const G = __T.G; G.sp.cap.decideT = 3; G.ship.nextFault = 120; G.sp.ev.nextT = -1; G.ship.power = 7; G.ship.hull = 40; window.__noSave = false; __T.saveGame(); const s = JSON.parse(localStorage.getItem('tenacity.save.v1')); s.savedAt = Date.now() - 3 * 3600e3; localStorage.setItem('tenacity.save.v1', JSON.stringify(s)); window.__noSave = true; });
+  await p.evaluate(() => { const G = __T.G; G.sp.cap.decideT = 3; G.ship.nextFault = 120; G.sp.ev.nextT = -1; G.ship.power = 7; G.ship.hull = 40; window.__noSave = false; __T.saveGame(); const s = JSON.parse(localStorage.getItem('tenacity.save.v1')); s.savedAt = Date.now() - 3 * 3600e3; s.prog.lastSeen = s.savedAt; localStorage.setItem('tenacity.save.v1', JSON.stringify(s)); window.__noSave = true; });
   await p.goto(BASE + '?debug=1');
-  await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done') && !document.querySelector('#report').hidden, null, { timeout: 60000 });
+  await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done') && !!document.querySelector('#wbCard.bow:not([hidden])'), null, { timeout: 60000 });
   await sleep(500);
-  report.offlineReport = await p.evaluate(() => ({ text: document.querySelector('#reportBody').innerText, faults: Object.keys(__T.G.ship.faults).length, power: Math.round(__T.G.ship.power), hull: Math.round(__T.G.ship.hull) }));
+  report.offlineReport = await p.evaluate(() => ({ text: document.querySelector('#wbCard.bow:not([hidden])').innerText,   /* v18: BACK ON WATCH */ faults: Object.keys(__T.G.ship.faults).length, power: Math.round(__T.G.ship.power), hull: Math.round(__T.G.ship.hull) }));
   await p.evaluate(() => { const d = document.querySelector('#debug'); if (d) d.hidden = true; });
   await shot(p, 'offline-report-3h');
   await p.context().close();

@@ -6,7 +6,7 @@
 // Then python3 tools/anim-strip-sheet.py TAG  -> shots/anim-TAG-<vp>-<scenario>.png
 const { chromium } = require('playwright-core');
 const fs = require('fs');
-const BASE = process.env.BASE || 'http://127.0.0.1:8811/';
+const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
 const TAG = process.env.TAG || 'before';
 const OUT = `/workspace/anim-strips/${TAG}/`;
 const VPS = { phone: { width: 390, height: 844, dsf: 2, mobile: true }, desk: { width: 1280, height: 800, dsf: 1, mobile: false } };
@@ -34,6 +34,7 @@ async function run() {
   for (const vpn of vpSel) {
     const v = VPS[vpn], R = M[vpn] = {};
     const ctx = await browser.newContext({ viewport: { width: v.width, height: v.height }, deviceScaleFactor: v.dsf, isMobile: v.mobile, hasTouch: v.mobile });
+    await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
     const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
     await ctx.addInitScript(HOOK);
     await p.goto(BASE + '?debug=1&reset=1');
@@ -44,7 +45,7 @@ async function run() {
       window.__path = path;
       const dctx = document.querySelector('#deck').getContext('2d'); window.__rt = 100; __T.app.paused = true;
       window.__adv = (ms, draw = true) => { const n = Math.round(ms / (1000 / 60)); for (let i = 0; i < n; i++) { const s = 1 / 60; stepSim(s); tickTren(s); tickAmbient(s); window.__rt += s; if (draw && (i % 2 === 1 || n === 1)) drawDeck(dctx, window.__rt, 2 / 60); } };
-      window.__noSave = true; document.querySelectorAll('.modal:not(.hidden), .overlay:not(.hidden), #report:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      window.__noSave = true; document.querySelectorAll('.modal:not(.hidden), .overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
       // world-space anchor of a logged draw (feet for upright frames; centre for rotated/lying ones)
       window.__anchor = (e) => {
         const C = window.__CAM; if (!C) return null; const T = e.T;
@@ -65,7 +66,7 @@ async function run() {
     // record n frames at 30 fps: per-frame chars + draws; optional screenshots (every `shotEvery` frames)
     async function rec(name, n, perFrame, shotEvery = 0) {
       const dir = `${OUT}${vpn}/${name}/`; if (shotEvery) fs.mkdirSync(dir, { recursive: true });
-      await ev(() => { window.__DL = []; document.querySelectorAll('.modal:not(.hidden), #report:not(.hidden)').forEach(m => m.classList.add('hidden')); });
+      await ev(() => { window.__DL = []; document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden')); });
       const st = [];
       for (let i = 0; i < n; i++) {
         if (perFrame) await perFrame(i);

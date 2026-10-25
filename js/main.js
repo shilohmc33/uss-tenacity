@@ -1,20 +1,20 @@
 // Boot, main loop (delta time, pause when hidden), input, view modes, save/load, debug.
-import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY, TAB_RT, SAVE_GUARD } from "./state.js";
+import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY, TAB_RT, SAVE_GUARD, MIG_RT } from "./state.js";
 import { initTabLock, TL, check as tabCheck } from "./tablock.js";   // P32 #1: one playing tab
 import { preload, missing, IMG } from "./assets.js";
 import { applyWalkMasks, snapToFloor } from "./path.js";
 import { applyArtHooks } from "./art-hooks.js";
-import { PACE_RT, playerInput, isPresent } from "./pacing.js";
+import { PACE, PACE_RT, playerInput, isPresent, idlePaused } from "./pacing.js";
 import { on, log, shipNews } from "./bus.js";
 import { ltNote } from "./crew.js";
-import { stepSim, catchUp } from "./sim.js";
+import { stepSim } from "./sim.js";
 import { tickTren, tren, trenTo } from "./npc.js";
 import { tickAmbient, ambient, ambientTo, npcOf, visibleOn } from "./npc-ambient.js";
 import * as CL from "./crewlife.js";
 import { drawDeck, resizeCam, hitTest, screenToDeck, setZoom, panBy, cam, deckFx } from "./render/deck.js";
 import { drawSpace } from "./render/space.js";
 import { clearShipFx } from "./render/shipfx.js";
-import { buildHud, wireHud, updateHud, openLiftPanel, closeLiftPanel, showReport, closeSheet, renderLog, flashLevel, openDecor } from "./ui/hud.js";
+import { buildHud, wireHud, updateHud, openLiftPanel, closeLiftPanel, showBackOnWatch, closeSheet, renderLog, flashLevel, openDecor } from "./ui/hud.js";
 import * as CB from "./cabin.js";
 import * as BD from "./boards.js";
 import * as MD from "./injuries.js";
@@ -131,25 +131,32 @@ document.addEventListener("touchmove", e => { if (!e.target.closest("#panels,.ch
 on("fx", (k, d) => { if (k === "openLift") openLiftPanel(); else if (k === "closeLift") closeLiftPanel(); else { if (k === "levelUp" || k === "promotion") flashLevel(); deckFx(k, d); } });
 
 // ---------- loop ----------
-let last = performance.now(), saveT = 0, hudT = 0, rt = 0, roDraw = -1e9;
+let last = performance.now(), saveT = 0, hudT = 0, rt = 0, roDraw = -1e9, seenT = 0, idleUp = false;
+// v18: the idle-pause overlay (index.html #idlePause)
+function showIdle() { idleUp = true; const o = document.getElementById("idlePause"); if (o) o.hidden = false; if (!window.__noSave) saveGame(); }
+function resumeIdle() { if (!idleUp) return; idleUp = false; const o = document.getElementById("idlePause"); if (o) o.hidden = true; playerInput(); last = performance.now(); }
+{ const o = document.getElementById("idlePause"); if (o) o.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); resumeIdle(); }); }
+window.addEventListener("keydown", () => { if (idleUp) resumeIdle(); });
 const MAX_DT = 0.1;
 function frame(now) {
   requestAnimationFrame(frame);
   ORDER.manual = false;
   if (TAB_RT.ro) { if (now - roDraw > 1000) { roDraw = now; try { if (app.view === "deck") drawDeck(dctx, rt, 0); else drawSpace(sctx, rt, 0); } catch (e) {} } last = now; return; }   /* P32b #4: a read-only tab still shows the deck, still, no sim */
   if (app.paused || ST.storyOpen()) { last = now; return; }   // P32 #1: a read-only tab runs no sim   // E1: the sim pauses while a story scene is open
+  // v18 (no offline quests, approved Q1): no input for PACE.idleAfter s pauses everything behind a 'tap to resume' overlay.
+  // The overlay stays up until it is tapped (or a key is pressed), so the resuming tap never lands on the deck.
+  if (idleUp || idlePaused()) { if (!idleUp) showIdle(); last = now; return; }
   let dt = Math.min(MAX_DT, (now - last) / 1000); last = now;
   rt += dt;
   tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
   let simDt = dt * app.timeScale;
   while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); simDt -= s; }
-  // pass 16 B1: the catch-up that waited behind a live fight runs once the fight is over (report as usual)
-  if (G.sp.awayDefer > 0 && !G.sp.battle) { const s = G.sp.awayDefer, lf = G.sp.lastFight; G.sp.awayDefer = 0; if (s > 30) { const r = catchUp(s); r.afterFight = lf || null; renderLog(); showReport(r); } }   // pass 17 P4: the report names the fight it waited for
+  seenT -= dt; if (seenT <= 0 && isPresent()) { seenT = 1; G.prog.lastSeen = Date.now(); }   // v18: the last moment on watch (BACK ON WATCH)
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }
   saveT += dt; if (saveT > 5) { saveT = 0; saveGame(); }
 }
-// pause when hidden; on return, run idle catch-up for the gap
+// pause when hidden; v18: on return nothing is simulated - the game resumes exactly where it was (BACK ON WATCH after a long break)
 let hiddenAt = 0;
 document.addEventListener("visibilitychange", () => {
   PACE_RT.hidden = document.hidden;   // pass 06: never 'present' while hidden
@@ -158,7 +165,7 @@ document.addEventListener("visibilitychange", () => {
     tabCheck();   // P32 #1: yield first if another tab took over while this one was hidden
     if (TAB_RT.ro) return;
     const gap = (Date.now() - hiddenAt) / 1000;
-    if (hiddenAt && gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }   // pass 16 B1: a live fight -> deferred (showReport notes it)
+    if (hiddenAt && gap >= PACE.backAfter) { showBackOnWatch(gap); G.prog.restT = 0; }   // same rule as a reload: rested only after a real absence
     if (hiddenAt && gap > 600) { PACE_RT.sessionT = 0; markPlayDay(); }   // back after a real break = a new session (calm opening again)
     playerInput();
     app.paused = false; last = performance.now();
@@ -205,17 +212,20 @@ function bootGame(params, masks) {
   if (!G.lt.path && !G.lt.lift && G.lt.mode !== "use") snapToFloor(G.lt);   // saves from older walk grids
   buildHud(); wireHud();
   setMode(innerWidth >= 900 ? "info" : "play"); setView("deck");
-  if (had && G.savedAt) {
-    const gap = (Date.now() - G.savedAt) / 1000;
-    if (gap > 30) { const r = catchUp(gap); renderLog(); showReport(r); }
+  // v18 (no offline quests): no catch-up. A pre-v18 save gets one 'held station' line; any absence of PACE.backAfter s or
+  // more opens the BACK ON WATCH card. The only reward for time away is the rested XP bonus of the new session.
+  if (had && (G.prog.lastSeen || G.savedAt)) {
+    const gap = Math.max(0, (Date.now() - Math.max(G.prog.lastSeen || 0, G.savedAt || 0)) / 1000);
+    if (MIG_RT.from != null && MIG_RT.from < 18 && gap > 30) log("The ship held station while you were away.", "comm");
+    if (gap >= PACE.backAfter) { showBackOnWatch(gap); G.prog.restT = 0; }   // a real absence: a fresh rested window (a quick reload keeps the old one as it was)
   }
-  PACE_RT.sessionT = 0; PACE_RT.idleT = 0;   // a new session starts after any catch-up
+  PACE_RT.sessionT = 0; PACE_RT.idleT = 0;   // a new session (the rested bonus runs for its first PROG.xp.rested.first s)
   markPlayDay();   // progression: real calendar days with play
   if (missing.length) log("Missing art (placeholders drawn): " + missing.join(", "), "fault");
   if (masks.length < 5) console.warn("Walk masks missing for some decks; using fallback rects.");
   $("#loading").classList.add("done");
   if (params.has("debug")) setupDebug(app, { setView, setMode });
-  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, catchUp, retrigger, PACE_RT, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds, ST, TL, TAB_RT };
+  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, retrigger, PACE_RT, idle: { up: () => idleUp, resume: resumeIdle }, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds, ST, TL, TAB_RT };
   updateHud();
   requestAnimationFrame(t => { last = t; frame(t); });
 }

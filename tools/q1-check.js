@@ -1,5 +1,5 @@
 // Q1 check: odd jobs (no repeats, 3-5 min gap, mini-chains, parked in battle), T'Ren's threat read, countdown rings,
-// the Academy background pick, the story scrapbook, the welcome-back beat. 390x844, 844x390, 1280x800; 0 console errors.
+// the Academy background pick, the story scrapbook, the welcome-back line (BACK ON WATCH card). 390x844, 844x390, 1280x800; 0 console errors.
 // Usage: node tools/q1-check.js
 const { chromium } = require('playwright-core'); const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = __dirname + '/../shots/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -98,15 +98,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const S = R.scrap; ok(S.n === 3 && S.top.id === 'mess_hall_feud' && S.top.band === 'safe' && S.second.id === 'letter_home' && S.second.band === 'success' && S.second.label && !/[{}]/.test(S.second.label) && S.second.res && S.old.old && S.old.label === null && S.capped === 40 && S.hard === 40 && !S.junk
       && R.scrapUI.rows >= 3 && R.scrapUI.loaded >= 2 && R.scrapUI.w <= 60 && R.scrapUI.fit, `scrapbook ${tag} ` + J([S, R.scrapUI]));
     await p.evaluate(() => document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }));
-    // ---- #8 welcome back: waits under the Shift Report, fires after RESUME DUTY ----
-    R.wb = await p.evaluate(async () => { const WB = await import('/js/welcome.js'), G = __T.G, o = {}; G.prog.welcome = null; WB.noteAbsence(3600); o.short = WB.welcomeDue(); WB.noteAbsence(9 * 3600); o.long = WB.welcomeDue();
-      __T.PACE_RT.idleT = 0; document.querySelector('#report').hidden = false; return o; });
-    await sleep(900); R.wb.under = await p.evaluate(() => ({ card: !document.querySelector('#wbCard').hidden, due: !!(__T.G.prog.welcome && __T.G.prog.welcome.due) }));
-    await p.click('#report button[data-close="report"]'); await sleep(900);
+    // ---- #8 welcome back (v18): the crew line rides on the BACK ON WATCH card; the line by name, no opinion reward ----
+    R.wb = await p.evaluate(async () => { const HUD = await import('/js/ui/hud.js'), G = __T.G, o = {}; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); __T.PACE_RT.idleT = 0;
+      const op0 = JSON.stringify(G.prog.opinion); o.ret = HUD.showBackOnWatch(9 * 3600); o.opSame = JSON.stringify(G.prog.opinion) === op0; o.noWelcome = !('welcome' in G.prog); return o; });
+    await sleep(600);
     R.wb.after = await p.evaluate(() => { const w = document.querySelector('#wbCard').getBoundingClientRect(), hit = [...document.querySelectorAll('.chipWrap, .sheetBtns, #ltBar, #newsBar')].filter(e => { const r = e.getBoundingClientRect(); return r.height > 0 && r.left < w.right && r.right > w.left && r.top < w.bottom && r.bottom > w.top; }).map(e => e.id || e.className);
-      return { card: !document.querySelector('#wbCard').hidden, text: document.querySelector('#wbCard').textContent, due: __T.G.prog.welcome, overlap: hit, inView: w.top >= 0 && w.bottom <= innerHeight && w.left >= 0 && w.right <= innerWidth }; });
+      return { card: !document.querySelector('#wbCard').hidden, text: document.querySelector('#wbCard').textContent, line: (document.querySelector('#wbCard .bowLine') || {}).textContent || '', overlap: hit, inView: w.top >= 0 && w.bottom <= innerHeight && w.left >= 0 && w.right <= innerWidth }; });
     await p.screenshot({ path: OUT + `q1-welcome-${tag}.png` });
-    ok(R.wb.short === false && R.wb.long === true && !R.wb.under.card && R.wb.under.due && R.wb.after.card && /WELCOME BACK/.test(R.wb.after.text) && R.wb.after.due === null && !/\b(she|her)\b/i.test(R.wb.after.text) && R.wb.after.overlap.length === 0 && R.wb.after.inView, `welcome ${tag} (Q1b #5: clear of the chip / button rows) ` + J(R.wb));
+    ok(R.wb.opSame && R.wb.noWelcome && R.wb.after.card && /BACK ON WATCH/.test(R.wb.after.text) && /Away 9h 0m/.test(R.wb.after.text) && /Lieutenant/.test(R.wb.after.line) && !/\b(she|her)\b/i.test(R.wb.after.text) && R.wb.after.overlap.length === 0 && R.wb.after.inView, `welcome ${tag} (BACK ON WATCH; Q1b #5: clear of the chip / button rows; no opinion reward) ` + J(R.wb));
+    await p.evaluate(() => { document.querySelector('#wbCard').hidden = true; });
     // ---- Q1b #3: the red-alert pill + banner with the longest name (a battlecruiser with two wings): the odds word always shows ----
     R.long = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G, o = {}; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); document.querySelector('#wbCard').hidden = true; G.sp.battle = null; G.sp.alert = null; G.ship.faults = {};
       BT.startBattle('debug', { enemies: ['jh_battlecruiser', 'jh_fighter', 'jh_fighter'] }); const B = G.sp.battle; B.enemies.forEach(e => { e.hull = e.max = 1e6; }); document.querySelector('#bcCard').hidden = true;
@@ -120,7 +120,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     // ---- Q1b #1 + #6: the Academy prompt steps aside for a red alert and comes back after; a made pick can't be reopened ----
     R.bg1 = await p.evaluate(async () => { const BT = await import('/js/battle.js'), BG = await import('/js/background.js'), PG = await import('/js/progression.js'), G = __T.G, o = {}, panel = document.querySelector('#bgPanel');
       const keep = { bg: G.prog.background, done: G.prog.bgDone }; G.prog.background = null; G.prog.bgDone = false; BG._askAgain(); document.querySelectorAll('.modal').forEach(m => { m.hidden = true; });
-      __T.PACE_RT.idleT = 0; __T.PACE_RT.sessionT = 1e6; G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy';
+      __T.PACE_RT.idleT = 0; __T.PACE_RT.sessionT = 1e6; G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy';
       for (let i = 0; i < 40 && panel.hidden; i++) await new Promise(r => setTimeout(r, 100)); o.asked = !panel.hidden;
       o.ret = BT.startBattle('enroute', { enemies: ['galor'] }); await new Promise(r => setTimeout(r, 300)); o.hidden = panel.hidden; const btn = document.querySelector('#raBtn'); o.btnOk = !btn.hidden && !btn.disabled;
       const r = btn.getBoundingClientRect(), top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); o.btnTop = !!top && !!top.closest('#raBtn');

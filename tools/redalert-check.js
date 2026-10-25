@@ -4,9 +4,9 @@
 // Usage: node tools/redalert-check.js
 const { chromium } = require('playwright-core'); const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = __dirname + '/../shots/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.idleT = 0; T.PACE_RT.offline = false; T.PACE_RT.sessionT = 1e6;
+const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.idleT = 0; T.PACE_RT.sessionT = 1e6;
   G.prog.background = G.prog.background || 'none'; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true;
-  G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.ev.active = null; G.ship.faults = {}; G.ship.hull = 100;
+  G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.sp.ev.active = null; G.ship.faults = {}; G.ship.hull = 100;
   G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy'; G.sp.travelPaused = false; };
 (async () => {
   const br = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -21,37 +21,35 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
       // ---- logic: hold, gates, parking, freeze, takeover, break-off, calm at roll, engage bypass, story fight ----
       R.L = await p.evaluate(async () => { const BT = await import('/js/battle.js'), PC = await import('/js/pacing.js'), ST = await import('/js/story.js'), EV = await import('/js/events.js'),
           OJ = await import('/js/oddjobs.js'), FT = await import('/js/faults.js'), SH = await import('/js/ships.js'), T = __T, G = T.G, o = {}, last = () => G.log[G.log.length - 1].msg, hasLog = re => G.log.slice(-6).some(e => re.test(e.msg));
-        const prep = () => { G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.travelPaused = false; T.PACE_RT.idleT = 0; T.PACE_RT.offline = false; T.PACE_RT.sessionT = 1e6; };
+        const prep = () => { G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.sp.travelPaused = false; T.PACE_RT.idleT = 0; T.PACE_RT.sessionT = 1e6; };
         // an odd job in progress before the alert
         const j = OJ.J(); j.active = null; j.next = 0; OJ.tickJobs(0.01); const job = j.active; o.hadJob = !!job;
         prep(); const s0 = G.stats ? JSON.stringify(G.stats) : '';
         o.ret = BT.startBattle('enroute', { enemies: ['galor'] }); const A = G.sp.alert;
         o.hold = { ret: o.ret, alert: !!A, battle: !!G.sp.battle, paused: G.sp.travelPaused, roster: A && A.enemies, allies: A && A.allies, stamped: G.sp.lastBattleT === G.ship.elapsed, log: /Red alert: your call/.test(last()) };
         // travel pauses: a sim step doesn't move the ship
-        const tt = G.sp.travel.t; T.catchUp ? 0 : 0; (await import('/js/sim.js')).stepSim(1); o.travelFrozen = G.sp.travel.t === tt; o.ticked = G.sp.alert && G.sp.alert.t > 0;
+        const tt = G.sp.travel.t; (await import('/js/sim.js')).stepSim(1); o.travelFrozen = G.sp.travel.t === tt; o.ticked = G.sp.alert && G.sp.alert.t > 0;
         // the gates
         o.gate = ST.gateWhy('leg'); o.second = BT.startBattle('enroute'); o.ev = EV.fireEvent ? EV.fireEvent('distress') : false;
         // odd job parked: no duty item, no ticking, no new offers
         o.dutyJob = FT.dutyItems().some(i => i.kind === 'job'); const jt = job && job.t; OJ.tickJobs(5); o.jobFrozen = job ? job.t === jt : true;
         j.active = null; j.next = 0; OJ.tickJobs(0.01); o.noOffer = !j.active; j.active = job;
         // freeze while away (idle)
-        const t0 = G.sp.alert.t; T.PACE_RT.idleT = 1e6; BT.tickAlert(100); o.freeze = { t: G.sp.alert.t === t0, away: G.sp.alert.away };
-        T.PACE_RT.idleT = 0; BT.tickAlert(1); o.back = { away: G.sp.alert.away, t: +(G.sp.alert.t - t0).toFixed(2) };
+        const t0 = G.sp.alert.t; T.PACE_RT.idleT = 1e6; BT.tickAlert(100); o.freeze = { t: G.sp.alert.t === t0, away: 'away' in G.sp.alert };
+        T.PACE_RT.idleT = 0; BT.tickAlert(1); o.back = { t: +(G.sp.alert.t - t0).toFixed(2) };
         // takeover at 90 s present
         G.sp.alert.t = 0; BT.tickAlert(89.5); o.at89 = !!G.sp.alert && !G.sp.battle; BT.tickAlert(0.6);
         o.take = { alert: G.sp.alert, battle: !!G.sp.battle, live: G.sp.battle && !G.sp.battle.away, enemies: G.sp.battle && G.sp.battle.enemies.map(e => e.ship), log: hasLog(/^T'Ren: 'Engaging, Lieutenant\. Join us when you can\.'$/) };
         G.sp.battle = null; G.sp.travelPaused = false;
-        // the 30-min break-off (away time only; no penalty or reward)
+        // v18: no break-off - however long nobody is watching (idle or hidden), the alert waits, frozen; no penalty or reward
         prep(); BT.startBattle('enroute', { enemies: ['galor'] }); T.PACE_RT.idleT = 1e6; const st = JSON.stringify(G.stats || {}), rep = JSON.stringify(G.prog.rep || null);
-        BT.tickAlert(1799); o.at1799 = !!G.sp.alert; BT.tickAlert(2);
-        o.brk = { alert: G.sp.alert, battle: !!G.sp.battle, paused: G.sp.travelPaused, log: hasLog(/^Contact lost while you were off watch\.$/), stats: JSON.stringify(G.stats || {}) === st, rep: JSON.stringify(G.prog.rep || null) === rep };
-        // offline catch-up freezes then breaks it off too
-        prep(); BT.startBattle('enroute', { enemies: ['galor'] }); T.PACE_RT.offline = true; BT.tickAlert(600); o.offFreeze = G.sp.alert && G.sp.alert.t === 0 && G.sp.alert.away === 600; BT.tickAlert(1300); o.offBrk = !G.sp.alert; T.PACE_RT.offline = false;
+        BT.tickAlert(1799); BT.tickAlert(1e5); T.PACE_RT.idleT = 0; T.PACE_RT.hidden = true; BT.tickAlert(1e5); T.PACE_RT.hidden = false;
+        o.brk = { alert: !!G.sp.alert, t: G.sp.alert && G.sp.alert.t, battle: !!G.sp.battle, paused: G.sp.travelPaused, log: hasLog(/Contact lost/), stats: JSON.stringify(G.stats || {}) === st, rep: JSON.stringify(G.prog.rep || null) === rep };
         // calm/gap at roll: no alert at all; Engage bypasses them
         prep(); T.PACE_RT.sessionT = 0; o.calmRoll = BT.startBattle('enroute'); o.calmNone = !G.sp.alert && !G.sp.battle;
         prep(); BT.startBattle('enroute', { enemies: ['galor'] }); T.PACE_RT.sessionT = 0; G.sp.lastBattleT = G.ship.elapsed; o.blocked = !BT.battleAllowed('enroute');
         BT.engageAlert('lt'); o.bypass = { battle: !!G.sp.battle, alert: G.sp.alert, log: hasLog(/^You call it: 'Engage\.'/) };
-        // away/night rolls keep today's rules (no hold)
+        // v18: no away fights - a roll while nobody is watching is held like any other
         prep(); T.PACE_RT.idleT = 1e6; BT.startBattle('enroute', { enemies: ['galor'] }); o.awayRoll = { alert: !!G.sp.alert, battle: !!G.sp.battle };
         // story fight -> soft held alert, never broken off; Engage -> soft fight
         prep(); ST.closeStory(); ST.S().fight = 'story_wreck'; ST.storyTick(); const SA = G.sp.alert;
@@ -82,11 +80,11 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
       const L = R.L;
       ok(L.hold.ret === 'held' && L.hold.alert && !L.hold.battle && L.hold.paused && J(L.hold.roster) === '["galor"]' && J(L.hold.allies) === '[]' && L.hold.stamped && L.hold.log && L.travelFrozen && L.ticked, 'hold while present ' + J([L.hold, L.travelFrozen, L.ticked]));
       ok(L.gate === 'alert' && L.second === false && !L.ev && !L.dutyJob && L.jobFrozen && L.noOffer && L.hadJob, 'gates + odd job parked ' + J([L.gate, L.second, L.ev, L.dutyJob, L.jobFrozen, L.noOffer, L.hadJob]));
-      ok(L.freeze.t && L.freeze.away === 100 && L.back.away === 0 && L.back.t === 1, 'freeze while away ' + J([L.freeze, L.back]));
+      ok(L.freeze.t && L.freeze.away === false && L.back.t === 1, 'freeze while away (no away counter) ' + J([L.freeze, L.back]));
       ok(L.at89 && L.take.alert === null && L.take.battle && L.take.live && J(L.take.enemies) === '["galor"]' && L.take.log, '90 s takeover ' + J([L.at89, L.take]));
-      ok(L.at1799 && L.brk.alert === null && !L.brk.battle && !L.brk.paused && L.brk.log && L.brk.stats && L.brk.rep && L.offFreeze && L.offBrk, '30-min break-off ' + J([L.at1799, L.brk, L.offFreeze, L.offBrk]));
+      ok(L.brk.alert && L.brk.t === 0 && !L.brk.battle && L.brk.paused && !L.brk.log && L.brk.stats && L.brk.rep, 'no break-off: the alert waits, frozen ' + J(L.brk));
       ok(L.calmRoll === false && L.calmNone && L.blocked && L.bypass.battle && L.bypass.alert === null && L.bypass.log, 'calm at roll; Engage bypasses calm/gap ' + J([L.calmRoll, L.calmNone, L.blocked, L.bypass]));
-      ok(!L.awayRoll.alert && L.awayRoll.battle, 'away rolls start as today ' + J(L.awayRoll));
+      ok(L.awayRoll.alert && !L.awayRoll.battle, 'no away fights: every roll is held ' + J(L.awayRoll));
       ok(L.story.alert && L.story.soft && L.story.ctx === 'story_wreck' && J(L.story.en) === '["jh_fighter"]' && L.story.pend === null && L.story.gate === 'alert' && L.story.kept && L.story.softB && L.pendBehind, 'story fight -> soft alert ' + J([L.story, L.pendBehind]));
       ok(L.hard.every(x => x === null), 'hardenAlert drops junk ' + J(L.hard));
     }
@@ -95,7 +93,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     await sleep(300);
     R.btn = await p.evaluate(() => { const b = document.querySelector('#raBtn'), r = b.getBoundingClientRect(); return { shown: !b.hidden, en: !b.disabled, txt: b.textContent, h: r.height, inView: r.left >= 0 && r.right <= innerWidth, pill: document.querySelector('#alertPill').textContent }; });
     await p.screenshot({ path: OUT + `ra-a-button-${tag}.png` });
-    R.modal = await p.evaluate(async () => { const rp = document.querySelector('#report'); rp.hidden = false; await new Promise(r => setTimeout(r, 400)); const b = document.querySelector('#raBtn'), d = b.disabled; b.click(); const opened = !document.querySelector('#raSheet').hidden; rp.hidden = true; await new Promise(r => setTimeout(r, 2500)); return { dis: d, opened, en: !b.disabled }; });   // Q1b-RA #5: a slow headless frame needs ~2.5 s
+    R.modal = await p.evaluate(async () => { const rp = document.querySelector('#plogPanel'); rp.hidden = false; await new Promise(r => setTimeout(r, 400)); const b = document.querySelector('#raBtn'), d = b.disabled; b.click(); const opened = !document.querySelector('#raSheet').hidden; rp.hidden = true; await new Promise(r => setTimeout(r, 2500)); return { dis: d, opened, en: !b.disabled }; });   // Q1b-RA #5: a slow headless frame needs ~2.5 s
     // ---- Q1b-RA #2: under each play-mode sheet (ORDERS / DUTY / CREW / LOG) the button, the pill and the banner tap are held and the view never opens ----
     R.sheets = await p.evaluate(async () => { const RA = await import('/js/ui/redalert.js'), BT = await import('/js/battle.js'), G = __T.G, o = {}, wait = ms => new Promise(r => setTimeout(r, ms)), b = document.querySelector('#raBtn'), view = () => !document.querySelector('#raSheet').hidden;
       const info = document.body.classList.contains('mode-info'); if (info) document.querySelector('#btnFull').click(); await wait(300);
@@ -138,7 +136,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
         G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy'; BT.startBattle('enroute', { enemies: ['galor'] }); G.sp.alert.t = 40; window.__noSave = false; __T.saveGame(); window.__noSave = true; });
       await p.goto(BASE); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });
       R.reload = await p.evaluate(async () => { window.__noSave = true; const BT = await import('/js/battle.js'), G = __T.G, A = G.sp.alert; const o = { alert: !!A, en: A && A.enemies, t: A && A.t, paused: G.sp.travelPaused, battle: !!G.sp.battle };
-        __T.PACE_RT.idleT = 0; __T.PACE_RT.offline = false; BT.tickAlert(51); o.took = !!G.sp.battle && !G.sp.alert; G.sp.battle = null; return o; });
+        __T.PACE_RT.idleT = 0; BT.tickAlert(51); o.took = !!G.sp.battle && !G.sp.alert; G.sp.battle = null; return o; });
       ok(R.reload.alert && J(R.reload.en) === '["galor"]' && R.reload.t >= 40 && R.reload.paused && !R.reload.battle && R.reload.took, 'reload keeps the held alert ' + J(R.reload));
       await p.evaluate(() => localStorage.clear());
     }
@@ -183,7 +181,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     }
     if (first) {
       R.DCL = await p.evaluate(async () => { const BT = await import('/js/battle.js'), DC = await import('/js/dc.js'), RA = await import('/js/ui/redalert.js'), FT = await import('/js/faults.js'), MD = await import('/js/injuries.js'), SIM = await import('/js/sim.js'), T = __T, G = T.G, S = G.ship, o = {};
-        const clean = () => { if (G.sp.battle && G.sp.battle.dc) G.sp.battle.dc.open = null; G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; T.PACE_RT.idleT = 0; T.PACE_RT.offline = false; T.PACE_RT.sessionT = 1e6; S.faults = {}; S.hull = 80; S.shields = 50; S.power = 80; S.torps = 4;
+        const clean = () => { if (G.sp.battle && G.sp.battle.dc) G.sp.battle.dc.open = null; G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; T.PACE_RT.idleT = 0; T.PACE_RT.sessionT = 1e6; S.faults = {}; S.hull = 80; S.shields = 50; S.power = 80; S.torps = 4;
           G.sp.travel = { dest: 'convoy', t: 10, dur: 600 }; G.sp.location = 'convoy'; MD.M().inj = []; MD.M().day = { pd: G.prog.playDays, n: 0 }; MD.M().gentle = false; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); RA.closeView(); };
         const fight = (by = 'lt') => { clean(); BT.startBattle('enroute', { enemies: ['galor'] }); BT.engageAlert(by); const B = G.sp.battle; B.enemies.forEach(e => { e.hull = e.max = 1e5; e.volleyT = 5; }); B.startedAt = S.elapsed - 20; return B; };
         const call = () => { const B = fight(); S.shields = 50; DC.tickDC(0.01); return B; };
@@ -211,9 +209,9 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
         b = fight(); S.shields = 0; S.hull = 3; BT.damageShip(60, 'test hit'); o.tow = { battle: !!G.sp.battle, loc: G.sp.location, hull: S.hull };
         // T'Ren engaged: the call waits for the Lt to open the view
         b = fight('tren'); DC.tickDC(0.01); o.queued = { by: b.by, due: b.dc.due, open: !!b.dc.open }; RA.openView(); o.queued.after = !!b.dc.open && b.dc.open.i === 1 && b.dc.due === null; DC.closeCall(); RA.closeView();
-        // an away fight: never a call
-        clean(); T.PACE_RT.idleT = 1e6; BT.startBattle('enroute', { enemies: ['galor'] }); b = G.sp.battle; b.enemies.forEach(e => { e.hull = e.max = 1e5; }); b.startedAt = S.elapsed - 90; S.hull = 20; S.shields = 10; DC.tickDC(1); T.PACE_RT.idleT = 0; DC.tickDC(1); RA.openView(); DC.tickDC(1);
-        o.away = { live: b.live, dc: b.dc ? [b.dc.n, b.dc.due, !!b.dc.open] : null }; RA.closeView();
+        // v18: nobody watching (idle >= 60 s): a call never opens; it can once he is back
+        b = fight('lt'); b.startedAt = S.elapsed - 90; S.hull = 20; S.shields = 10; T.PACE_RT.idleT = 1e6; DC.tickDC(1); const away = !!(b.dc && b.dc.open); T.PACE_RT.idleT = 0; DC.tickDC(1);
+        o.away = { away, back: !!(b.dc && b.dc.open) }; if (b.dc) b.dc.open = null; RA.closeView();
         // hardening
         const SH = await import('/js/ships.js'), hz = d => { const q = { dc: d }; SH.hardenDC(q); return q.dc; };
         o.hard = [hz(7), hz({ n: 9, due: 5, open: { i: 1, cast: { eps: '<x>' }, res: { k: 'nuke', band: 'success' } }, buf: { eps: 'yes', core: true } })];
@@ -228,7 +226,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
       ok(/no harm done/.test(D.gRisk) && !D.gentle.fault && D.gentle.inj === 0 && D.gentle.chips.some(c => /shaken/.test(c)) && /nothing gained/.test(D.gentle.text) && /burns/.test(D.risk), 'gentle wording ' + J([D.gRisk, D.gentle, D.risk]));
       ok(!D.tow.battle && D.tow.loc === 'ds9' && D.tow.hull === 20, 'not destroyable ' + J(D.tow));
       ok(D.queued.by === 'tren' && D.queued.due === 1 && !D.queued.open && D.queued.after, 'queued call (T\'Ren engaged) ' + J(D.queued));
-      ok(D.away.live === false && (!D.away.dc || (D.away.dc[0] === 0 && !D.away.dc[1] && !D.away.dc[2])), 'no call in away fights ' + J(D.away));
+      ok(!D.away.away && D.away.back, 'no call while nobody is watching; it opens on return ' + J(D.away));
       ok(D.hard[0].n === 0 && D.hard[0].open === null && D.hard[1].n === 2 && D.hard[1].due === null && D.hard[1].open && !D.hard[1].open.cast.eps && D.hard[1].open.res === null && D.hard[1].buf.eps === false && D.hard[1].buf.core === true, 'hardenDC ' + J(D.hard));
       // ---- reload mid-call: the same call reopens (same cast, no reroll); then it can still be answered ----
       R.pre = await p.evaluate(async () => { const BT = await import('/js/battle.js'), DC = await import('/js/dc.js'), G = __T.G, S = G.ship; G.sp.lastBattleT = -1e9; __T.PACE_RT.idleT = 0; BT.startBattle('enroute', { enemies: ['galor'] }); BT.engageAlert('lt');

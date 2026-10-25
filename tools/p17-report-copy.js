@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 17 P4: after a live fight that the player hid during (catch-up deferred, pass 16 B1), the deferred night report must name
 // the actual enemy and outcome, not "No contact with the Jem'Hadar". Per enemy (battlecruiser, Galor): live fight, catchUp(40)
 // while it is on (deferred), the fight is won, the report opens: its text is checked. Also a plain quiet catch-up still reads

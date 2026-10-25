@@ -9,6 +9,7 @@ const issues = {}, R = {};
 async function mk(b, w, h, mobile) {
   const tag = `${w}x${h}`; issues[tag] = issues[tag] || [];
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+  await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
   const p = await ctx.newPage();
   p.on('console', m => { if (['error', 'warning'].includes(m.type())) issues[tag].push(`console.${m.type()}: ${m.text()}`); });
   p.on('pageerror', e => issues[tag].push(`pageerror: ${e.message}`));
@@ -39,10 +40,12 @@ const tile = p => p.evaluate(() => { const el = document.querySelector('.stat[da
   R.manualTap = await p.evaluate(() => ({ repairManual: __T.G.lt.repairManual, sys: __T.G.lt.repairSys }));
   await p.waitForFunction(() => __T.G.lt.mode !== 'repair', null, { timeout: 30000 });
   R.afterManual = await p.evaluate(() => ({ manualXp: __T.G.prog.xpManual, autoXp: __T.G.prog.xpAuto, level: __T.G.prog.level, milestones: __T.G.prog.milestones }));
-  // automated: he's at the shield console; a fault there is picked up on his own initiative
+  // v18: he's at the shield console; a fault there waits for an order (no own-initiative repair), then he's ordered to it
   await p.evaluate(() => __T.playerOrder(() => __T.sendUse('shield', { force: true })));
   await p.waitForFunction(() => __T.G.lt.mode === 'use' && __T.G.lt.node === 'shield', null, { timeout: 30000 });
   await p.evaluate(async () => { const F = await import('/js/faults.js'); F.spawnFault('ambient', 'shields', 'low'); });
+  await sleep(3000); R.noSelfRepair = await p.evaluate(() => ({ mode: __T.G.lt.mode, fault: !!__T.G.ship.faults.shields }));   // v18: no own-initiative repair; the fault waits for an order
+  await p.evaluate(() => __T.playerOrder(() => __T.sendRepair('shields')));
   await p.waitForFunction(() => __T.G.lt.mode === 'repair', null, { timeout: 30000 });
   R.autoPickup = await p.evaluate(() => ({ repairManual: __T.G.lt.repairManual }));
   await p.waitForFunction(() => __T.G.lt.mode !== 'repair', null, { timeout: 30000 });
@@ -68,12 +71,12 @@ const tile = p => p.evaluate(() => { const el = document.querySelector('.stat[da
   await shot(p, 'excellent-floater');
   R.excellent = await p.evaluate(() => { Object.assign(__T.PROG.quality.excellent, window.__q); return { quality: __T.G.prog.quality, log: __T.G.log.slice(-6).map(e => e.msg) }; });
   // offline report with XP: back-date the save by 3 h and reload
-  await p.evaluate(async () => { const St = await import('/js/state.js'); __T.G.ship.nextFault = 120; __T.G.sp.cap.decideT = 3; __T.G.sp.ev.nextT = -1; __T.G.savedAt = Date.now() - 3 * 3600e3; localStorage.setItem(St.SAVE_KEY, JSON.stringify(__T.G)); window.__noSave = true; });
+  await p.evaluate(async () => { const St = await import('/js/state.js'); __T.G.ship.nextFault = 120; __T.G.sp.cap.decideT = 3; __T.G.sp.ev.nextT = -1; __T.G.savedAt = Date.now() - 3 * 3600e3; __T.G.prog.lastSeen = __T.G.savedAt; localStorage.setItem(St.SAVE_KEY, JSON.stringify(__T.G)); window.__noSave = true; });
   R.beforeOffline = await p.evaluate(() => ({ level: __T.G.prog.level, totalXp: __T.G.prog.totalXp, day: __T.G.prog.day }));
   await p.goto(BASE + '?debug=1');
   await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });
   await sleep(600);
-  R.offline = await p.evaluate(() => ({ shown: !document.querySelector('#report').hidden, line: [...document.querySelectorAll('#reportBody li')].map(l => l.innerText).find(t => /XP/.test(t)), level: __T.G.prog.level, totalXp: __T.G.prog.totalXp, offlineXp: __T.G.prog.xpOffline, day: __T.G.prog.day }));
+  R.offline = await p.evaluate(() => ({ shown: !!document.querySelector('#wbCard.bow:not([hidden])'), line: (document.querySelector('#wbCard.bow:not([hidden])') || {}).innerText || null,   /* v18: BACK ON WATCH, no offline XP */ level: __T.G.prog.level, totalXp: __T.G.prog.totalXp, offlineXp: __T.G.prog.xpOffline, day: __T.G.prog.day }));
   await p.evaluate(() => { const d = document.querySelector('#debug'); if (d) d.hidden = true; });
   await shot(p, 'offline-report');
   // save migration: a v1 save (no version / prog) with a veteran's stats

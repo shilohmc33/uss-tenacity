@@ -9,6 +9,7 @@ const issues = {}, R = {};
 async function mk(b, w, h, mobile) {
   const tag = `${w}x${h}`; issues[tag] = issues[tag] || [];
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+  await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
   const p = await ctx.newPage();
   p.on('console', m => { if (['error', 'warning'].includes(m.type())) issues[tag].push(`console.${m.type()}: ${m.text()}`); });
   p.on('pageerror', e => issues[tag].push(`pageerror: ${e.message}`));
@@ -126,7 +127,7 @@ const closeSheet = p => p.evaluate(() => { const c = document.querySelector('#sh
     St.resetState(); G.prog.fleetRep = 14; CL.transferOff('vardock', 'vsa'); const o = CL.arrive('science-tech'); out.newcomer = { fr: G.prog.fleetRep, opinion: G.prog.opinions[o.id], expect: Math.min(15, Math.floor(G.prog.fleetRep * 0.5)), intro: o.intro, name: o.name, species: o.species };
     // offline catch-up lands the replacement and the report lists it
     St.resetState(); CL.transferOff('mollo', 'sb375'); G.prog.crew.pending[0].at = G.ship.elapsed + 600;
-    const rep = sim.catchUp(3600); out.offline = { crewLine: rep.prog.crew.map(e => `${e.kind}: ${e.name}`), aboard: PR.crewList().length };
+    out.offline = null;   // v18: no offline catch-up (retired)
     // generator sample (rarity)
     const sp = {}; for (let i = 0; i < 2000; i++) { const g = CL.genOccupant('crewman'); sp[g.species] = (sp[g.species] || 0) + 1; } out.generator2000 = sp;
     return out;

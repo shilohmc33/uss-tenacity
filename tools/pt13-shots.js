@@ -2,7 +2,7 @@
 //   sensor   - the battlecruiser through the REAL path (startBattle('enroute'), roll pinned to her row): the "capital-class contact"
 //              sensor toast + Hale log line show first, the red-alert card is not up yet
 //   card     - ~1.4 s later: the red-alert card with the pass 13 copy (matches the real danger; no disengage option)
-//   report   - a battlecruiser fought during offline catch-up (real sim.catchUp) is the FIRST thing in the return report
+//   report   - retired in v18 (no offline catch-up / Shift Report)
 //   memorial - romance OFF: the IN MEMORIAM row of a lost partner reads '· a close friend' (no ♥, no 'partner')
 // node tools/pt13-shots.js [base] [outDir]
 const { chromium } = require('playwright-core');
@@ -18,6 +18,7 @@ const SIZES = [[390, 844, true], [844, 390, true], [1280, 800, false]];
   for (const [w, h, m] of SIZES) {
     const tag = `${w}x${h}`, errs = [];
     const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: m ? 2 : 1, isMobile: m, hasTouch: m });
+    await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
     await c.addInitScript(() => { window.__TENACITY_TEST_DEATHS = true; });
     const p = await c.newPage(); p.on('pageerror', e => errs.push(e.message)); p.on('console', x => { if (x.type() === 'error') errs.push(x.text()); });
     const shot = async name => { const f = OUT + `pt13-${name}-${tag}.png`; await p.screenshot({ path: f }); rep.shots.push(f.replace(/^.*shots\//, 'shots/')); };
@@ -25,29 +26,20 @@ const SIZES = [[390, 844, true], [844, 390, true], [1280, 800, false]];
     const ready = () => p.evaluate(async () => {
       window.__noSave = true; const G = __T.G, P = await import('/js/pacing.js'), E = await import('/js/encounters.js');
       G.prog.rank = 1; G.prog.playDays = 20; G.prog.day = Math.max(G.prog.day, 25); G.ship.hull = 100; G.ship.power = 90; G.ship.torps = 2; G.ship.faults = {}; for (const a of Object.values(G.ab)) if (a && typeof a === 'object') a.cd = 30;
-      G.sp.enc = E.freshEnc(); G.sp.lastBattleT = -1e9; P.PACE_RT.sessionT = 1e5; P.PACE_RT.idleT = 0; P.PACE_RT.offline = false;
+      G.sp.enc = E.freshEnc(); G.sp.lastBattleT = -1e9; P.PACE_RT.sessionT = 1e5; P.PACE_RT.idleT = 0;
       if (__T.MD && __T.MD.answerGentlePrompt) __T.MD.answerGentlePrompt(false); const sp = document.querySelector('#safetyPanel'); if (sp) sp.hidden = true; });
     // 1) sensor line, then 2) the card
     await boot(); await ready();
-    const s1 = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G, mr = Math.random, n0 = G.log.length; Math.random = () => 0.999; let ok; try { ok = BT.startBattle('enroute'); } finally { Math.random = mr; }
+    const s1 = await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G, mr = Math.random, n0 = G.log.length; Math.random = () => 0.999; let ok; try { ok = BT.startBattle('enroute'); if (ok === 'held' && G.sp.alert) { document.querySelectorAll('#toasts .toast').forEach(t => t.remove()); window.__n1 = G.log.length; BT.engageAlert('lt'); } } finally { Math.random = mr; }   /* every roll is a held red alert now: engage it (the sensor line / card come with the fight) */
       __T.app.paused = true;   // hold the fight still for the captures
-      const msgs = G.log.slice(n0).map(e => e.msg); return { ok, enemy: G.sp.battle && G.sp.battle.enemies[0].ship, card: !document.querySelector('#bcCard').hidden, toasts: [...document.querySelectorAll('#toasts .toast')].map(t => t.textContent), sensor: msgs.find(m => /capital-class contact/.test(m)) || null, first: /capital-class contact/.test(msgs[0] || '') }; });
+      const msgs = G.log.slice(window.__n1 ?? n0).map(e => e.msg); return { ok, enemy: G.sp.battle && G.sp.battle.enemies[0].ship, card: !document.querySelector('#bcCard').hidden, toasts: [...document.querySelectorAll('#toasts .toast')].map(t => t.textContent), sensor: msgs.find(m => /capital-class contact/.test(m)) || null, first: msgs.slice(0, 3).some(m => /capital-class contact/.test(m))   /* after the engage line */ }; });
     await sleep(250); await shot('sensor');
     ck(tag, 'sensor line first: toast + Hale log line, no card yet', s1.ok && s1.enemy === 'jh_battlecruiser' && !s1.card && s1.first && s1.toasts.some(t => /capital-class contact/.test(t)), s1);
     await sleep(1300);
     const s2 = await p.evaluate(() => { const c = document.querySelector('#bcCard'), r = c.getBoundingClientRect(); return { card: !c.hidden, text: c.innerText, fits: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, tap: parseFloat(getComputedStyle(c.querySelector('.tap')).fontSize), buttons: c.querySelectorAll('button').length }; });
     await shot('card');
     ck(tag, 'card: pass 15 copy (outguns us / break off / hull damage; no casualties, no outrunning her), fits, TAP >= 12 px, no disengage button', s2.card && /outguns us/i.test(s2.text) && /break off/i.test(s2.text) && /hull damage/i.test(s2.text) && !/casualties/i.test(s2.text) && !/outrunning/i.test(s2.text) && !/Half again/i.test(s2.text) && !/disengage/i.test(s2.text) && s2.buttons === 0 && s2.fits && s2.tap >= 12, s2);
-    // 3) the return-report headline after an offline battlecruiser
-    await boot(); await ready();
-    const s3 = await p.evaluate(async () => { const BT = await import('/js/battle.js'), SIM = await import('/js/sim.js'), HUD = await import('/js/ui/hud.js'), G = __T.G; __T.app.paused = true;
-      // pass 16 B1: an OFFLINE battlecruiser = one that started while the player was away (idle); a live-started fight is no longer resolved by the catch-up (pt16-livefight)
-      const P = await import('/js/pacing.js'); P.PACE_RT.idleT = 1e6;
-      const hid = document.querySelector('#bcCard'); const ok = BT.startBattle('enroute', { enemy: 'jh_battlecruiser' }); hid.hidden = true;
-      const r = SIM.catchUp(1800); HUD.showReport(r); const body = document.querySelector('#reportBody'), first = body.firstElementChild;
-      document.querySelector('#bcCard').hidden = true; return { ok, bc: r.bcFights, battles: r.battles, firstIsHead: !!first && first.classList.contains('bcHead'), head: first ? first.innerText : '', shown: !document.querySelector('#report').hidden }; });
-    await sleep(400); await shot('report');
-    ck(tag, 'return report: the offline battlecruiser is the headline (first element), with outcome + hull', s3.ok && s3.shown && s3.bc.length >= 1 && s3.firstIsHead && /While you were off watch: a Jem'Hadar battlecruiser/.test(s3.head) && /hull \d+%|towed/.test(s3.head), s3);
+    // 3) (retired in v18: no offline catch-up and no Shift Report, so no away battlecruiser headline)
     // 4) memorial row, romance OFF
     await boot();
     const s4 = await p.evaluate(async () => { window.__noSave = true; const G = __T.G, P = G.prog, RM = __T.RM, HUD = await import('/js/ui/hud.js'); __T.app.paused = true; RM.setOpt(false);

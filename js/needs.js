@@ -1,9 +1,9 @@
 // Crew needs phase N1 (notes/2026-10-22-crew-needs-plan.md): five needs per crewmember (0-100), a shift (alpha / beta /
 // gamma on the 16 h ship's day) and the current activity: duty | sleep | eat | fun. npc-ambient turns the activity into
 // walking (cabins, mess tables, the bar). Simulated for the whole roster in stepSim, offline too (needs floor at
-// NEEDS.offlineFloor while away). Saved in G.prog.needs[occupantId] (save v15). Mood and incidents are N2/N3.
+// (v18: no away floor - nothing runs while he is away). Saved in G.prog.needs[occupantId] (save v15). Mood and incidents are N2/N3.
 import { G } from "./state.js";
-import { NEEDS, PACE_RT } from "./pacing.js";
+import { NEEDS } from "./pacing.js";
 import { PROG } from "./progression.js";
 import { quirksOf, tickMood, hardenMood, moodlet, skillLvl } from "./mood.js";
 
@@ -43,7 +43,7 @@ export function choose(r, id) {
   if (r.argue) { if (r.argue > ((G.ship && G.ship.elapsed) || 0) && !r.unwell) return "fun"; if (!(r.argue > ((G.ship && G.ship.elapsed) || 0))) delete r.argue; }   // N3: arguing in the Mess & Bar
   if (r.unwell) { if (r.unwell > ((G.ship && G.ship.elapsed) || 0)) return n.food < T.wakeToEat ? "eat" : "sleep"; delete r.unwell; }   // N3: signed off duty (not an injury): rests in quarters
   if (A === "eat" && n.food < 99) return "eat";   // finish the meal
-  if (A === "sleep" && !PACE_RT.offline && n.food < T.wakeToEat) { r.nap = true; return "eat"; }   // P27: hunger wakes a sleeper (online)
+  if (A === "sleep" && n.food < T.wakeToEat) { r.nap = true; return "eat"; }   // P27: hunger wakes a sleeper (online)
   if (r.nap) { delete r.nap; if (!on && n.rest < T.wake) return "sleep"; }   // ...who goes back to bed after the meal
   if (on) return n.food < T.mealBreak ? "eat" : "duty";
   if (A === "sleep" && n.rest < T.wake) return "sleep";
@@ -58,7 +58,7 @@ export function tickNeeds(dt) {
   acc += dt; if (acc < NEEDS.stepS) return;
   const h = acc / 3600; acc = 0;
   const p = G.prog, C = p && p.crew; if (!C || !C.slots) return;
-  const alert = !!G.sp.battle, floor = PACE_RT.offline ? NEEDS.offlineFloor : 0, ct = comfortTarget(), D = NEEDS.decay, Gn = NEEDS.gain;
+  const alert = !!G.sp.battle, floor = 0, ct = comfortTarget(), D = NEEDS.decay, Gn = NEEDS.gain;
   const inj = new Set(((p.med && p.med.inj) || []).map(x => x.id));
   for (const id of Object.values(C.slots)) {
     if (!id || !C.occ[id] || inj.has(id)) continue;   // sickbay: needs on hold

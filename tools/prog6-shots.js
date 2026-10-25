@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Progression phase 6 (crew injuries + deaths with the memo's safeguards) verification + proof shots
 // -> shots/prog6-*.png, shots/prog6-report.json.   NODE_PATH=/workspace/pwtools/node_modules node tools/prog6-shots.js [base]
 const { chromium } = require('playwright-core');

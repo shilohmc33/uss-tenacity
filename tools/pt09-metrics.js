@@ -8,7 +8,7 @@
 const { chromium } = require('playwright-core');
 const fs = require('fs');
 const { execSync } = require('child_process');
-const BASE = process.env.BASE || 'http://127.0.0.1:8811/';
+const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
 const TAG = process.env.TAG || 'before';
 const ONLY = process.env.ONLY || '';   // comma list of sections to run (lying,aside,overlap,tren,turns); empty = all
 const want = k => !ONLY || ONLY.split(',').includes(k);
@@ -46,6 +46,7 @@ async function run() {
   for (const vpn of ['phone', 'desk']) {
     const v = VPS[vpn], R = M[vpn] = {}; fs.mkdirSync(TMP + vpn, { recursive: true });
     const ctx = await browser.newContext({ viewport: { width: v.width, height: v.height }, deviceScaleFactor: v.dsf, isMobile: v.mobile, hasTouch: v.mobile });
+    await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
     const p = await ctx.newPage(); const errs = M.errors[vpn] = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
     await ctx.addInitScript({ content: `(${INIT.toString()})(${SEED})` });
     await p.goto(BASE + '?debug=1&reset=1');
@@ -57,7 +58,7 @@ async function run() {
       const dctx = document.querySelector('#deck').getContext('2d'); window.__rt = 100; __T.app.paused = true; window.__noSave = true;
       window.__frame = null;   // per-tick observer
       window.__adv = (ms, draw = true) => { const n = Math.round(ms / (1000 / 60)); for (let i = 0; i < n; i++) { const s = 1 / 60; stepSim(s); tickTren(s); tickAmbient(s); window.__rt += s; if (window.__frame) window.__frame(s); if (draw && (i % 2 === 1 || n === 1)) drawDeck(dctx, window.__rt, 2 / 60); } };
-      document.querySelectorAll('.modal:not(.hidden), .overlay:not(.hidden), #report:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      document.querySelectorAll('.modal:not(.hidden), .overlay:not(.hidden)').forEach(m => m.classList.add('hidden'));
       window.__w2 = (e, lx, ly) => { const C = window.__CAM, T = e.T; const sx = T[0] * lx + T[2] * ly + T[4], sy = T[1] * lx + T[3] * ly + T[5]; const det = C[0] * C[3] - C[1] * C[2], ux = sx - C[4], uy = sy - C[5]; return [(C[3] * ux - C[2] * uy) / det, (-C[1] * ux + C[0] * uy) / det, Math.hypot(T[2], T[3]) / Math.hypot(C[2], C[3])]; };
       // head-top row per v3 cell of the Lt's sheet (first row with >= 3 opaque px)
       const im = (await import('/js/assets.js')).IMG['lt-v3'], c = document.createElement('canvas'); c.width = im.width; c.height = im.height;

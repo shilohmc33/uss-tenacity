@@ -5,10 +5,11 @@ const { chromium } = require('playwright-core'); const BASE = process.env.BASE |
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const br = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
-  const errs = [], res = {};
+  const errs = [], net = [], res = {};
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
     const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage();
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
+    p.on('response', r => { if (r.status() >= 400) net.push(`${tag}: ${r.status()} ${r.url()}`); }); p.on('requestfailed', r => net.push(`${tag}: failed ${r.url()}`));
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
     await p.evaluate(() => { window.__noSave = true; });
     const R = res[tag] = {};
@@ -57,13 +58,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       for (const o of Object.values(C.slots)) if (o && o !== sid) N.needsOf(o).n.fun = 90;
       withR(0, () => HD.tickHolo(1)); out.self = H.busy[sid] ? H.busy[sid].prog + (H.busy[sid].self ? ' (self, free)' : '') : 'none';
       PC.PACE_RT.idleT = 1e6; for (const k of Object.keys(H.busy)) delete H.busy[k]; withR(0, () => HD.tickHolo(1)); out.selfUnseen = Object.keys(H.busy).length; PC.PACE_RT.idleT = 0;
-      // crew care
+      // crew care (v18: crew self-book the holodeck while the sim runs, as intended; clear self-bookings so the rest / captain's-call answers are the captain's)
+      const clearSelf = () => { const hb = G.prog.holo && G.prog.holo.busy; if (hb) for (const k of Object.keys(hb)) if (hb[k].self) delete hb[k]; }; clearSelf();
       const cid = C.slots['security']; out.rest = withR(0, () => [CC.orderRest(cid).ok, CC.orderRest(cid).why, CC.orderRest(C.slots.co).why]); out.restUnwell = N.needsOf(cid).unwell > t0();
       N.needsOf(id2).stress = 6; out.counsel = [CC.counsel(id2).ok, N.needsOf(id2).stress, CC.counsel(id2).why]; CC.C().counsel[id2] -= 3 * PG.PROG.dayLength; out.counselLater = CC.toolState(id2).counsel.ok;
       const s0 = N.needsOf(id2).shift; out.swap = withR(0, () => [CC.shiftSwap(id2).ok, (s0 + 1) % 3 === N.needsOf(id2).shift, CC.shiftSwap(id2).why]);
       G.sp.location = 'ds9'; G.sp.travel = null; G.sp.rep = 100; const rep0 = G.sp.rep; out.shore = withR(0, () => [CC.shoreLeave().ok, rep0 - G.sp.rep, CC.shoreLeave().why]); G.sp.location = 'patrol'; CC.tickCare(); out.shoreReset = CC.C().shoreUsed === false;
       // P31: captain's call
-      { const did = C.slots['yeoman'], dr = N.needsOf(did), cap = C.slots.co; G.prog.rank = 1; CC.C().rest = {}; CC.C().swap = {}; CC.C().deny = {}; dr.unwell = 0;
+      { clearSelf(); const did = C.slots['yeoman'], dr = N.needsOf(did), cap = C.slots.co; G.prog.rank = 1; CC.C().rest = {}; CC.C().swap = {}; CC.C().deny = {}; dr.unwell = 0;
         dr.stress = 0; for (const k of N.NEED_KEYS) dr.n[k] = 90; G.prog.opinions[cap] = 0; const pLow = CC.chance([did]);
         dr.stress = 8; dr.n[N.NEED_KEYS[0]] = 5; const pStress = CC.chance([did]); G.prog.opinions[cap] = 60; const pOp = CC.chance([did]);
         G.prog.opinions[cap] = 0; dr.stress = 0; for (const k of N.NEED_KEYS) dr.n[k] = 90;
@@ -91,5 +93,5 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       return out; });
     await c.close();
   }
-  console.log(JSON.stringify(res, null, 1)); console.log('ERRORS', errs.length, errs.slice(0, 5)); await br.close();
+  console.log(JSON.stringify(res, null, 1)); console.log('ERRORS', errs.length, errs.slice(0, 5)); console.log('FAILED REQUESTS', net.length, net.slice(0, 5)); await br.close(); process.exit(errs.length || net.length ? 1 : 0);
 })();

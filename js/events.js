@@ -7,7 +7,7 @@ import { log, toast, shipNews, fx, cheerful, cheer } from "./bus.js";
 import { spawnFault } from "./faults.js";
 import { ZONE } from "./crew.js";
 import { startBattle as _sb, battleAllowed } from "./battle.js";
-import { PACE, PACE_RT, rr, travelS, STORY } from "./pacing.js";
+import { PACE, rr, travelS, STORY } from "./pacing.js";
 import { legStory, tickStoryDock, storyLeg, storyTick, pilotTick } from "./story.js";
 import { pushMoment } from "./moments.js";   // Bigger wins #11   // E1 story events (story.js never imports events.js)
 
@@ -118,13 +118,11 @@ export function tickEvents(dt) {
   storyTick();   // E3: one 'the moment passed' line for a story step dropped at load
   pilotTick(dt);   // Bigger wins #7: the day-1 pilot story (once)
   if (act) {
-    // NEW-06: offline nobody can answer a deck task, so the bridge handles it at once (same outcome as letting it
-    // expire, without the countdown warning or the "window closed" line cluttering the shift report)
-    if (act.task && PACE_RT.offline) { resolveEvent(false); return; }
+    // v18: no offline auto-fail - a deck task's timer simply holds while the game is closed / hidden / idle-paused
     if (act.task && !SP.battle) {
       const tk = act.task;
       tk.t -= dt;
-      if (!tk.warned && tk.t <= 10 && tk.acc < tk.need && !PACE_RT.offline) {   // no "10 seconds left" noise offline
+      if (!tk.warned && tk.t <= 10 && tk.acc < tk.need) {
         tk.warned = true;
         log(`Deck task — 10 seconds left: ${tk.label}.`, "fault");
         toast(`10s left: ${DECKS[tk.deck].name} — ${NODEMAP[tk.node].name}`, "warn");

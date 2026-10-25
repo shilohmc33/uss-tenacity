@@ -91,13 +91,13 @@ export function migrateBattle14(sp) {
 const fin = (v, d, lo = -Infinity, hi = Infinity) => typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
 // returns false when the battle is beyond repair (the caller drops it: the ship simply isn't at red alert any more)
 // RA(a): a held red alert (battle.js raiseAlert). Junk drops it; a valid one keeps its roster and clocks. Never with a live battle.
-export function hardenAlert(sp, K = { holdPresent: 90, awayBreakOff: 1800 }) {
+export function hardenAlert(sp, K = { holdPresent: 90 }) {
   const A = sp && sp.alert; if (A == null) { if (sp) sp.alert = null; return true; }
   const isE = id => SHIPS[id] && SHIPS[id].side === "enemy", isA = id => SHIPS[id] && SHIPS[id].side === "ally" && id !== "tenacity", num = (v, lo, hi) => Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : lo;
   if (typeof A !== "object" || Array.isArray(A) || sp.battle || !Array.isArray(A.enemies) || !A.enemies.length || !A.enemies.every(isE) || typeof A.kind !== "string" || !/^[a-z_]{1,24}$/.test(A.kind)) { sp.alert = null; return false; }
   const m = A.mission && typeof A.mission === "object" && typeof A.mission.id === "string" ? { id: A.mission.id, lead: isA(A.mission.lead) ? A.mission.lead : null, protect: isA(A.mission.protect) ? A.mission.protect : null, failed: false } : null;
   sp.alert = { kind: A.kind, enemies: A.enemies.slice(0, SLOTS), wing: A.wing !== false, allies: (Array.isArray(A.allies) ? A.allies : []).filter(isA).slice(0, SLOTS - 1), mission: m && m.lead ? m : null,
-    soft: A.soft === true, t: num(A.t, 0, K.holdPresent), at: Number.isFinite(A.at) ? A.at : 0, away: num(A.away, 0, K.awayBreakOff) };
+    soft: A.soft === true, t: num(A.t, 0, K.holdPresent), at: Number.isFinite(A.at) ? A.at : 0 };   // v18: no away counter (an alert waits however long you're gone)
   if (sp.travel) sp.travelPaused = true;
   return true;
 }

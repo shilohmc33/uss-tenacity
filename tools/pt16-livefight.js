@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 16 B1 exploit check: does looking away during a LIVE fight beat watching it?
 // Runs the REAL battle + catch-up code headless (paused rAF, stepSim at 1/20 s, seeded Math.random per run, so every
 // mode of a run fights the same dice up to the moment the player looks away). Passive Lt (nobody repairs), present

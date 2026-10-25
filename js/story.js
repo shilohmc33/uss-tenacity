@@ -6,7 +6,7 @@
 // progression's graph).
 import { G, saveSoon } from "./state.js";
 import { addScrap, scrapList, SCRAP_MAX } from "./scrapbook.js";   // Q1 #10
-import { STORY, MOOD, isPresent, offRules, storyShare, storyPerDay, oddsWord } from "./pacing.js";
+import { STORY, MOOD, isPresent, idlePaused, storyShare, storyPerDay, oddsWord } from "./pacing.js";
 import { addHardener, nudge, opinionOf, spend, canAfford, awardXP, addr, costText } from "./progression.js";
 import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { pr, SLOTMAP } from "./roster.js";
@@ -705,7 +705,7 @@ export const storyUI = { show: null, hide: null, blocked: null, panelWhy: null }
 export function gateWhy(where = "leg") {   // P33 fix 1: follow-ups obey every gate too (the quiet-leg gap, one per DS9 visit)
   if (cur) return "open";
   if (!isPresent()) return "away";
-  if (offRules()) return "night";
+  if (idlePaused()) return "idle";
   if (G.sp.battle) return "battle";
   if (G.sp.alert) return "alert";   // RA(a): a held red alert
   if (S().fight) return "fight pending";   // P34c: no new story (voyage, dock or follow-up) while a story fight waits
@@ -743,7 +743,7 @@ export function tickStoryDock(dt) {
 export function storyLeg() {
   const s = S(); s.legsSince = Math.min(99, s.legsSince + 1);
   const ch = s.chain; if (!ch) return;
-  if (!isPresent() || offRules()) return;
+  if (!isPresent() || idlePaused()) return;
   ch.legs++;
   // P33 fix 3: expiry counts only legs where the due follow-up could have fired (all gates open; for the DS9 one, all but being docked)
   if (ch.legs >= ch.wait && EV[ch.id]) { const why = gateWhy(EV[ch.id].where[0]); if (why === null || why === "not docked" || why === "not travelling") ch.el = (ch.el | 0) + 1; }
@@ -765,7 +765,7 @@ export function pilotTick(dt) {
   const PP = STORY.pilot, ms = P().milestones || {};
   if (ms.firstRepair && !(pl.repairT >= 0)) pl.repairT = pl.t;   // fix 2: the 15 min start at the first repair (stamped in present seconds)
   if (cur) return false;
-  if (isPresent() && !offRules()) pl.t = Math.min(1e6, pl.t + numIn(dt, 0, 60, 0));
+  if (isPresent() && !idlePaused()) pl.t = Math.min(1e6, pl.t + numIn(dt, 0, 60, 0));
   if (!(pl.repairT >= 0 ? pl.t - pl.repairT >= PP.at : pl.t >= PP.fallback)) return false;   // the 30 min fallback (from the start of present play) only while no repair has happened
   if (gateWhy("pilot")) return false;
   return startStory(PILOT_ID, { where: "pilot" });
@@ -916,7 +916,7 @@ const PENDING_LINE = { story_echo: "Sensors still tracking the echo contact. The
 // until the player can see it and a fight is normally allowed: present, not under the night rules, no panel / modal / overlay open
 // (story scene, Shift Report, holo, tab lock...), travelling (not docked), out of the post-load calm, battleAllowed.
 export const FIGHTS = ["story_echo", "story_wreck"];
-export const fightReady = ctx => !cur && !G.sp.battle && !G.sp.alert && isPresent() && !offRules() && !(storyUI.blocked && storyUI.blocked()) && !!G.sp.travel && !atDS9() && battleAllowed(ctx);
+export const fightReady = ctx => !cur && !G.sp.battle && !G.sp.alert && isPresent() && !idlePaused() && !(storyUI.blocked && storyUI.blocked()) && !!G.sp.travel && !atDS9() && battleAllowed(ctx);
 function startFight(ctx) { if (!fightReady(ctx)) return false; const ok = startBattle(ctx, { enemies: ["jh_fighter"], mission: "none", soft: true });   // RA(a): present -> a held (soft) red alert
   if (ok === "held" && G.sp.alert) S().fight = null; else if (ok && G.sp.battle) { G.sp.battle.soft = true; S().fight = null; } saveSoon("story"); return !!ok; }
 // tests: every line of an event filled for a cast (blurb, all variants, labels, risks, outcomes) for the pronoun scan

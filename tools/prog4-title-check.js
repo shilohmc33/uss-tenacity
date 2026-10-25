@@ -4,11 +4,11 @@ const tag = process.argv[2];
   const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const out = {};
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
-    const p = await (await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1.2 })).newPage();
+    const p = await (await (async () => { const cx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1.2 }); await cx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; }); /* v18: skip the name prompt; no idle pause */ return cx; })()).newPage();
     const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
     await p.goto('http://127.0.0.1:8765/?reset=1');
     await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 30000 });
-    await p.evaluate(() => { window.__noSave = true; document.querySelector('#report')?.classList.remove('open'); });
+    await p.evaluate(() => { window.__noSave = true; });
     if (w === 1280) await p.click('#btnFull');
     await p.waitForTimeout(400);
     const res = {};

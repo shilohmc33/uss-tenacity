@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // NEW-06 verification: real catchUp() runs, fresh and "left mid-crisis" starts, 2 h and 3.5 h.
 // NODE_PATH=/workspace/pwtools/node_modules node tools/pt02-offline-sim.js [base] [runs] [outJson]
 const { chromium } = require('playwright-core');

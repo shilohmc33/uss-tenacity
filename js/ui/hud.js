@@ -27,9 +27,10 @@ import { BR, missionText, threatRead, alertBattle as BT_alert } from "../battle.
 import { ringBand, PACE_RT } from "../pacing.js";   // Q1
 import * as BG from "../background.js";
 import { nameDue, setName, cleanName, ltFull, ltLast, ltNamed, ltAddr, DEFAULT_LAST } from "../ltname.js";   // the player names the Lt
-import { tickWelcome, welcomeDue } from "../welcome.js";
+import { welcomeLine } from "../welcome.js";   // v18: the crew line on the BACK ON WATCH card
+import { orderUpkeep, upkeepState, UPKEEP } from "../upkeep.js";   // v18 D: the ordered UPKEEP round
 import { scrapbook, storyOpen as ST_open } from "../story.js";
-import { artKey, artReady } from "./story.js";   // Bigger wins: pictures only through the manifest (+ approved stand-ins)
+import { picImg, artKey, artReady } from "./story.js";   // Bigger wins: pictures only through the manifest (+ approved stand-ins)
 import { nextGoal, applyTab, setTab, firstWatch } from "./next.js";   // #10
 import { tickProm, promHooks, openProm } from "./promenade.js";   // #12
 import { bestMoment, markReported, MOMENT_ART, MOMENT_TAG } from "../moments.js";   // #11
@@ -304,11 +305,11 @@ export function updateHud() {
   renderCareer();
   autoModals();
   // chips
-  const bp = IN.pending(), sg = RM.pendingSignal(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck);
+  const bp = IN.pending(), sg = RM.pendingSignal(), uk = upkeepState(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck) + (uk.unlocked ? uk.active ? "U" + uk.step : "u" : "-");
   if (ck !== lastChips) {
     lastChips = ck;
     // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
-    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + upkeepChip(uk) + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
      
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;
@@ -344,7 +345,7 @@ export function updateHud() {
 }
 export function wireHud() {
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-itab],[data-rom-open],[data-beat-open],[data-plog-open],[data-node],[data-lift],[data-fix],[data-task],[data-close],[data-req],[data-fav],[data-sink],[data-kit],[data-slot],[data-spec=open],[data-board-open],[data-pin],[data-gentle]");
+    const t = e.target.closest("[data-itab],[data-rom-open],[data-beat-open],[data-plog-open],[data-node],[data-lift],[data-upkeep],[data-fix],[data-task],[data-close],[data-req],[data-fav],[data-sink],[data-kit],[data-slot],[data-spec=open],[data-board-open],[data-pin],[data-gentle]");
     if (!t) return;
     if (t.dataset.spec === "open") { openSpec(); return; }
     if (t.dataset.itab) { setTab(t.dataset.itab); return; }   // #10 the info-layout tabs
@@ -356,9 +357,10 @@ export function wireHud() {
     if (t.dataset.gentle) { MD.setGentle(t.dataset.gentle === "on"); renderCareer(true); return; }
     if (t.dataset.node) sendUse(t.dataset.node);
     else if (t.dataset.lift) sendLiftPanel();
+    else if (t.dataset.upkeep) { orderUpkeep(); lastChips = ""; renderCareer(true); }
     else if (t.dataset.req) { if (t.dataset.req === "locker") buyLocker(); renderCareer(true); }
     else if (t.dataset.fav) { callFavour(t.dataset.fav); renderCareer(true); }
-    else if (t.dataset.sink) { if (t.dataset.sink === "overhaul") doOverhaul(); else if (t.dataset.sink === "casing") buildCasing(); else if (t.dataset.sink === "maintain") G.prog.sinks.maintainOn = !G.prog.sinks.maintainOn; else if (t.dataset.sink === "trade") CB.tradeParts(); else if (t.dataset.sink === "dinner") CB.hostDinner(); renderCareer(true); }
+    else if (t.dataset.sink) { if (t.dataset.sink === "overhaul") doOverhaul(); else if (t.dataset.sink === "casing") buildCasing(); else if (t.dataset.sink === "trade") CB.tradeParts(); else if (t.dataset.sink === "dinner") CB.hostDinner(); renderCareer(true); }
     else if (t.dataset.slot) openDecor(t.dataset.slot);
     else if (t.dataset.kit) { fixKit(t.dataset.kit); renderCareer(true); }
     else if (t.dataset.fix) sendRepair(t.dataset.fix);
@@ -402,43 +404,27 @@ export function openLiftPanel() {
   list.onclick = e => { const b = e.target.closest("[data-deck]"); if (!b) return; closeLiftPanel(); if (b.dataset.deck !== G.lt.deck) rideLiftTo(b.dataset.deck); };
   $("#liftPanel").hidden = false;
 }
-export function showReport(r) {
-  // pass 16 B1: a live-started fight was on - nothing was simulated; the fight resumes live and the report waits for it
-  if (r && r.deferred) { log("Back on watch — red alert is still on. The fight held while you were away; the night crew's report waits until it's over.", "comm"); return; }
-  const fmt = s => s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.floor(s / 60)}m ${Math.floor(s % 60)}s`;
-  const d = (v, u = "") => (v >= 0 ? "+" : "") + Math.round(v) + u;
-  const vv = voyageView(), SP = G.sp;
-  const where = SP.battle ? "at red alert — the bridge has the fight" : SP.travel ? `at warp for ${DESTS[SP.travel.dest].name}` : SP.location ? `at ${DESTS[SP.location].name}` : "holding position in deep space";
-  const nB = r.battles + (r.battleWasOn ? 1 : 0);   // pass 13: a fight already on when you left counts (the headline names it too)
-  // pass 17 P4: a report deferred behind a live fight names that fight (enemy + outcome) instead of "No contact with the Jem'Hadar"
-  const LFO = { won: (a, h) => `${a} — beaten off, hull ${h}%`, disengaged: (a, h) => `${a} — T'Ren broke off and ran, hull ${h}%`, towed: a => `${a} — she crippled us; towed to Deep Space Nine` };
-  const lf = r.afterFight, lfTxt = lf ? (LFO[lf.out] || LFO.won)(lf.a.charAt(0).toUpperCase() + lf.a.slice(1), lf.hull) : "";
-  const fights = nB === 0 ? (lf ? `The fight that held the report: ${lfTxt}. No further contact while you were off watch.` : "No contact with the Jem'Hadar.")
-    : `${nB} engagement${nB === 1 ? "" : "s"} (won ${r.wins})${r.tows ? ` · towed to DS9 ×${r.tows}` : ""}.`;
-  // pass 13: a battlecruiser fought while away is the night's headline - first thing in the report
-  const BCO = { won: h => `beaten off — hull ${h}%`, towed: () => "she crippled us; the Tenacity was towed to Deep Space Nine", disengaged: h => `T'Ren broke off and ran — hull ${h}%`, ongoing: h => `still fighting her now — hull ${h}%` };
-  const bcHead = (r.bcFights || []).length ? `<div class="bcHead" role="alert"><b>⚠ While you were off watch: ${r.bcFights.length === 1 ? "a Jem'Hadar battlecruiser" : `${r.bcFights.length} Jem'Hadar battlecruisers`}</b> — ${r.bcFights.map(f => `${(BCO[f.out] || BCO.won)(f.hull)}${f.lost && f.out !== "towed" ? ` (−${f.lost}% in the fight)` : ""}`).join(" · ")}.</div>` : "";
-  // Bigger wins #11: the best moment since the last report leads, with a small painted picture; else "A quiet watch"
+// v18 D: the UPKEEP chip (after the Turbolift): locked before Lieutenant; tap = one ordered round; tap again = call it off
+function upkeepChip(u) { return `<button class="chip upk${u.active ? " on" : ""}${u.unlocked ? "" : " lock"}" data-upkeep="1" aria-label="${u.unlocked ? u.active ? "Stop the upkeep round" : "Order an upkeep round" : "Upkeep unlocks at Lieutenant"}">${u.unlocked ? u.active ? "Upkeep ■" : "Upkeep ▸" : "🔒 Upkeep"}</button>`; }
+// v18 B (no offline quests): the BACK ON WATCH card after an absence of PACE.backAfter s or more (main.js). Non-modal, docked
+// at the top of the stage: the time away, "everything held as you left it" (nothing ran while he was gone), the best moment
+// of the last session (moments.js, with its painted picture) and one crewmate's line by name (welcome.js; no opinion reward).
+export function showBackOnWatch(away) {
+  const el = $("#wbCard"); if (!el) return null;
+  { const st = $("#stage"); if (st && el.parentNode !== st) st.appendChild(el); }
+  const fmt = s => s >= 86400 ? `${Math.floor(s / 86400)}d ${Math.floor(s % 86400 / 3600)}h` : s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.max(1, Math.floor(s / 60))}m`;
   const bm = bestMoment(), mk = bm ? bm.k : "quiet"; markReported();
-  const hl = r.highlights || [], sub = bm ? "" : hl.length ? hl[0].msg : "Nothing worth waking you for.";
-  const pic = () => (bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]);
-  const rhead = `<div class="rhead m-${mk}" data-mk="${mk}"><span class="rpic"></span><div class="rtx"><small>${MOMENT_TAG[mk]}</small><b>${esc(bm ? bm.txt : "A quiet watch")}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div></div>`;
-  $("#reportBody").innerHTML = `${bcHead}${rhead}<p><b>Okafor's night-watch log for ${esc(ltNamed())}.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
-  <ul><li>Voyage: ${r.legs} leg${r.legs === 1 ? "" : "s"} completed · ${r.events} event${r.events === 1 ? "" : "s"}</li>
-  <li>${fights}${r.avoided ? ` T'Ren steered around ${r.avoided} patrol${r.avoided === 1 ? "" : "s"}.` : ""}</li>
-  <li>Night watch cleared <b>${r.crewFixes || 0}</b> fault${r.crewFixes === 1 ? "" : "s"}${r.repairs ? ` · your repairs: ${r.repairs}` : ""}${r.torpsBuilt ? ` · torpedoes replicated: ${r.torpsBuilt}` : ""}</li>
-  ${r.prog ? `<li>Lieutenant: <b>+${r.prog.xp} XP</b> watch-officer credit for the night crew's work${r.prog.to > r.prog.from ? ` · <b>level ${r.prog.from} → ${r.prog.to}</b>` : ` · level ${r.prog.to}`}${r.prog.days ? ` · ${r.prog.days} ship's day${r.prog.days === 1 ? "" : "s"} passed` : ""}${r.prog.promoted ? ` · <b>promoted to ${r.prog.promoted}</b>` : ""}</li>` : ""}
-  ${r.prog && r.prog.crew && r.prog.crew.length ? `<li>Crew: ${r.prog.crew.map(e => e.kind === "transfer" ? `${e.name} transferred to ${POSTINGS[e.posting].name}` : e.kind === "arrival" ? `${e.name} reported aboard` : e.kind === "death" ? `${e.name} was lost` : `${e.name} ${e.kind === "promotion" ? "promoted" : "reduced in rank"}`).join(" · ")}</li>` : ""}
-  ${r.rations ? `<li>${PROG.currency.name}: +${r.rations}${r.trades ? ` (incl. ${r.trades * PROG.rations.trade.rations} for ${r.trades * PROG.rations.trade.parts} surplus spares traded)` : ""}</li>` : ""}
-  ${r.maint ? `<li>Night watch used ${r.maint} surplus spare${r.maint === 1 ? "" : "s"} on preventive maintenance (standing order)</li>` : ""}
-  ${(() => { const inj = G.prog.med.inj.filter(x => x.at >= G.ship.elapsed - r.simulated - 1); return inj.length ? `<li><b>Sickbay:</b> ${inj.map(x => `${x.name} — ${x.sev === "serious" && x.state === "warning" ? `seriously injured; the ${SYSTEMS[x.sys].name} needs you (the doctor is holding them until you're back)` : x.state === "stable" ? "out of danger" : "minor injury, recovering"}`).join(" · ")}</li>` : ""; })()}
-  <li>Hull ${d(r.d.hull, "%")} · Parts ${d(r.d.parts)} · Torpedoes ${d(r.d.torps)} · Reputation ${d(r.d.rep)}</li>
-  <li>Faults awaiting you: <b>${r.faults}</b>${r.faults ? " — see DUTY." : " — the deck is clean."}</li>
-  ${G.prog.board ? `<li><b>A promotion board is waiting for you</b> — ${BD.CHAIR[G.prog.board.chair].name} convened it while you were off watch. It sits when you resume duty.</li>` : ""}${BD.specPending() ? `<li>Specialisation pick waiting (level ${G.prog.level}).</li>` : ""}</ul>
-  ${r.highlights.length ? `<p><b>Log highlights</b></p><ul>${r.highlights.map(e => `<li>SD ${e.sd} — ${e.msg.replace(/</g, "&lt;")}</li>`).join("")}</ul>` : ""}`;
-  const fillPic = () => { const sp = $("#reportBody .rpic"), k = pic(); if (!sp) return; if (k && !sp.firstChild) sp.innerHTML = `<img src="assets/story/${k}.webp" alt="">`; sp.classList.toggle("none", !sp.firstChild); };   // never a broken image: only manifest art
+  const pic = (bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]);
+  const w = welcomeLine();
+  const rhead = `<div class="rhead m-${mk}" data-mk="${mk}"><span class="rpic"></span><div class="rtx"><small>${bm ? "LAST WATCH · " + MOMENT_TAG[mk] : MOMENT_TAG[mk]}</small><b>${esc(bm ? bm.txt : "A quiet watch")}</b></div></div>`;
+  el.innerHTML = `<div class="k">BACK ON WATCH</div>${rhead}<p class="bowAway">Away <b>${fmt(away)}</b>. Everything held as you left it.</p>${w ? `<p class="bowLine">${esc(w.line)}</p>` : ""}<div class="tap">TAP TO CLOSE</div>`;
+  el.classList.add("bow"); el.dataset.away = String(Math.round(away));
+  const sp = el.querySelector(".rpic");
+  const fillPic = () => { if (!sp || !sp.isConnected) return; if (pic && !sp.firstChild && !sp.dataset.err) { const im = picImg(pic); im.addEventListener("error", () => { if (!im.isConnected) sp.dataset.err = "1"; }); sp.appendChild(im); } sp.classList.toggle("none", !sp.firstChild); };   // never a broken image: manifest art; a failed load falls back (guardImg)
   fillPic(); artReady().then(fillPic);
-  $("#report").hidden = false;
+  el.hidden = false; clearTimeout(wbTimer); wbTimer = setTimeout(() => { el.hidden = true; }, 20000);
+  if (w) log(w.line, "comm");
+  return { mk, line: w ? w.line : null, away };
 }
 // progression: flash the LT LEVEL tile on a level-up
 export function flashLevel() {
@@ -516,8 +502,8 @@ export function renderCareer(force = false) {
   setHtml("reqBox", `<h4>REQUISITIONS</h4>${o ? `<div class="req"><div>Parts locker expansion<small>capacity ${S.partsCap} → ${o.cap} spares · spending never lowers your board record</small></div><button data-req="locker" ${G.sp.rep >= o.rep ? "" : "disabled"}>${o.rep} REP</button></div>` : `<div class="req"><div>Parts locker fully expanded<small>capacity ${S.partsCap} spares</small></div></div>`}
     <div class="req"><div>Preventive overhaul<small>${ov.left ? `crew rested in ${Math.ceil(ov.left / 60)} min` : "the next fault comes 5 min later · Okafor approves"}</small></div><button data-sink="overhaul" ${ov.ok ? "" : "disabled"}>${K.overhaul.parts} PARTS</button></div>
     <div class="req"><div>Machine a torpedo casing<small>+1 torpedo (${S.torps}/${S.torpCap})</small></div><button data-sink="casing" ${casingOk() ? "" : "disabled"}>${K.casing.parts} PARTS</button></div>${kits}
-    <div class="req"><div>Trade spares to the quartermaster<small>${PROG.rations.trade.parts} parts → ${PROG.rations.trade.rations} ${PROG.currency.unit} (a poor rate — he knows you're overstocked) · he takes up to ${PROG.rations.trade.perDay} parts a ship's day — ${CB.tradeLeft()} left today${CB.tradeAutoToday() ? ` (${CB.tradeAutoToday()} went on the standing order)` : ""} · ${PROG.currency.name} ${G.prog.rations}</small></div><button data-sink="trade" ${CB.tradeOk() ? "" : "disabled"}>${PROG.rations.trade.parts} PARTS</button></div>
-    <div class="req"><div>Standing order: night-watch maintenance<small>while you're away, Okafor's crew spends spares above ${Math.round(K.maintain.above * 100)}% of the locker on preventive work (fewer faults waiting), and a full locker's surplus goes to the quartermaster at the trade-in rate${G.prog.sinks.n.maintain ? ` · ${G.prog.sinks.n.maintain} used so far` : ""}</small></div><button data-sink="maintain">${G.prog.sinks.maintainOn ? "ON" : "OFF"}</button></div>
+    <div class="req"><div>Trade spares to the quartermaster<small>${PROG.rations.trade.parts} parts → ${PROG.rations.trade.rations} ${PROG.currency.unit} (a poor rate — he knows you're overstocked) · he takes up to ${PROG.rations.trade.perDay} parts a ship's day — ${CB.tradeLeft()} left today · ${PROG.currency.name} ${G.prog.rations}</small></div><button data-sink="trade" ${CB.tradeOk() ? "" : "disabled"}>${PROG.rations.trade.parts} PARTS</button></div>
+    <div class="req"><div>Upkeep round (an order)<small>${(() => { const u = upkeepState(); return !u.unlocked ? "unlocks at Lieutenant · one tap = one round: shields → power → parts locker to " + Math.round(UPKEEP.lockerTo * 100) + "%" : u.active ? "under way — tap to call it off" : "the Lieutenant tops up shields → power → parts locker himself, once · never automatic" + (u.n ? ` · ${u.n} done` : ""); })()}</small></div><button data-upkeep="1" ${upkeepState().unlocked ? "" : "disabled"}>${upkeepState().active ? "STOP" : "UPKEEP"}</button></div>
     <p class="cnote">Reputation ${G.sp.rep} to spend · ${Math.round(G.prog.repLifetime)} earned in total · parts ${S.parts}/${S.partsCap}</p>`, force);
 }
 
@@ -567,14 +553,13 @@ function renderMedScene() {
 function renderSafetyPrompt() {
   const id = G.prog.crew.slots.doctor, o = id && G.prog.crew.occ[id], doc = o ? `Dr. ${o.short}` : "the duty medic";
   $("#safetyBody").innerHTML = `<div class="mhead"><b class="mx sh">⛨</b><div><h3>CREW SAFETY</h3><small>A choice before it matters</small></div></div>
-    <p class="mline">From day 14 of play, a seriously injured crewmate can — rarely — be lost, in one of two ways: the system sickbay needs stays down for the full 3 minutes after you've seen the alert, or ${doc} loses them on the table after the fix (a fast fix makes that unlikely). It only ever happens while you're here: the clock and any surgery pause whenever you're away, and a patient you never saw is always stabilised by the night crew and ${doc}.</p>
+    <p class="mline">From day 14 of play, a seriously injured crewmate can — rarely — be lost, in one of two ways: the system sickbay needs stays down for the full 3 minutes after you've seen the alert, or ${doc} loses them on the table after the fix (a fast fix makes that unlikely). It only ever happens while you're here: the clock and any surgery pause whenever you're away, and a patient you never saw is always stabilised by ${doc}.</p>
     <p class="mline"><b>Gentle mode</b>: if the worst happens, they are critically injured and evacuated to a hospital ship instead. Nobody is lost.</p>
     <p class="cnote">You can change this any time in CREW ▸ Crew safety.</p>
     <div class="mbtns"><button class="close" data-safety="standard">KEEP STANDARD</button><button class="close alt" data-safety="gentle">GENTLE MODE</button></div>`;
   $("#safetyPanel").hidden = false;
 }
 let wbTimer = 0;
-function showWelcome(w) { const el = $("#wbCard"); if (!el) return; { const st = $("#stage"); if (st && el.parentNode !== st) st.appendChild(el); } /* Q1b #5: docked at the top of the stage, clear of the chip / button rows */ el.innerHTML = `<div class="k">WELCOME BACK</div><p>${esc(w.line)}</p><div class="tap">TAP TO DISMISS</div>`; el.hidden = false; clearTimeout(wbTimer); wbTimer = setTimeout(() => { el.hidden = true; }, 9000); }
 function renderBgPrompt() {
   $("#bgBody").innerHTML = `<h3>ACADEMY RECORD</h3><p class="cnote">One question for your service record: which track did you take at the Academy? It's a small lean, picked once.</p>
     <div class="bgopts">${Object.entries(BG.BACKGROUNDS).map(([k, b]) => `<button class="bgopt" data-bg="${k}"><b>${b.name}</b><small>${esc(b.blurb)}</small></button>`).join("")}</div>
@@ -612,13 +597,12 @@ function wireNameForm(root, done) {
 function autoModals() {
   renderMedScene();
   if (nameAsk()) return;   // the Lt's name comes first (a new game: at the start; an older save: once on its next load)
-  const busy = !$("#namePanel").hidden || !$("#report").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden
+  const busy = !$("#namePanel").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden
     || !$("#bcCard").hidden;   // pass 15 L3: the safety prompt / board / spec / disclosure wait while the red-alert card is up (dismissed or auto-hidden after 7 s)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && MD.gentlePromptDue()) { renderSafetyPrompt(); return; }
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && RM.pendingDisc()) { openRom({ mode: "disc" }); return; }
   const anyModal = [...document.querySelectorAll(".modal")].some(m => !m.hidden);
-  if (!anyModal && !G.sp.battle && welcomeDue()) { const w = tickWelcome(); if (w) showWelcome(w); }   // Q1 #8: after RESUME DUTY, present, nothing open
-  if (!anyModal && !G.sp.battle && BG.promptDue() && PACE_RT.sessionT >= 3 && (!firstWatch() || PACE_RT.sessionT >= 120)) {   // Bigger wins #10: on a fresh first watch it waits for the first repair (or 2 min)
+  if (!anyModal && !G.sp.battle && BG.promptDue() && window.__TENACITY_SKIP_BG !== true && PACE_RT.sessionT >= 3 && (!firstWatch() || PACE_RT.sessionT >= 120)) {   // Bigger wins #10: on a fresh first watch it waits for the first repair (or 2 min)
     BG.markAsked(); renderBgPrompt(); return; }   // Q1 #9: once
   if (!busy && $("#boardPanel").hidden && BD.boardWaiting() && !G.sp.battle) openBoard();   // pass 16 B2: never mid-fight (it waits for the all-clear, like the others)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && BD.specPending() && (G.prog.specOffered || 0) < BD.specOwed() && !G.sp.battle) { G.prog.specOffered = BD.specOwed(); openSpec(); }

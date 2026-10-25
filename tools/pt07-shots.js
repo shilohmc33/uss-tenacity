@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 07 (playtest-07 narrow HOLD + minors): present-time play days, 'away never beats watching', surgery odds band + assist,
 // Orvin's post-loss line, the injury-note countdown state, the fixed phone gift picker, and unit checks for every minor.
 // -> shots/pt07-*.png + shots/pt07-report.json     NODE_PATH=/workspace/pwtools/node_modules node tools/pt07-shots.js [base]

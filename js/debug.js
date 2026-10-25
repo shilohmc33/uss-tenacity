@@ -5,8 +5,7 @@ import { startBattle, towToDS9 } from "./battle.js";
 import { foe } from "./ships.js";
 import { fireEvent, EV_POOL } from "./events.js";
 import { arriveAtDest, captainOrder } from "./voyage.js";
-import { catchUp } from "./sim.js";
-import { showReport, renderLog } from "./ui/hud.js";
+import { showBackOnWatch, renderLog } from "./ui/hud.js";
 import { DESTS } from "./data.js";
 import { DBG } from "./render/deck.js";
 import { forceStory, EV as STORY_EV } from "./story.js";
@@ -24,7 +23,7 @@ export function setupDebug(app, ui) {
     "Tow": () => towToDS9(), "Arrive": () => { if (G.sp.travel) arriveAtDest(); },
     "Depart": () => captainOrder(G.sp.location === "convoy" ? "nebula" : "convoy", "Debug order."),
     "x1": () => app.timeScale = 1, "x5": () => app.timeScale = 5, "x20": () => app.timeScale = 20,
-    "Save": () => saveGame(), "Offline 10m": () => { const r = catchUp(600); renderLog(); showReport(r); },
+    "Save": () => saveGame(), "Back on watch": () => showBackOnWatch(8 * 3600),
     "Wipe": () => { window.__noSave = true; wipeSave(); location.href = location.pathname + "?debug=1&reset=1"; },
     "Walk grid": () => { DBG.walk = !DBG.walk; },
     "Idle now": () => { __T.PACE_RT.idleT = 1e6; },

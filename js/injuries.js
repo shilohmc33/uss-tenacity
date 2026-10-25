@@ -32,7 +32,7 @@ import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, fullName, rankOf, a
 import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, SPECIES, POSTINGS, pr, Pr } from "./roster.js";
 import { SYSTEMS } from "./data.js";
-import { PACE_RT, nightActive, offRules, isPresent, presentIdle } from "./pacing.js";
+import { PACE_RT, isPresent, presentIdle } from "./pacing.js";
 import { spawnFault } from "./faults.js";
 import { transferOff, crewNote, crewCapsOk, medFx } from "./crewlife.js";
 const secs = n => `${n} second${n === 1 ? "" : "s"}`;   // pass 08 (7)
@@ -116,9 +116,9 @@ export function injure(cause, opts = {}) {
   if ((c.senior && I.seniorMinorOnly) || c.protected) sev = "minor";   // protected crew (Thelev): minor injuries only, so never a hospital transfer either
   let sys = null;
   if (sev === "serious") { sys = linkSystem(cause, opts.sys); if (!sys) sev = "minor"; }
-  const now = G.ship.elapsed, live = !PACE_RT.offline && !nightActive();
+  const now = G.ship.elapsed, live = true;
   const inj = { id: c.id, slot: c.slot, short: c.short, name: c.name, cause, what: opts.what || (cause === "battle" ? "a hit through the shields" : "a hazard"),
-    sev, sys, state: sev === "serious" ? "warning" : "recovering", at: now, pd: p.playDays, day: p.day, left: k.window, seen: live, seenT: 0, offline: !!PACE_RT.offline, ack: false, acked: false, pendT: 0, ackT: 0, away: false,
+    sev, sys, state: sev === "serious" ? "warning" : "recovering", at: now, pd: p.playDays, day: p.day, left: k.window, seen: live, seenT: 0, offline: false, ack: false, acked: false, pendT: 0, ackT: 0, away: false,
     visited: false, excellent: 0, crewSave: Math.random() < k.crewStabilise, healAt: sev === "minor" ? now + rnd(k.heal.minor) : null, crit: !!opts.crit, src: typeof opts.src === "string" ? opts.src : "" };   // pass 15: src = the enemy (battle) / hazard kind, for death attribution
   moodAll("injury", { skip: [inj.id] });   // N2
   m.inj.push(inj); m.day.n++; m.n.injuries++; m.n[sev]++; if (inj.offline) m.n.offlineInj++;
@@ -181,7 +181,7 @@ function savedFx(inj, by, away) {
 // away / offline (c): the night crew restored the system and the doctor stabilised the patient. No roll, nobody lost.
 function awaySave(inj) {
   const d = savedFx(inj, "crew", true); M().n.awaySaved = (M().n.awaySaved || 0) + 1;
-  log(`While you were away, Okafor's night crew restored the ${SYSTEMS[inj.sys].name} and ${docName(inj.id)} stabilised ${inj.short}. '${inj.short} is going to make it — I kept ${pr(P().crew.occ[inj.id] || inj, "obj")} alive for you.' (${inj.short}'s opinion +${Math.max(1, Math.round(d))})`, "good");
+  log(`While you were busy elsewhere, Okafor's team restored the ${SYSTEMS[inj.sys].name} and ${docName(inj.id)} stabilised ${inj.short}. '${inj.short} is going to make it — I kept ${pr(P().crew.occ[inj.id] || inj, "obj")} alive for you.' (${inj.short}'s opinion +${Math.max(1, Math.round(d))})`, "good");
   toast(`${inj.short} will pull through`, "good");
 }
 // live: the system is back — Dr. Orvin operates while the player watches (the outcome roll, PROG.deaths.surgery)
@@ -264,7 +264,7 @@ function die(inj, how = "expired") {
   moodAll("death", { skip: [inj.id] });   // N2: ship-wide loss, 3 ship's days
   const sl = SLOTMAP[o.slot], sd = G.ship.stardate.toFixed(1), sp = (SPECIES[o.species] || SPECIES.human).name;
   const audit = { pd: p.playDays, day: p.day, rank: p.rank, id: o.id, senior: !!sl.senior, prot: !!o.protected, fav: favourites().includes(o.id), gap: m.lastDeathPD == null ? null : p.playDays - m.lastDeathPD,
-    caps: crewCapsOk(), offline: !!PACE_RT.offline, present: isPresent(), hidden: !!(PACE_RT.hidden || (typeof document !== "undefined" && document.hidden)), idleT: Math.round(PACE_RT.idleT), ack: !!inj.ack, seen: inj.seen, seenT: Math.round(inj.seenT), ackT: Math.round(inj.ackT || 0), window: k.window - Math.max(0, inj.left), how, cause: inj.cause, src: inj.src || "", crit: !!inj.crit, injuredAt: inj.pd, gentle: gentle() };
+    caps: crewCapsOk(), offline: false, present: isPresent(), hidden: !!(PACE_RT.hidden || (typeof document !== "undefined" && document.hidden)), idleT: Math.round(PACE_RT.idleT), ack: !!inj.ack, seen: inj.seen, seenT: Math.round(inj.seenT), ackT: Math.round(inj.ackT || 0), window: k.window - Math.max(0, inj.left), how, cause: inj.cause, src: inj.src || "", crit: !!inj.crit, injuredAt: inj.pd, gentle: gentle() };
   m.audit.push(audit); if (m.audit.length > 40) m.audit.shift();
   m.inj = m.inj.filter(x => x !== inj);
   cr.slots[o.slot] = null; delete cr.occ[o.id]; crewTouch();
@@ -299,7 +299,7 @@ function memorialScene() {
   const m = M(), mp = m.memPending; if (!mp) return;
   const e = m.memorial.find(x => x.id === mp.id); if (!e) { m.memPending = null; return; }
   if (P().playDays > mp.until) { e.plaque = true; m.memPending = null; log(`The crew held a short service for ${e.short} in the mess while you were on duty elsewhere. A plaque now hangs by the viewport.`, "comm"); return; }
-  const L = G.lt; if (PACE_RT.offline || L.mode !== "use" || (L.node !== "mess" && L.node !== "bar")) return;
+  const L = G.lt; if (L.mode !== "use" || (L.node !== "mess" && L.node !== "bar")) return;
   if (G.ship.elapsed < (mp.notBefore || 0)) return;   // pass 06 m1: never the same second as the death
   m.memPending = null; e.plaque = true; e.attended = true;
   log(`Mess & Bar — a service for ${e.name}. Captain T'Ren: '${e.short} performed ${pr(e, "pos")} duties with precision and without complaint for as long as ${pr(e)} served. That is the whole of what we ask, and ${pr(e)} gave it.'`, "comm");
@@ -314,11 +314,11 @@ function memorialScene() {
   const avg = friends.length ? tot / friends.length : 0;
   log(`You were there. ${friends.length} of ${e.short}'s friends noticed${avg >= 0.05 && !e.partner ? ` (opinion +${avg.toFixed(1)} each on average)` : ""}.`, "comm");
 }
-// ---- per-step tick (stepSim; runs offline too) ----
+// ---- per-step tick (stepSim) ----
 export function tickMed(dt) {
   const p = P(); if (!p || !p.crew || !K().enabled) return;
   const m = M(), k = K(), now = G.ship.elapsed, L = G.lt; presentIdle.s = k.presentIdle;
-  const pres = isPresent(), away = PACE_RT.offline || nightActive();
+  const pres = isPresent(), away = false;   // v18: no away rules (the sim never runs while he is gone); not-present = paused
   if (pres) p.presentTotal = num0(p.presentTotal) + dt;   // pass 07: present play time (sim seconds while present; never offline / hidden / idle)
   for (const inj of m.inj.slice()) {
     if (!p.crew.occ[inj.id]) { m.inj = m.inj.filter(x => x !== inj); crewTouch(); continue; }   // transferred / gone
@@ -361,7 +361,7 @@ export function tickMed(dt) {
     } else if (inj.healAt != null && now >= inj.healAt) heal(inj, inj.sev === "serious" ? "a little slower on the stairs, but whole" : "");
   }
   memorialScene();
-  if (!m.asked && !PACE_RT.offline) { m.asked = true; log("Crew safety: standard. If you'd rather nobody aboard is ever lost, switch on Gentle mode in CREW ▸ Crew safety (any time).", "comm"); }
+  if (!m.asked) { m.asked = true; log("Crew safety: standard. If you'd rather nobody aboard is ever lost, switch on Gentle mode in CREW ▸ Crew safety (any time).", "comm"); }
 }
 // pass 06 m5: the one-time Crew safety prompt, from play day 12 (before deaths are possible on day 14); UI shows it while due
 export const gentlePromptDue = () => K().enabled && !M().prompt12 && P().playDays >= K().gentlePromptAt && isPresent();
@@ -376,13 +376,13 @@ hooks.shipHit = hooks.shipHit || [];
 hooks.hazard = hooks.hazard || [];
 hooks.shipHit.push(({ sys, hit }) => {
   const B = G.sp.battle, I = K().injury; if (!B) return;
-  if ((B.injN || 0) >= I.perBattle || Math.random() >= I.battleHit * (offRules() ? I.nightMult : 1)) return;
+  if ((B.injN || 0) >= I.perBattle || Math.random() >= I.battleHit) return;
   const crit = Object.values(G.ship.faults).some(f => f.sev === "crit");
   const where = sys ? SYSTEMS[sys].deck : pick(["engineering", "bridge", "berthing", "medical", "lounge"]);
   if (injure("battle", { deck: where, sys, crit, ...(B.soft ? { sev: "minor" } : {}), src: (B.enemies && B.enemies[0] && B.enemies[0].ship) || "", what: `${hit || "a hit"} that came through the shields on the ${where === "engineering" ? "engineering deck" : where}` })) B.injN = (B.injN || 0) + 1;
 });
 hooks.hazard.push(({ kind, sys, bonus }) => {
-  const I = K().injury; if (Math.random() >= I.hazard * (bonus ? I.hazardBonusMult : 1) * (offRules() ? I.nightMult : 1)) return;
+  const I = K().injury; if (Math.random() >= I.hazard * (bonus ? I.hazardBonusMult : 1)) return;
   injure("hazard", { deck: sys ? SYSTEMS[sys].deck : null, sys, src: String(kind || ""), what: kind === "storm" ? "the subspace shear" : kind === "hulk" ? "the intruder loose in the systems" : "a hazard" });
 });
 hooks.repair.push((tier, sev, manual, sysId) => {

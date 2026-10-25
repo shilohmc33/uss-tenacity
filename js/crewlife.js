@@ -9,7 +9,6 @@ import { log, toast, fx } from "./bus.js";
 import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, rankOf, fullName, perkFx, spend, canAfford, addr, costText, computeReadiness, giftShare, romanceCap } from "./progression.js";
 import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, SPECIES, TAGS, TAG_KEYS, POSTINGS, LADDERS, DEPTS, pr, Pr, prFill } from "./roster.js";
-import { PACE_RT, nightActive } from "./pacing.js";
 
 const P = () => G.prog;
 const C = () => G.prog.crew;
@@ -167,21 +166,8 @@ export function introDone(id) {
 }
 export function tickCrew(dt) {
   const cr = C(); if (!cr) return;
-  nightMaintenance(dt);
   if (!cr.pending.length) return;
   for (let i = cr.pending.length - 1; i >= 0; i--) if (G.ship.elapsed >= cr.pending[i].at) { const pe = cr.pending.splice(i, 1)[0]; arrive(pe.slot); }
-}
-// Standing order (parts sink while away): when the locker is above PROG.sinks.maintain.above of its cap, the night
-// crew spends one surplus part every `every` s on preventive maintenance, pushing the next ambient fault back a little.
-export function nightMaintenance(dt) {
-  const K = PROG.sinks.maintain, p = P(), S = G.ship;
-  if (!K || !p.sinks.maintainOn || !nightActive() || G.sp.battle) { p.sinks.maintT = 0; return; }
-  if (S.parts <= Math.ceil(S.partsCap * K.above)) return;
-  p.sinks.maintT = (p.sinks.maintT || 0) + dt;
-  if (p.sinks.maintT < K.every) return;
-  p.sinks.maintT = 0;
-  spend({ parts: 1 }, "maintain");
-  if ((S.nextFault || 0) < K.maxAhead) S.nextFault = (S.nextFault || 0) + K.delay;
 }
 // DEATHS (phase 6, js/injuries.js): never before day 14 / Lt, battle or hazard only, injured-first warning, seniors +
 // 2 favourites protected, gentle mode, max 1 per PROG.deaths.gap days of play. injuries.js fills medFx (no import cycle).
@@ -225,15 +211,13 @@ perkFx.readiness = () => perkState().readiness;
 perkFx.callup = () => perkState().callup;
 perkFx.excellent = () => (G.ship.elapsed < (P().fav.fx.calUntil || 0) ? PROG.favourFx.calibration : 0);
 perkFx.repairSpeed = () => { const f = PROG.favours.find(x => x.id === "dcteam"); return G.ship.elapsed < (P().fav.fx.dcUntil || 0) ? 1 + f.repair : 1; };
-// DS9 resupply interval multiplier (quartermaster perk; priority dock favour) and the night crew loaner
+// DS9 resupply interval multiplier (quartermaster perk; priority dock favour)
 export function ds9Mult() {
   const fx2 = P().fav.fx; let m = 1;
   if (perkState().quartermaster) m *= PROG.fleet.perks.quartermaster.ds9Every / 15;
   if (fx2.dock === "active") m *= PROG.favourFx.dockMult;
   return m;
 }
-export const nightFixMult = () => (PACE_RT.offline && P().fav.fx.loaner ? PROG.favourFx.loanerMult : 1);
-export function endOffline(seconds) { if (seconds >= 600 && P().fav.fx.loaner) { P().fav.fx.loaner = false; log("The Starbase 375 loaner team signs off — Okafor's night crew is on its own again.", "comm"); } }
 export function onDock() {
   const f = P().fav; f.docks = (f.docks || 0) + 1;
   if (f.fx.dock === "pending") { f.fx.dock = "active"; log("DS9 ops waves the Tenacity into a priority slot — the quartermaster's pallets come twice as fast.", "good"); }
@@ -293,7 +277,6 @@ export function callFavour(id) {
   if (f.cd === "rank") p.fav.used[id] = p.rank;
   let what = "";
   if (id === "shipment") { const n = st.n; if (G.sp.location === "ds9" && !G.sp.travel) { S.parts += n; what = `+${n} parts beamed over from the DS9 dock`; } else { p.fav.fx.shipment = (p.fav.fx.shipment || 0) + n; what = `+${n} parts waiting at the next DS9 dock`; } }
-  else if (id === "loaner") { p.fav.fx.loaner = true; what = "a loaner team joins Okafor's night crew for your next offline stretch"; }
   else if (id === "dock") { p.fav.fx.dock = G.sp.location === "ds9" && !G.sp.travel ? "active" : "pending"; what = "a priority slot at DS9 (resupply twice as fast)"; }
   else if (id === "intel") { G.sp.preScanned = true; what = "the next hostile's shield frequencies"; }
   else if (id === "ordnance") { const got = st.n; S.torps += got; what = `+${got} torpedo${got === 1 ? "" : "es"}, no questions asked`; }

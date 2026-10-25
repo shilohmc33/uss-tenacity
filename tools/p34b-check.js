@@ -18,14 +18,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       return { px: parseFloat(getComputedStyle(s).fontSize), fits: r.left >= b.left - 0.5 && r.right <= b.right + 0.5 && r.top >= b.top - 0.5 && r.bottom <= b.bottom + 0.5 && s.scrollWidth <= s.clientWidth + 1, vis: b.bottom <= innerHeight + 0.5 || getComputedStyle(s.closest('.stc').parentElement).overflowY !== 'visible', t: s.textContent }; })) };
     if (tag === '844x390') await p.screenshot({ path: OUT + 'p34b-odds-844x390.png' });
     ok(res[tag].odds.length >= 3 && res[tag].odds.every(o => o.px >= (tag === '844x390' ? 12 : 11) && o.fits && o.vis), `odds line ${tag} ` + JSON.stringify(res[tag].odds));
-    // pending fight across an offline reload
+    // pending fight across a reload (v18: nothing runs while closed)
     await p.evaluate(() => { __T.ST.closeStory(); const G = __T.G; G.sp.battle = null; G.sp.alert = null; G.prog.story.fight = 'story_wreck'; G.sp.travel = { dest: 'convoy', t: 10, dur: 3000 }; G.sp.location = 'convoy'; G.sp.travelPaused = false; G.sp.lastBattleT = -1e9;
       window.__noSave = false; __T.saveGame(); const k = 'tenacity.save.v1', s = JSON.parse(localStorage.getItem(k)); s.savedAt -= 120000; localStorage.setItem(k, JSON.stringify(s)); window.__noSave = true; });
-    await boot('');
-    const st = () => p.evaluate(() => ({ report: !document.querySelector('#report').hidden, fight: __T.G.prog.story.fight, battle: !!__T.G.sp.battle, open: [...document.querySelectorAll('.modal')].filter(m => !m.hidden).map(m => m.id) }));
+    await boot(''); await p.evaluate(() => { document.querySelector('#plogPanel').hidden = false; });   // v18: no Shift Report on return; a panel stands in for 'something open'
+    const st = () => p.evaluate(() => ({ report: !document.querySelector('#plogPanel').hidden, fight: __T.G.prog.story.fight, battle: !!__T.G.sp.battle, open: [...document.querySelectorAll('.modal')].filter(m => !m.hidden).map(m => m.id) }));
     const R = res[tag].reload = { load: await st() };
     await p.evaluate(() => { __T.PACE_RT.sessionT = 1e6; __T.G.sp.lastBattleT = -1e9; }); await sleep(1500); R.calmOver = await st();
-    await p.click('#report button[data-close="report"]'); await sleep(300);
+    await p.evaluate(() => { document.querySelector('#plogPanel').hidden = true; }); await sleep(300);
     R.afterResume0 = await st(); await p.evaluate(() => { document.querySelectorAll('.modal').forEach(m => { if (m.id !== 'report') m.hidden = true; }); __T.PACE_RT.sessionT = 1e6; }); await sleep(1500);
     R.afterResume = await p.evaluate(() => ({ fight: __T.G.prog.story.fight, battle: __T.G.sp.battle && { ctx: __T.G.sp.battle.ctx, soft: __T.G.sp.battle.soft }, log: (document.querySelector('#log') || document.body).textContent.includes('still waiting for you') }));
     R.afterResume.alert = await p.evaluate(() => __T.G.sp.alert && { kind: __T.G.sp.alert.kind, soft: __T.G.sp.alert.soft });   // RA(a): it comes up as a held (soft) red alert

@@ -8,7 +8,6 @@ import { PROG, hooks, spend, canAfford, costText, cabinFx, earnRations, addr, cr
 import { DECKS, DW, DH } from "./data.js";
 import { rectGrid, sampleMask, snapToFloor } from "./path.js";
 import { IMG } from "./assets.js";
-import { nightActive } from "./pacing.js";
 import { CABIN_TIERS, CABIN_ORDER, DECOR_ITEMS, DECOR, SLOT_NAMES } from "./cabin-data.js";
 
 const P = () => G.prog, C = () => G.prog.cabin;
@@ -200,19 +199,17 @@ export function hostDinner() {
 
 // ---------------- trade-in: spares -> rations (poor rate) ----------------
 const tradeDay = () => { const s = P().sinks; if (!s.trade || s.trade.day !== P().day) s.trade = { day: P().day, parts: 0 }; return s.trade; };
-export const tradeAutoToday = () => tradeDay().auto || 0;
 export const tradeLeft = () => Math.max(0, PROG.rations.trade.perDay - tradeDay().parts);
 export const tradeOk = () => canAfford({ parts: PROG.rations.trade.parts }) && tradeLeft() >= PROG.rations.trade.parts;
-export function tradeParts(quiet = false) {
+export function tradeParts() {
   const T = PROG.rations.trade; if (!tradeOk() || !spend({ parts: T.parts }, "trade")) return false;
-  tradeDay().parts += T.parts; if (quiet) tradeDay().auto = (tradeDay().auto || 0) + T.parts;   // pt04 m6: the standing order shares the 120/day cap
+  tradeDay().parts += T.parts;
   earnRations(T.rations, "trade");
-  if (!quiet) { log(`Traded ${T.parts} spare parts to the quartermaster for ${T.rations} ${PROG.currency.unit}. He drives a hard bargain.`, "comm"); toast(`−${T.parts} parts · +${T.rations} ${PROG.currency.unit}`, "good"); }
+  log(`Traded ${T.parts} spare parts to the quartermaster for ${T.rations} ${PROG.currency.unit}. He drives a hard bargain.`, "comm"); toast(`−${T.parts} parts · +${T.rations} ${PROG.currency.unit}`, "good");
   return true;
 }
 
 // ---------------- per step ----------------
-let tradeAcc = 0;
 export function tickCabin(dt) {
   const L = G.lt, S = G.ship, c = C();
   if (c.tier !== tierIdFor(P().rank)) moveQuarters();          // promotion (or a migrated save) -> right tier
@@ -224,11 +221,6 @@ export function tickCabin(dt) {
       if (!c.refreshedNoted || c.refreshedNoted < S.elapsed - 600) { c.refreshedNoted = S.elapsed; fx("floater", { x: L.x, y: L.y - 0.2, text: "REFRESHED", color: "#9ff0e0", life: 2 }); log(`The ${addr()} wakes in his own rack, properly rested. (Refreshed: energy drains slower for a while.)`, "comm"); }
     }
   }
-  // standing order: with the locker full while away, surplus spares go to the quartermaster at the trade-in rate
-  if (P().sinks.maintainOn && nightActive() && S.parts >= S.partsCap) {
-    tradeAcc += dt;
-    if (tradeAcc >= PROG.rations.autoTradeEvery) { tradeAcc = 0; if (tradeParts(true)) P().sinks.n.autoTrade = (P().sinks.n.autoTrade || 0) + 1; }
-  } else tradeAcc = 0;
 }
 
 // ---------------- drawing (render/deck.js calls this on the quarters deck) ----------------

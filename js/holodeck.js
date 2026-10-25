@@ -5,9 +5,9 @@
 // Diminishing returns: skill XP halves on each repeat in a ship's day; buffs don't stack (newest replaces); one booking per
 // person at a time; Risa once per 5 ship's days per person. Holonovel addicts: x1.5 novel effect, >2 sessions a day = overuse
 // (late to post: a minor slip; the novel's mood halves for 2 days). Crew also use it on their own, free, cheap programs only,
-// one self-booked slot at a time, and only while the ship is seen (!offRules()).
+// one self-booked slot at a time, and only while the sim runs (v18: never while he is away).
 import { G } from "./state.js";
-import { HOLO, MOOD, offRules } from "./pacing.js";
+import { HOLO, MOOD } from "./pacing.js";
 import { PROG, addHardener, nudge, opinionOf, spend, canAfford, addr } from "./progression.js";
 import { SLOTMAP } from "./roster.js";
 import { log, toast } from "./bus.js";
@@ -177,7 +177,7 @@ export function book(pid, lead = "lt", paid = true) {
 export function tickHolo(h) {
   const S = H(), t = now();
   for (const id of Object.keys(S.busy)) if (!(S.busy[id].endT > t)) delete S.busy[id];
-  if (offRules() || G.sp.battle || Object.values(S.busy).some(b => b.self)) return;
+  if (G.sp.battle || Object.values(S.busy).some(b => b.self)) return;
   if (Math.random() >= HOLO.crewPerHour * h) return;
   const sh = shiftNow(), inj = injured();
   const c = aboard().filter(id => { const r = needsOf(id); return !inj.has(id) && !isHolo(id) && r.shift !== sh && !(r.unwell > t) && !(r.argue > t) && (r.n.fun < 35 || (r.stress || 0) > 2) && r.act !== "sleep"; });

@@ -9,7 +9,7 @@ import { DECKS, NODEMAP, HEAD_Y } from "./data.js";
 import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, awardXP, taskMult, taskDone, nudge, crewList, opinionOf, addr } from "./progression.js";
 import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
-import { PACE, PACE_RT, nightActive, isPresent } from "./pacing.js";
+import { PACE, PACE_RT, isPresent } from "./pacing.js";
 import { resolveIncident, expireIncident, checkIncident } from "./incidents.js";
 
 const P = () => G.prog;
@@ -60,7 +60,7 @@ const remember = key => { const r = recentOf(); r.push(key); while (r.length > (
 export const activeJob = () => { const j = J().active; return j && NODEMAP[j.node] ? j : null; };
 function quiet() {
   const S = G.ship;
-  return !PACE_RT.offline && !nightActive() && !G.sp.battle && !G.sp.alert && !Object.keys(S.faults).length && !(G.sp.ev.active && G.sp.ev.active.task) && !G.lt.lift;
+  return !G.sp.battle && !G.sp.alert && !Object.keys(S.faults).length && !(G.sp.ev.active && G.sp.ev.active.task) && !G.lt.lift;
 }
 const freeCrew = deck => crewList().filter(c => c.deck === deck && !c.senior && !(G.prog.med && G.prog.med.inj.some(x => x.id === c.id)));
 function spawnChain() {
@@ -93,8 +93,8 @@ export function tickJobs(dt) {
   if (a) {
     if (G.sp.battle || G.sp.alert) return;   // Q1 #6 / RA(a): parked during a battle (clock paused, off the pill and the deck); resumes after
     if (a.kind === "incident" && !checkIncident(a)) { j.active = null; j.next = rr(GAP()); return; }   // P29b: they left the ship
-    if (a.kind === "incident" && (PACE_RT.offline || !isPresent())) return;   // P29 #4: frozen while the player is away; the timer resumes when he is back
-    if (PACE_RT.offline) { j.active = null; j.next = rr(GAP()); return; }   // errands don't survive a break
+    if (a.kind === "incident" && !isPresent()) return;   // P29 #4: frozen while the player is away; the timer resumes when he is back
+    // v18: an errand is never dropped for a break - its timer holds while the game is closed / hidden / idle-paused
     a.t -= dt;
     if (L.deck === a.deck && !L.lift && L.mode === "use" && L.node === a.node) {
       a.acc += dt * taskMult();

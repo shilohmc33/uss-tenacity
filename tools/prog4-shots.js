@@ -9,6 +9,7 @@ const issues = {}, R = {};
 async function mk(b, w, h, mobile) {
   const tag = `${w}x${h}`; issues[tag] = issues[tag] || [];
   const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+  await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
   const p = await ctx.newPage();
   p.on('console', m => { if (['error', 'warning'].includes(m.type())) issues[tag].push(`console.${m.type()}: ${m.text()}`); });
   p.on('pageerror', e => issues[tag].push(`pageerror: ${e.message}`));
@@ -122,7 +123,7 @@ const PLAN = {
     St.resetState(); G.prog.rank = 1; G.prog.rations = 500; CB.applyTier(); const o0 = {}; for (const c of PR.crewList()) o0[c.id] = Math.round(PR.opinionOf(c.id));
     const dn = CB.hostDinner(); out.dinner = { ok: !!dn, rations: G.prog.rations, again: CB.dinnerState(), log: G.log.slice(-1)[0].msg };
     // offline: auto-trade with a full locker + standing order on, and rack rest offline is off by config
-    St.resetState(); G.prog.sinks.maintainOn = true; G.ship.parts = G.ship.partsCap; const sim = await import('/js/sim.js'); const rep = sim.catchUp(4 * 3600); out.offline = { trades: rep.trades, rations: rep.rations, parts: G.ship.parts, cap: G.ship.partsCap };
+    out.offline = null;   // v18: no offline catch-up / auto-trade (retired)
     St.resetState();
     return out;
   });

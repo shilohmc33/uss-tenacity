@@ -36,8 +36,6 @@ export const PACE = {
   sessionCalm: 600,                // no battle in the first 10 minutes of a session
   battleGap: 1200,                 // live: at least 20 minutes between battles
   enrouteChancePerLeg: 0.05,       // chance of an ambush somewhere along any warp leg
-  idleBattlesPerHour: 2,           // offline / idle: hard cap on battles in any rolling hour
-  idleBattleGap: 1800,             //   ... and at least 30 minutes between them
   // --- encounter table (js/encounters.js): WHICH enemy a random battle brings. Weights are relative odds among the
   //     types whose gates are open; story contexts (defector, shadow) and forced/debug fights skip the table.
   encounter: {
@@ -104,17 +102,10 @@ export const PACE = {
   faultEvery: [300, 540],          // ambient fault cadence (5-9 minutes)
   critKnockOnS: travelS(150),      // pass 18: an open CRIT strains a random LOW fault to MEDIUM every this many s (was 150; x TRAVEL_SCALE)
   coolantHullDrain: 0.03,          // hull %/s lost to an impairing coolant leak out of battle (was 0.08; battle stays 0.45)
-  // --- night-shift crew (runs while the player is away: offline catch-up, or no input for idleAfter s) ---
-  idleAfter: 180,                  // seconds without input before the night crew takes the deck
-  nightFix: { low: 240, med: 600, critToMed: 900 },   // seconds of work per fault (one at a time); crit gets stabilised to MED
-  nightMedParts: 1,                // MED fixes use this many spares when the locker has them (else twice as slow)
-  powerFloor: 25,                  // night crew keeps main power at or above this out of battle (hard floor, re-applied after every step)
-  powerFloorBattle: 25,            //   ... and this during a fight (was 15; playtest-02 saw 7% because post-step drains weren't re-floored)
-  nightFaultCap: 3,                // night crew: no new ambient faults while this many are open; catch-up hands over at most this many
-  offlineHullFloor: 30,            // offline catch-up: damage control never lets the hull fall below this (no 5% craters while away)
+  // --- idle pause (no offline quests, v18): no input for idleAfter s pauses the whole sim behind a 'tap to resume' overlay ---
+  idleAfter: 180,                  // seconds without input before the game pauses (main.js frame; nothing runs while paused)
+  backAfter: 1800,                 // an absence (closed / hidden) of this many real seconds or more opens the BACK ON WATCH card
   livePowerTrickle: 1.2,           // live play: emergency reserve trickle (power/s) whenever power < 10 and no battle
-  offlineEnergyTarget: 70,         // the Lt is off watch while away: his energy drifts toward this
-  offlineMaxSim: 8 * 3600,         // catch-up simulates at most this much time away
   // --- the Lieutenant's energy (per real second at x1, out of battle; battles multiply by ltDrainBattle) ---
   // playtest-02: the old rates (station 0.245/s, repair 0.49/s, walk 0.175/s) emptied a full bar in ~7-9 min of play.
   // These give ~36 min from full to empty (fumes at ~31 min) at a console or in a typical active mix (see tools/pt02-energy-sim.js).
@@ -125,27 +116,23 @@ export const PACE = {
 };
 // Crew needs N1 (notes/2026-10-22-crew-needs-plan.md): per real hour; a ship's day is 16 h (PROG.dayLength), 3 shifts of ~5.3 h
 export const NEEDS = {
-  stepS: 10,                                   // sim seconds per needs update (cheap; offline catch-up too)
+  stepS: 10,                                   // sim seconds per needs update (cheap)
   decay: { rest: 6, food: 9, fun: 4, social: 2 },
   gain: { sleep: 22, eat: 600, fun: 40, socialGroup: 20, chat: 10 },   // eat: about 6 min from hungry to full
   th: { sleep: 40, wake: 95, eat: 45, wakeToEat: 15, mealBreak: 20, fun: 35, funDone: 90 },
   comfort: { base: 65, docked: 25, perFault: 5, faultMax: 20, lowHull: 15, lowHullAt: 50, alert: 10, rate: 10 },
-  offlineFloor: 30,                            // away: crew look after themselves (nobody below Strained)
   start: { rest: 85, food: 80, fun: 75, social: 70, comfort: 70 },
 };
 // runtime-only pacing state (not saved)
-export const PACE_RT = { offline: false, idleT: 0, sessionT: 0, hidden: false, liveFight: false };
+export const PACE_RT = { idleT: 0, sessionT: 0, hidden: false, liveFight: false };
 export const rr = ([a, b]) => a + Math.random() * (b - a);
-export const nightActive = () => PACE_RT.offline || PACE_RT.idleT >= PACE.idleAfter;
-// pass 16 B1: a fight that STARTED live (battle.live) stays live until it ends, whatever the player does meanwhile -
-// no offline hull floor, no night-crew patching, no x0.006 injury rate, no power floor. PACE_RT.liveFight mirrors
-// G.sp.battle.live (set by startBattle, refreshed every stepSim). The away-weighted roll itself still uses nightActive().
-export const offRules = () => nightActive() && !PACE_RT.liveFight;
+// v18: the game is idle-paused once there has been no input for PACE.idleAfter s (main.js shows the overlay, the sim stops)
+export const idlePaused = () => PACE_RT.idleT >= PACE.idleAfter && !(typeof window !== "undefined" && window.__TENACITY_NO_IDLE);   // __TENACITY_NO_IDLE: test switch for long-running shot tools (never set by the game)
 export function playerInput() { PACE_RT.idleT = 0; }
-// pass 06: the player is PRESENT when the app is visible, not in an offline catch-up, and there was input within the
+// pass 06: the player is PRESENT when the app is visible and there was input within the
 // last PROG.deaths.presentIdle s (60). Injury clocks, surgery outcomes and deaths only ever run while present.
 export const presentIdle = { s: 60 };
-export const isPresent = () => !PACE_RT.offline && !PACE_RT.hidden && !(typeof document !== "undefined" && document.hidden) && PACE_RT.idleT < presentIdle.s;
+export const isPresent = () => !PACE_RT.hidden && !(typeof document !== "undefined" && document.hidden) && PACE_RT.idleT < presentIdle.s;
 // crew needs N2: mood, moodlets, minor incidents, station efficiency, combat cooldown, skills (js/mood.js)
 export const MOOD = {
   w: { rest: 0.25, food: 0.2, fun: 0.2, social: 0.15, comfort: 0.2 },   // mood = weighted needs + moodlets (+ quirks)
@@ -227,11 +214,10 @@ export const HOLO = {
 };
 // ---- Q1 (2026-10-24) ----
 // #5 odd jobs: no repeat inside the last noRepeat labels, 3-5 min of quiet between jobs, every chainEvery-th job a 2-step
-// mini-chain with a named crewmate (oddjobs.js CHAINS). #8 welcome-back: an absence of welcomeAfter s or more earns one
-// short positive crew beat after RESUME DUTY (welcome.js). #4 threat read: T'Ren's win chance, logistic in
+// mini-chain with a named crewmate (oddjobs.js CHAINS). #8 welcome-back: since v18 the crew line rides on the BACK ON WATCH
+// card (welcome.js, PACE.backAfter; no opinion reward). #4 threat read: T'Ren's win chance, logistic in
 // ln(our strength / theirs), strength = effective hp x dps summed over every ship on a side (battle.js threatRead).
 PACE.oddjobs = { gap: [180, 300], noRepeat: 6, chainEvery: 3 };
-PACE.welcomeAfter = 8 * 3600;
 PACE.threat = { a: 2.5, b: -2.85 };   // full ship, 4 torps: fighter "likely", Galor "fair odds", 2 Galors "a long shot", battlecruiser "unlikely" (she wins ~1 in 8)
 // Q1 countdown rings (deck markers and the alert pill): the ring drains with the time left; amber at <= amber, red at <= red
 PACE.ring = { amber: 0.5, red: 0.25 };
@@ -243,8 +229,8 @@ export function oddsWord(p) {
   return { word: sc >= W.likely ? "likely" : sc >= W.fair ? "fair odds" : sc >= W.long ? "a long shot" : "unlikely", full: sc };
 }
 // RA(a) the held red alert (battle.js raiseAlert / tickAlert / engageAlert): T'Ren engages after holdPresent s of PRESENT time;
-// a non-story alert breaks off after awayBreakOff s of continuous away time (no penalty, no reward)
-PACE.alert = { holdPresent: 90, awayBreakOff: 1800,
+// v18: no break-off - away / idle / not-present time freezes the hold, and the alert waits however long the player is gone
+PACE.alert = { holdPresent: 90,
   // RA(b) damage-control calls: the first at hull or shields <= first % (after minT s of fighting), an optional second on a long fight
   // (>= longFight s) with hull < second %; the fight holds while the card is open and T'Ren's (safe) call is taken after pause s
   dc: { first: 60, second: 35, longFight: 60, minT: 8, pause: 20, epsShields: 25, epsPartial: 12, epsRegen: 0.5, powerDip: 15,

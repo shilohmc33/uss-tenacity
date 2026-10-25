@@ -9,7 +9,8 @@ export const DEFAULT_LAST = "Marlowe";   // the Starfleet default when the playe
 export const NAME_MAX = 20;
 export function cleanName(s) {
   let t = String(s == null ? "" : s).normalize("NFC").replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u2010-\u2013]/g, "-");
-  t = t.replace(/<[^>]*>?/g, "").replace(/[^\p{L}\p{M} '\-]/gu, "").replace(/\s+/g, " ").replace(/^[\s'\-]+|[\s'\-]+$/g, "");
+  t = t.replace(/<[^>]*>?/g, "").replace(/[^\p{L}\p{M} '\-]/gu, "").replace(/(^|[^\p{L}\p{M}])\p{M}+/gu, "$1").replace(/(\p{L}\p{M}{2})\p{M}+/gu, "$1")   // at most 2 combining marks per letter (none without a letter)
+    .replace(/\s+/g, " ").replace(/^[\s'\-]+|[\s'\-]+$/g, "");
   t = Array.from(t).slice(0, NAME_MAX).join("").replace(/[\s'\-]+$/g, "");
   return t;
 }

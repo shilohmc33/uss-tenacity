@@ -36,19 +36,31 @@ function setArt(frame, k, fade, fb) {   // fade: crossfade (~400 ms, css) from t
   const L = [...frame.querySelectorAll("img.sl")], on = L.find(x => x.classList.contains("on")) || L[0], off = L.find(x => x !== on);
   if (fb) frame.dataset.fb = fb; fb = frame.dataset.fb;
   if (frame.dataset.art === k) return;
-  const fail = () => { frame.dataset.err = k; if (fb && k !== fb) { frame.dataset.art = ""; frame.dataset.want = ""; setArt(frame, fb, false); } };
+  const fail = () => { frame.dataset.err = k; if (fb && k !== fb) { frame.dataset.art = ""; frame.dataset.want = ""; setArt(frame, fb, false); return; }
+    // nothing left to fall back to: no picture (the scene reads as noart), never a broken image
+    for (const i of L) { i.onerror = null; i.removeAttribute("src"); i.classList.remove("on"); } frame.dataset.art = ""; frame.dataset.want = ""; const sc = frame.closest(".storyscene") || frame.parentNode; if (sc && sc.classList) sc.classList.add("noart"); };
   if (!fade) { on.onerror = () => { if (frame.dataset.art === k) fail(); }; on.src = url(k); on.classList.add("on"); off.classList.remove("on"); frame.dataset.art = k; return; }
   frame.dataset.want = k;
   const swap = () => { if (frame.dataset.want !== k) return; off.classList.add("on"); on.classList.remove("on"); frame.dataset.art = k; };
   off.onload = swap; off.onerror = () => { if (frame.dataset.want !== k) return; frame.dataset.want = ""; frame.dataset.err = k; if (!on.complete || !on.naturalWidth) fail(); };   // keeps the shown scene (or falls back to the main one)
   if (off.getAttribute("src") === url(k) && off.complete && off.naturalWidth) swap(); else off.src = url(k);
 }
+// fix (b): the main scene's own fallback: the resolved main (when k is its _v2), else its approved stand-in (ART_FB), else none
+function mainFb(a, k) { const m = artKey(a.main); if (m && m !== k) return m; const f = ART_FB[a.main]; return f && f !== k && has(f) ? f : null; }
+// fix (b): an <img> outside the story frame (Shift Report headline, Promenade card) that fails to load swaps to its approved
+// stand-in (ART_FB, when in the manifest) once, then to no picture: the holder gets .none, never a broken image
+export function guardImg(img, k) {
+  img.onerror = () => { const f = ART_FB[k]; if (f && f !== k && has(f) && !img.dataset.fb) { img.dataset.fb = f; img.src = url(f); return; }
+    const p = img.parentNode; img.onerror = null; img.remove(); if (p && p.classList) p.classList.add("none"); };
+  return img;
+}
+export function picImg(k, alt = "") { const i = document.createElement("img"); i.alt = alt; guardImg(i, k); i.src = url(k); return i; }
 function buildFrame(m, c, E, fkey) {
   m.innerHTML = `<div class="storywrap"><div class="storyframe" data-for="${esc(fkey)}"><img class="sl on" alt="${esc(ST.titleOf(c))}"><img class="sl" alt=""><button class="storyx" data-story-close="1"></button></div><div class="storypanel"></div></div>`;
   const fr = m.querySelector(".storyframe"), a = ST.artOf(c), mk = MAN ? mainKey(a) : null;
-  m.classList.toggle("noart", !mk); if (mk) { setArt(fr, mk, false, artKey(a.main) || mk); preload(mk); }   // fb: the resolved main scene (a broken _v2 falls back to it)
+  m.classList.toggle("noart", !mk); if (mk) { setArt(fr, mk, false, mainFb(a, mk)); preload(mk); }   // fb: the resolved main scene (a broken _v2 falls back to it)
   const more = () => { for (const ch of ST.choicesOf(c)) if (!ch.safe && has(`${a.cbase}_c${ch.n}`)) preload(`${a.cbase}_c${ch.n}`); };
-  if (MAN) more(); else manP.then(() => { if (fr.isConnected && fr.dataset.for === fkey) { more(); const k = mainKey(a); m.classList.toggle("noart", !k); if (k && (!ST.current() || !ST.current().res)) setArt(fr, k, !!fr.dataset.art, artKey(a.main) || k); } });
+  if (MAN) more(); else manP.then(() => { if (fr.isConnected && fr.dataset.for === fkey) { more(); const k = mainKey(a); m.classList.toggle("noart", !k); if (k && (!ST.current() || !ST.current().res)) setArt(fr, k, !!fr.dataset.art, mainFb(a, k)); } });
   return fr;
 }
 function render() {
@@ -69,7 +81,7 @@ function render() {
 ST.storyUI.show = render;
 ST.storyUI.blocked = () => [...document.querySelectorAll(".modal")].some(m => !m.hidden);   // P34b: any panel, modal or overlay (Shift Report, holo, tab lock...) holds a saved fight
 // #7: the pilot's gate: the Shift Report, any panel / modal, or an open play-mode sheet holds it
-ST.storyUI.panelWhy = () => { const rp = document.getElementById("report"); if (rp && !rp.hidden) return "report"; if ([...document.querySelectorAll(".modal")].some(m => !m.hidden)) return "panel"; if (document.body.classList.contains("sheet-open")) return "panel"; return null; };
+ST.storyUI.panelWhy = () => { if ([...document.querySelectorAll(".modal")].some(m => !m.hidden)) return "panel"; if (document.body.classList.contains("sheet-open")) return "panel"; return null; };
 ST.storyUI.hide = () => { modal().hidden = true; document.body.classList.remove("story-open"); };
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-story-pick],[data-story-continue],[data-story-close]");

@@ -6,6 +6,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const errors = [];
   async function mk(w, h, mobile) {
     const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile });
+    await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; window.__TENACITY_SKIP_BG = true; window.__TENACITY_NO_IDLE = true; });   // v18: skip the name / Academy prompts; no idle pause in long shot runs
     if (process.env.DEATHS === '1' || process.env.DEATHS === '0') await ctx.addInitScript(on => { window.__TENACITY_TEST_DEATHS = on; }, process.env.DEATHS === '1');   // phase 6: force deaths ON/OFF (default: the shipped PROG value, ON)
     const p = await ctx.newPage();
     p.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${w}] ${m.type()}: ${m.text()}`); });
@@ -117,11 +118,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const after = await ev(p, () => ({ deck: __T.G.lt.deck, torps: __T.G.ship.torps, sd: __T.G.ship.stardate, log: __T.G.log.length }));
   res.save = { before, after, ok: before.deck === after.deck && Math.abs(before.sd - after.sd) < 1 };
   // offline catch-up: rewind savedAt
-  await ev(p, () => { __T.saveGame(); const d = JSON.parse(localStorage.getItem('tenacity.save.v1')); d.savedAt -= 20 * 60 * 1000; localStorage.setItem('tenacity.save.v1', JSON.stringify(d)); window.__noSave = true; __T.app.paused = true; });
+  await ev(p, () => { __T.saveGame(); const d = JSON.parse(localStorage.getItem('tenacity.save.v1')); d.savedAt -= 40 * 60 * 1000; d.prog.lastSeen = d.savedAt; localStorage.setItem('tenacity.save.v1', JSON.stringify(d)); window.__noSave = true; __T.app.paused = true; });
   await p.goto('http://localhost:8765/');
   await waitFor(p, () => !!window.__T && document.querySelector('#loading').classList.contains('done'));
   await sleep(500);
-  res.report = await ev(p, () => !document.querySelector('#report').hidden);
+  res.report = await ev(p, () => { const e = document.querySelector('#wbCard'); return !e.hidden && e.classList.contains('bow'); });   // v18: BACK ON WATCH (40 min away)
   await p.screenshot({ path: SH + 'phone_17_offline_shift_report.png' });
   res.scroll = await ev(p, () => ({ sh: document.documentElement.scrollHeight, ih: innerHeight }));
   // ---------- desktop ----------

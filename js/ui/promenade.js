@@ -10,7 +10,7 @@ import { toast } from "../bus.js";
 import * as CC from "../crewcare.js";
 import * as GF from "../gifts.js";
 import * as ST from "../story.js";
-import { artKey, artReady } from "./story.js";
+import { artKey, artReady, picImg } from "./story.js";
 import { openHolo } from "./holo.js";
 import { promUI } from "./next.js";
 
@@ -35,10 +35,10 @@ export function promRows() {
 }
 export function render() {
   const m = el(), k = artKey(PROM_ART);
-  m.innerHTML = `<div class="pcpic${k ? "" : " none"}">${k ? `<img src="assets/story/${k}.webp" alt="">` : ""}</div><button class="pcx" data-prom="close" aria-label="Close">✕</button>
+  m.innerHTML = `<div class="pcpic${k ? "" : " none"}"></div><button class="pcx" data-prom="close" aria-label="Close">✕</button>
     <div class="pcbody"><b class="pct">THE PROMENADE · DEEP SPACE NINE</b><p class="pcl">${PROG.currency.name}: <b>${G.prog.rations}</b> · the Promenade is open while we're docked.</p>
     <div class="pcbtns">${promRows().map(r => `<button class="pcb" data-prom="${r.k}"${r.ok ? "" : ` disabled aria-disabled="true"`}><b>${esc(r.label)} ▸</b><small>${esc(r.sub)}</small></button>`).join("")}</div></div>`;
-  m.dataset.art = k || "";
+  m.dataset.art = k || ""; if (k) m.querySelector(".pcpic").appendChild(picImg(k));   // fix (b): a failed load falls back (stand-in, then no picture)
 }
 export const promShown = () => !!$("#promCard") && !$("#promCard").hidden;
 export function openProm() { render(); el().hidden = false; artReady().then(() => { if (promShown() && el().dataset.art !== (artKey(PROM_ART) || "")) render(); }); }

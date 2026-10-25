@@ -9,7 +9,7 @@ import { G } from "./state.js";
 import { pushMoment } from "./moments.js";   // Bigger wins #11 (moments.js only calls the hoisted addHardener at load)
 import { log, toast, fx, cheerful, cheer, cheerToast } from "./bus.js";
 import { clamp } from "./util.js";
-import { PACE_RT, nightActive, TRAVEL_SCALE } from "./pacing.js";
+import { PACE_RT, TRAVEL_SCALE } from "./pacing.js";
 import { NODEMAP, HEAD_Y } from "./data.js";
 import { CREW_ROSTER, SLOTMAP, START_CREW, LADDERS, DEPTS, SPECIES, POSTINGS, PRONOUNS, pr } from "./roster.js";
 import { GIFT } from "./gift-data.js";
@@ -27,12 +27,10 @@ export const PROG = {
     chat: 3, chatCooldown: 120,                // a chat (ambient crew, the chair, the bar): 3 XP (+social points in phase 2)
     milestone: { firstRepair: 50, firstTask: 50, firstArrival: 50 },   // one-time session-1 milestones (phase 3: first repair back to 50 so L4 lands ~10 min with rested x1.25)
     rested: { mult: 1.25, first: 900 },        // rested bonus: x1.25 (manager: trimmed from 1.5) live XP in the first 15 min of each session
-    offline: { rate: 1, taper: 0.25, full: 7200 }, // per minute offline: 1/min for the first 2 h, then 0.25/min (~210 per 8 h)
   },
   // manual (player-directed) vs automated: same actions at 40% XP and 50% rep  =>  manual = 2.5x XP, 2x rep
   manual: { xp: 1.0, rep: 2.0 },
   auto: { xp: 0.7, rep: 1.0 },                 // pt04: live hands-off (app open, idle) raised 0.4 -> 0.7 so automated play lands ~6 XP/min
-  autoOffline: { xp: 0.4, rep: 1.0 },          // the Lt's own auto-repairs during an offline catch-up keep the old rate (offline stays ~1 XP/min)
   // ---- pt04: odd jobs between repairs (js/oddjobs.js): only while the ship is quiet and the player is at the controls ----
   jobs: { enabled: true, firstAt: 60, gap: [60, 100], work: [10, 16], expire: Math.round(150 * TRAVEL_SCALE) /* pass 18: 150 s x TRAVEL_SCALE (walk to the node is inside) */, xp: 17, rep: 1, opinion: 3, requestShare: 0.4 },   // gap: quiet seconds before the next job; work: s at the console; xp: manual XP (x0.7 if the Lt drifts there on his own)
   // ---- repair rewards (moved here from pacing.js) ----
@@ -247,7 +245,6 @@ export const PROG = {
       battleHit: 0.12, perBattle: 1,         // chance per hull hit (shields down) to injure someone; at most 1 per battle
       hazard: 0.40, hazardBonusMult: 0.4,   // pass 07 tune: was 0.30 (the fast-fix loss fell from ~32% to ~12%, so exposure rises to keep ~1 loss / 4 months)
          // per hazard event (ion storm shear, hulk intruder); x0.4 if the Lt rode it out at the core
-      nightMult: 0.006,                      // while the night crew has the deck (offline / idle) damage control keeps people clear: x0.006 (phase 6 final: was 0.04 -> ~19 injuries/month, mostly offline)
       maxOpen: 2, perPlayDay: 2,             // at most 2 in sickbay at once, 2 new injuries per day of play
       deckWeight: 3,                         // crew on the deck that was hit are 3x as likely to be the one hurt
       never: ["co"], seniorMinorOnly: true,  // T'Ren is never hurt; Okafor, Diallo, Hale only ever minor injuries
@@ -282,7 +279,6 @@ export const PROG = {
   },
   favours: [
     { id: "shipment", name: "Parts shipment", contact: "utopia", fr: 5, cost: { rep: 40 }, cd: 1, desc: "up to +6 parts at the next DS9 dock (charged per part)" },
-    { id: "loaner", name: "Night-crew loaner", contact: "sb375", fr: 8, cost: { rep: 30 }, cd: 1, desc: "night-crew fix times −25% for your next offline stretch" },
     { id: "dock", name: "Priority dock slot", contact: "ds9ops", fr: 12, cost: { rep: 50 }, cd: "dock", desc: "DS9 resupply twice as fast next dock" },
     { id: "intel", name: "Intel tip", contact: "intel", fr: 18, cost: { rep: 60 }, cd: 2, desc: "next battle starts pre-scanned" },
     { id: "ordnance", name: "Klingon ordnance swap", contact: "qonos", fr: 22, cost: { rep: 50 }, cd: 2, desc: "+2 torpedoes now (25 rep each)" },
@@ -297,7 +293,7 @@ export const PROG = {
     { id: "dcteam", name: "Borrow a damage-control team", who: "chief-engineer", cost: { rep: 30 }, cd: 0, dur: 900, repair: 0.3, desc: "your repairs +30% faster for 15 min" },
   ],
   favourFx: { shipmentParts: 6, shipmentMin: 2,   // shipment: delivers min(6, locker room) at 40 rep x n/6; refused below 2 spaces (pt04 m3)
-     loanerMult: 0.75, dockMult: 0.5, ordnance: 2, calibration: 0.10, calibrationDur: 24 * 3600, letter: 20 },
+     dockMult: 0.5, ordnance: 2, calibration: 0.10, calibrationDur: 24 * 3600, letter: 20 },
   // ---- rep sinks: locker expansion requisition (memo §3: 150 rep, parts cap 20 -> 25 -> 30). Spending never lowers
   // lifetime rep (readiness uses lifetime). Quarters / favours come in phase 3.
   sinks: {
@@ -306,8 +302,6 @@ export const PROG = {
     overhaul: { parts: 4, delay: 300, cd: 1800, opinion: 1 },   // preventive overhaul: next ambient fault 5 min later, Okafor +1
     casing: { parts: 3, torps: 1 },                              // hand-built torpedo casing: 3 parts -> +1 torpedo
     kit: { parts: 2, opinion: 4, perDay: 1, max: 2 },            // a crewmate's personal kit needs fixing: 2 parts -> +4 opinion
-    maintain: { above: 0.55, every: 200, delay: 20, maxAhead: 900 },  // standing order: night crew burns 1 surplus part / 200 s above 55%
-    lockerAwayFill: 0.55,   // while away / hands-off, the Lt left at the parts locker only fabricates up to 55% of the cap (was: to full, 1 part / 2.5 s all night -- the main cause of a full locker at session start) of the locker (above the 60% DS9/Earth pallet allotment) on preventive maintenance (next fault +30 s)
   },
   // ---- phase 4: currency. The display name is config (alternative: "Requisition Credits"). Held in the generic wallet
   // under the key "rations"; separate from Reputation, which stays the standing stat for promotion.
@@ -324,7 +318,6 @@ export const PROG = {
     shift: 15,                                 // a ship's day (shift) completed -- also while away
     trade: { parts: 5, rations: 2, perDay: 120 },   // trade-in: spares -> rations at a deliberately poor rate; the quartermaster takes at most 120 parts per ship's day
                                                // (uncapped, DS9/Earth pallets refilling the locker would turn into an endless ration tap)
-    autoTradeEvery: 20,                        // standing order: while away with the locker full, one trade batch per 20 s
   },
   // ---- phase 4: the Lt's Quarters (CABIN_TIERS / DECOR_ITEMS live in js/cabin-data.js) ----
   cabin: {
@@ -418,7 +411,10 @@ export function freshProg() {
     fav: { cd: {}, used: {}, fx: {} },  // phase 3: favour cooldowns (ship's day / dock count / rank) and active effects
     readyBonus: 0,                      // phase 3: readiness from a letter of recommendation (cleared on promotion)
     requests: [], reqDay: 0,            // phase 3: crewmates' kit repairs (parts sink)
-    sinks: { overhaulAt: -1e9, spent: { rep: 0, parts: 0 }, n: {}, maintainOn: true, maintT: 0 },   // phase 3: sink bookkeeping (sim + report)
+    sinks: { overhaulAt: -1e9, spent: { rep: 0, parts: 0 }, n: {} },   // phase 3: sink bookkeeping (sim + report)
+    upkeep: { order: null, n: 0 },   // v18 D: the Lt's ordered UPKEEP round (upkeep.js); never automatic
+    restT: 0,                        // rested window used (s of play, saved): only a real absence (PACE.backAfter) resets it, so a reload never restarts the bonus
+    lastSeen: 0,                     // v18: real time (ms) the player was last on watch (main.js; the BACK ON WATCH card)
     rations: PROG.rations.start, rationsLife: PROG.rations.start, rationsBy: {}, chatRR: { day: 0, n: 0 },   // phase 4: currency
     cabin: { tier: "ltjg", owned: [], placed: {}, log: [] },   // phase 4: quarters (owned decor ids, slot id -> item id)
     spec: {}, specPicks: 0, specOffered: 0,   // phase 5: focus id -> tier (1..maxTier); picks made; picks the picker has offered
@@ -597,15 +593,15 @@ export function rollQuality(level, manual, day, energy, sysId = null) {
 
 const HUSH_REPAIR = ["The repair holds. Nobody says much today.", "Clean work. Okafor signs the job card without a word.", "Back in tolerance. The deck is quiet."];
 const HUSH_PRAISE = ["{crew} notes the work in the log. Nobody makes a fuss today.", "Word of the fix gets around, quietly."];
-// ---- XP: the one entry point. src: "manual" | "auto" | "offline". Returns XP actually granted. ----
+// ---- XP: the one entry point. src: "manual" | "auto". Returns XP actually granted. ----
 export function awardXP(amount, src = "auto", why = "") {
   const p = P();
   let a = amount;
-  if (src !== "offline" && !PACE_RT.offline && PACE_RT.sessionT < PROG.xp.rested.first) a *= PROG.xp.rested.mult;   // rested bonus
+  if (PACE_RT.sessionT < PROG.xp.rested.first && num(p.restT, 0) < PROG.xp.rested.first) a *= PROG.xp.rested.mult;   // rested bonus (v18: the only reward for time away)
   const xp = Math.max(0, Math.round(a));
   if (!xp) return 0;
   p.xp += xp; p.totalXp += xp;
-  if (src === "manual") p.xpManual += xp; else if (src === "offline") p.xpOffline += xp; else p.xpAuto += xp;
+  if (src === "manual") p.xpManual += xp; else p.xpAuto += xp;
   for (let guard = 0; guard < 50 && p.xp >= xpToNext(p.level); guard++) { p.xp -= xpToNext(p.level); levelUp(); }
   return xp;
 }
@@ -621,7 +617,7 @@ function levelUp() {
 // ---- repair outcome (called by crew.finishRepair): quality, XP, rep, parts. Pure numbers + flavour line. ----
 export function repairOutcome(sev, manual, energy, sysId = null, resp = 0) {
   const p = P(), Q = PROG.quality, tier = rollQuality(p.level, manual, p.day, energy, sysId), T = Q.tier[tier];
-  const m = manual ? PROG.manual : PACE_RT.offline ? PROG.autoOffline : PROG.auto;
+  const m = manual ? PROG.manual : PROG.auto;
   const xp = (PROG.xp.repair[sev] || 10) * m.xp * T.xp;
   const rep = Math.max(0, Math.round((PROG.repairRep[sev] || 1) * m.rep) + T.rep);
   const parts = Math.max(0, (PROG.repairParts[sev] || 0) + T.parts + (sev !== "low" && T.partsMedCrit ? T.partsMedCrit : 0));
@@ -645,30 +641,18 @@ export function repairOutcome(sev, manual, energy, sysId = null, resp = 0) {
   const quiet = !cheerful() && (tier === "good" || tier === "excellent"), qline = quiet ? HUSH_REPAIR[Math.floor(Math.random() * HUSH_REPAIR.length)] : lines[Math.floor(Math.random() * lines.length)];
   return { tier, xp, rep, parts, rations, line: qline.replace(/Lieutenant/g, addr()), reopen: tier === "marginal", src: manual ? "manual" : "auto" };
 }
-// live idle (app open, hands off): the night crew's fixes credit the Lt at the AUTO rate (offline XP is time-based)
-export function nightCredit(sev, stabilised) {
-  if (PACE_RT.offline) return 0;
-  return awardXP((stabilised ? PROG.xp.repair.low : (PROG.xp.repair[sev] || 10)) * PROG.auto.xp, "auto", "night");
-}
-// offline "watch-officer XP" for the night crew's work: 1/min for the first 2 h, then 0.25/min
-export function offlineXP(seconds) {
-  const o = PROG.xp.offline, full = Math.min(seconds, o.full), rest = Math.max(0, seconds - o.full);
-  return awardXP(full / 60 * o.rate + rest / 60 * o.taper, "offline", "watch");
-}
-// station work trickle: 1 XP / 10 s while he's player-directed and the player is present; 40% when hands-off (idle)
+// station work trickle: 1 XP / 10 s at a working console (the sim only runs while he is on watch)
 export function tickStationXP(dt) {
   const p = P();
-  if (PACE_RT.offline) return;
-  const manual = !nightActive();
-  p.stationAcc += dt / PROG.xp.stationEvery * (manual ? PROG.manual.xp : PROG.auto.xp);
-  if (p.stationAcc >= 1) { const n = Math.floor(p.stationAcc); p.stationAcc -= n; awardXP(n, manual ? "manual" : "auto", "station"); }
+  p.stationAcc += dt / PROG.xp.stationEvery * PROG.manual.xp;
+  if (p.stationAcc >= 1) { const n = Math.floor(p.stationAcc); p.stationAcc -= n; awardXP(n, "manual", "station"); }
 }
 // a chat (ambient crew at the mess/bar, reporting at the chair, a drink at the bar): 3 XP, 2-min cooldown
 export function chatXP(who) {
   const p = P(), now = G.ship.elapsed;
-  if (PACE_RT.offline || now - p.chatT < PROG.xp.chatCooldown) return 0;
+  if (now - p.chatT < PROG.xp.chatCooldown) return 0;
   p.chatT = now;
-  const xp = awardXP(PROG.xp.chat, nightActive() ? "auto" : "manual", "chat");
+  const xp = awardXP(PROG.xp.chat, "manual", "chat");
   if (crewById(who)) nudge(who, PROG.opinion.chat, "chat");
   if (p.chatRR.day !== p.day) p.chatRR = { day: p.day, n: 0 };
   if (p.chatRR.n < PROG.rations.chatPerDay) { p.chatRR.n++; earnRations(PROG.rations.chat, "chat"); }
@@ -686,14 +670,15 @@ export function milestone(id, label) {
   fx("milestone", { text: `${label.toUpperCase()} +${xp} XP` });
   return xp;
 }
-// ---- ship's day + lifetime rep (called every sim step) ----
+// ---- lifetime rep + the shift clock (called every sim step). C (v18): the ship's day no longer turns on sim time - it
+// turns once per real play day (markPlayDay -> onNewDay), so crew rolls, letters and rep events follow the days he plays.
+// dayT still runs (mod PROG.dayLength) for the watch / shift of the day (needs.js shiftNow). ----
 export function tickDay(dt) {
   const p = P(), rep = G.sp.rep;
   if (p.repSeen == null) p.repSeen = rep;
   if (rep > p.repSeen) p.repLifetime += rep - p.repSeen;
   p.repSeen = rep;
-  p.dayT += dt;
-  while (p.dayT >= PROG.dayLength) { p.dayT -= PROG.dayLength; p.day++; onNewDay(p.day); }
+  p.dayT = (num(p.dayT, 0) + dt) % PROG.dayLength;
 }
 // real calendar days with play (boot / return from a break)
 // pt04 m2: the player's LOCAL calendar date (the UTC date rolled over at 7 PM in Chicago)
@@ -720,7 +705,9 @@ export function markPlayDay(now = new Date(), present = null) {
   const s = present == null ? num(p.dayPresent, 0) : present;
   if (!(s >= PROG.playDayPresentS)) return false;
   if (p.playDays + 1 > 1 + num(p.presentTotal, 0) / PROG.playDayPerPresentS) return false;   // pass 08 (1): cap by total present time (the day stays due)
-  p.lastPlayDate = localDate(now); p.lastPlayAt = now.getTime(); p.playDays++; p.dayPresent = 0; return true;
+  p.lastPlayDate = localDate(now); p.lastPlayAt = now.getTime(); p.playDays++; p.dayPresent = 0;
+  p.day++; onNewDay(p.day);   // C (v18): one ship's day per real play day
+  return true;
 }
 // main loop (real seconds, not time-scaled): accrue present time only while a new play day is due; count it at ~3 min
 let dueT = 0, dueNow = false;
@@ -746,7 +733,7 @@ function onNewDay(day) {
   //          guaranteed board by PROG.ranks[n].guaranteeDay
   // phase 3: daily crew roll (positive-only until day 14; caps in PROG.crewEvents) + fleet rep from alumni
   hooks.newDay.forEach(f => f(day));
-  earnRations(PROG.rations.shift, "shift");   // phase 4: a shift completed (also while away)
+  earnRations(PROG.rations.shift, "shift");   // phase 4: a ship's day of service
 }
 // phase 5: specialisations. specFx(sysId) -> { speed, quality } summed over the Lt's foci (G.sp.battle: Damage Control's battleAll)
 export function specFx(sysId) {
@@ -1114,15 +1101,14 @@ export function promote(reason = "readiness") {
 let acc = 0;
 export function tickProg(dt) {
   const p = P(), S = G.ship, L = G.lt, O = PROG.opinion;
-  const onWatch = !PACE_RT.offline && !nightActive();
   if (!(G.sp.rep >= 0)) G.sp.rep = 0; if ("rep" in p && !(p.rep >= 0)) p.rep = 0;   // pass 06 m6: rep never negative at runtime either
   for (const [k, f] of Object.entries(S.faults)) {
     if (f.ign || f.t < O.ignored.after) continue;
-    if (!onWatch || (L.mode === "repair" && L.repairSys === k)) continue;
+    if (L.mode === "repair" && L.repairSys === k) continue;
     f.ign = true;
     for (const c of ownersOf({ sys: k })) nudge(c.id, O.ignored[f.sev] || -1, `ignored fault|${k}`);
   }
-  if (!PACE_RT.offline && L.mode === "use" && L.node && NODEMAP[L.node] && !NODEMAP[L.node].rest) {
+  if (L.mode === "use" && L.node && NODEMAP[L.node] && !NODEMAP[L.node].rest) {
     for (const c of ownersOf({ node: L.node })) {
       p.opStation[c.id] = (p.opStation[c.id] || 0) + dt;
       if (p.opStation[c.id] >= O.station.every) { p.opStation[c.id] -= O.station.every; nudge(c.id, O.station.gain, "station work"); }

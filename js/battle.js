@@ -10,7 +10,7 @@ const MOOD_XP = MOOD.skill;
 import { chooseEncounter, chooseWingmen, noteEncounter, noteBcEnd } from "./encounters.js";
 import { spawnFault, FAULT_RT, impairing, shieldCap, medFrozen, medDepends } from "./faults.js";
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
-import { PACE, PACE_RT, nightActive, offRules, oddsWord, isPresent } from "./pacing.js";
+import { PACE, PACE_RT, oddsWord, isPresent } from "./pacing.js";
 import { hooks } from "./progression.js";
 import { suspendPrompt } from "./background.js";
 import { pushMoment } from "./moments.js";   // Bigger wins #11   // Q1b #1: the Academy prompt steps aside for a red alert / battle
@@ -102,27 +102,23 @@ const OPEN = { convoy: "{A} breaks from the convoy's shadow — weapons free! Re
   story_echo: "The probe's handler — {a} — comes about out of the static, weapons hot. Red alert!" };   // E3: S4's hand-off (story.js; a soft fight)
 const openLine = (kind, d) => (OPEN[kind] || "Long-range sensors scream — {a} on an attack vector, dropping us out of warp. Red alert!")
   .replace("{A}", d.a.charAt(0).toUpperCase() + d.a.slice(1)).replace("{a}", d.a).replace("{short}", d.short);
-// Battles are rare set pieces: none in a session's first 10 minutes, a long gap between fights, and a hard
-// per-hour cap while the player is away (offline catch-up or idle). See PACE in pacing.js.
+// Battles are rare set pieces: none in a session's first 10 minutes and a long gap between fights. Since v18 nothing is ever
+// rolled away (the sim only runs while the game is open and not idle-paused). See PACE in pacing.js.
 export function battleAllowed(kind) {
   if (kind === "debug") return true;
   const SP = G.sp, now = G.ship.elapsed, last = typeof SP.lastBattleT === "number" ? SP.lastBattleT : -1e9;
-  if (!PACE_RT.offline && PACE_RT.sessionT < PACE.sessionCalm) return false;
-  if (nightActive()) {
-    const recent = (G.night.battleTimes || []).filter(t => now - t < 3600 && now >= t);
-    if (recent.length >= PACE.idleBattlesPerHour || now - last < PACE.idleBattleGap) return false;
-  } else if (now - last < PACE.battleGap) return false;
+  if (PACE_RT.sessionT < PACE.sessionCalm) return false;
+  if (now - last < PACE.battleGap) return false;
   return true;
 }
 // opts.enemy: force an enemy type (tests, debug); otherwise encounters.js (story context, then the gated weighted table)
 // RA(a): a battle is ROLLED (allowed now, roster picked up front) and then STARTED. A roll while the player is present (live,
 // not the night / offline rules) becomes a held red alert (G.sp.alert; raise/tick/engage below) that waits for ENGAGE or T'Ren's takeover;
-// away rolls and debug drills start at once, as before. Returns true (started), "held" (an alert is up) or false.
+// debug drills (and opts.now) start at once. v18: every other roll is held, present or not (it waits while nobody watches). Returns true (started), "held" (an alert is up) or false.
 export function startBattle(kind = "enroute", opts = {}) {
   const SP = G.sp;
   if (SP.battle || SP.alert) return false;   // one contact at a time: nothing new rolls while an alert is held
   if (!battleAllowed(kind)) {
-    G.night.avoided = (G.night.avoided || 0) + 1;
     log("Hale: 'Jem'Hadar patrol on long-range sensors, Captain. They haven't seen us.' T'Ren alters course a few degrees. Nobody says anything until it's gone.", "comm");
     return false;
   }
@@ -130,11 +126,11 @@ export function startBattle(kind = "enroute", opts = {}) {
   if (holdsAlert(kind, opts)) { raiseAlert(Rl, opts); return "held"; }
   return startRolled(Rl, opts);
 }
-const holdsAlert = (kind, opts) => kind !== "debug" && !opts.now && !PACE_RT.offline && !nightActive() && isPresent();
+const holdsAlert = (kind, opts) => kind !== "debug" && !opts.now;
 function raiseAlert(Rl, opts) {
   suspendPrompt();
   const SP = G.sp; if (SP.travel) SP.travelPaused = true;
-  SP.alert = { ...Rl, soft: !!opts.soft, t: 0, away: 0, at: G.ship.elapsed };
+  const { away: _aw, ...R0 } = Rl; SP.alert = { ...R0, soft: !!opts.soft, t: 0, at: G.ship.elapsed };
   const tr = threatRead(alertBattle(SP.alert)), d = SHIPS[Rl.enemies[0]];
   log(`Hale: 'Contact — ${d.a}${Rl.enemies.length > 1 ? ` and ${Rl.enemies.length - 1} more` : ""}, holding at range. All stop, shields up.' Red alert: your call, Lieutenant.`, "fault");
   toast(`⚠ RED ALERT — ${d.name}${tr ? ` · T'Ren: ${tr.word}` : ""} · tap to respond`, "crit");
@@ -153,25 +149,21 @@ export function engageAlert(by = "lt") {
   if (ok && SP.battle && A.soft) SP.battle.soft = true;   // a story fight stays soft: faults capped at MEDIUM, minor injuries only
   saveSoon("alert"); return ok;
 }
-// held: present time counts toward T'Ren's takeover; away / offline time freezes it, and a long absence lets the contact go
+// held: present time counts toward T'Ren's takeover; time not present (idle >= 60 s) freezes it. v18: no break-off - the
+// contact waits however long the player is gone (a closed / hidden / idle-paused game runs no sim at all)
 export function tickAlert(dt) {
   const SP = G.sp, A = SP.alert; if (!A) return;
   if (SP.battle) { SP.alert = null; return; }
   if (SP.travel) SP.travelPaused = true;
   const K = PACE.alert;
-  if (PACE_RT.offline || !isPresent()) {
-    A.away += dt;
-    if (!A.soft && A.away >= K.awayBreakOff) { SP.alert = null; if (SP.travel) SP.travelPaused = false; log("Contact lost while you were off watch.", "comm"); saveSoon("alert"); }   // no penalty, no reward
-    return;
-  }
-  A.away = 0; A.t += dt;
+  if (!isPresent()) return;
+  A.t += dt;
   if (A.t >= K.holdPresent) engageAlert("tren");
 }
 function rollBattle(kind, opts) {
   const SP = G.sp;
   SP.lastBattleT = G.ship.elapsed;
-  const bt = (G.night.battleTimes || []).filter(t => G.ship.elapsed - t < 3600 && G.ship.elapsed >= t); bt.push(G.ship.elapsed); G.night.battleTimes = bt;
-  const away = nightActive();   // pass 15 D2: the player isn't watching - the battlecruiser rolls at PACE.encounter.awayWeights
+  const away = false;   // v18: no away fights (encounters.js keeps the away table for tools/battle-sim only)
   // multi-ship P1: opts.enemies / opts.allies (ship id lists, slot order, max SLOTS a side) force a group (debug drills, tests;
   // real encounters stay one-on-one until P2's group table). P23: an ally id passed as opts.enemy used to become a Galor
   // silently - it now joins the allies (with a console warning) and the enemy rolls as usual.
@@ -180,7 +172,7 @@ function rollBattle(kind, opts) {
   if (opts.enemy && !isE(opts.enemy)) { console.warn(`startBattle: '${opts.enemy}' is not an enemy ship${isA(opts.enemy) ? " - added as an ally" : ""}`); if (isA(opts.enemy)) fA.unshift(opts.enemy); }
   const pick = chooseEncounter(kind, { prog: G.prog, ship: G.ship, enc: SP.enc, forced: fE[0] || (isE(opts.enemy) ? opts.enemy : null), away }), enemy = pick.id, d = SHIPS[enemy];
   const wings = fE.length ? fE.slice(1) : chooseWingmen(enemy, kind, { prog: G.prog, ship: G.ship, away });   // P2: the groups table (forced lists skip it)
-  const mid = away || PACE_RT.offline ? null : missionOf(kind, opts), M = mid && PACE.allies.missions[mid], mA = M && Math.random() < M.p ? M.allies.filter(isA) : [];   // P3: mission allies (P26: only in fights the player watches - none away / offline)
+  const mid = missionOf(kind, opts), M = mid && PACE.allies.missions[mid], mA = M && Math.random() < M.p ? M.allies.filter(isA) : [];   // P3: mission allies (P26: only in fights the player watches - none away / offline)
   const aIds = [...fA, ...mA.filter(id => !fA.includes(id))].slice(0, SLOTS - 1);
   const mission = M && aIds.some(id => M.allies.includes(id)) ? { id: mid, lead: aIds.find(id => M.allies.includes(id)), protect: M.protect && aIds.includes(M.protect) ? M.protect : null, failed: false } : null;
   noteEncounter(SP, enemy, kind, G.prog.playDays, pick.held, away);
@@ -196,8 +188,7 @@ export function startRolled(Rl, opts = {}) {
   SP.battle = { ...(enemy === "jh_battlecruiser" && kind !== "debug" ? { bc: { h0: Math.round(G.ship.hull), away, pd: G.prog.playDays | 0 } } : {}), ctx: kind, mission, enterT: 0, dying: 0, cd: { phaser: 0, torp: 0, evasive: 0, divert: 0 }, startedAt: G.ship.elapsed, live: !away, allies, enemies, target: 0, allyDying: 0 };
   PACE_RT.liveFight = !away;   // pass 16 B1: live-started = live rules to the end (saved with the battle)
   G.stats.battles++;
-  if (SP.battle.bc && away) nightWatch();
-  const alpha = enemy === "jh_battlecruiser" && !away ? alphaStrike() : null;   // pass 15: live (debug drills too: battle-sim) - her opening volley knocks the READY abilities
+  const alpha = enemy === "jh_battlecruiser" ? alphaStrike() : null;   // pass 15: live (debug drills too: battle-sim) - her opening volley knocks the READY abilities
   SFX.jink = { x: 0, y: 0, tx: 0, ty: 0, next: 1.4 }; SFX.shieldFlare = null; SFX.anim = {}; SFX.smoke.length = 0; SFX.flares.length = 0;
   if (SP.preScanned) { SP.preScanned = false; const E = foe(SP.battle); E.hull = Math.round(E.max * 0.76); log("Diallo: 'The defector's shield frequencies are exact. She starts this fight pre-scanned.'", "comm"); }
   if (SP.travel) SP.travelPaused = true;
@@ -274,8 +265,6 @@ function damageAlly(A, dmg, label) {
 // pass 15 D2: a battlecruiser fight's record (hull before / after, outcome, whether the player was away) -> G.sp.enc.bcRec
 function recBc(B, out, h1) {
   if (B && B.bc) noteBcEnd(G.sp, { pd: B.bc.pd, away: !!B.bc.away, h0: B.bc.h0, h1: Math.round(h1), out });
-  // pass 17 P4: every fight's end (enemy + outcome) for the report of a catch-up that was deferred behind it (main.js / hud showReport)
-  if (B) { const E = foe(B), d = E && shipOf(E); G.sp.lastFight = { a: d ? d.a : "the enemy", out, hull: Math.round(h1), live: !!B.live }; }
 }
 function endBattleVictory() {
   const SP = G.sp, S = G.ship, B0 = SP.battle, kind = B0 ? B0.ctx : null, d = shipOf(foe(B0)), killed = B0 ? B0.enemies.map(shipOf) : [d];
@@ -306,7 +295,7 @@ export function damageShip(dmg, label, pierce = 0, src = null) {
   if (S.shields >= dmg) {
     // pass 13: a piercing weapon (the battlecruiser's polarons: weapon.pierce) bleeds part of an absorbed hit through to the hull.
     // Hull only - no fault / injury roll (those stay with real shield breaches). Weapons without pierce (fighter, Galor) are untouched.
-    const bleed = pierce > 0 ? Math.min(S.hull - (offRules() ? PACE.offlineHullFloor : 0), dmg * pierce) : 0;
+    const bleed = pierce > 0 ? Math.min(S.hull, dmg * pierce) : 0;
     S.shields -= dmg - Math.max(0, bleed); setAnim("tenacity", "shieldsHit");
     if (!SFX.evasiveGraze) SFX.shieldFlare = { t: 0, dur: 0.65 };
     SFX.floaters.push({ x: tp[0], y: tp[1] - 0.05, t: 0, text: "SHIELDS −" + Math.round(dmg - Math.max(0, bleed)), color: "#9cd2ff" });
@@ -320,7 +309,7 @@ export function damageShip(dmg, label, pierce = 0, src = null) {
   SFX.booms.push({ x: tp[0], y: tp[1], t: 0, dur: 0.5, big: false });
   for (let i = 0; i < 9; i++) SFX.smoke.push({ x: tp[0] + rand(-0.02, 0.02), y: tp[1] + rand(-0.015, 0.015), vx: rand(-0.05, 0.05), vy: rand(-0.05, 0.02), t: 0, life: rand(0.3, 0.7), r: 0.006, kind: "spark" });
   const through = (dmg - S.shields) * 0.6;
-  S.shields = 0; S.hull = Math.max(offRules() ? PACE.offlineHullFloor : 0, S.hull - through);   // offline / idle tab (N-2): damage control holds the line
+  S.shields = 0; S.hull = Math.max(0, S.hull - through);
   SFX.floaters.push({ x: tp[0], y: tp[1] - 0.05, t: 0, text: "HULL −" + Math.round(through), color: "#ff8a7a" });
   log(`${label} — shields down, the hull takes ${Math.round(through)}%. Hull at ${Math.round(S.hull)}%.`, "fault");
   if (S.hull <= 0) { towToDS9(); return; }
@@ -447,8 +436,6 @@ export function towToDS9() {
   shipNews("<b>Disabled and towed to Deep Space Nine.</b> Hull at 20%, systems faulted — the Lieutenant has work to do.");
 }
 // ---- officer abilities (autonomous) ----
-// pass 15 D2: an away battlecruiser fight starts on the night watch (PACE.encounter.bcAway) - the senior staff are not all at their
-// posts, so their abilities start partly cooled down and she can't be one-volleyed by a fully rested bridge.
 // pass 15 (manager call): her opening polaron volley hits the bridge - abilities with less than knockFrac x cdMax left go to it; ones cooling longer are untouched
 const AB_NAME = { pattern: "Attack Pattern Analysis", miracle: "Miracle Worker", scan: "Weak-Point Scan", spread: "Torpedo Spread" };   // pass 16 B4: the full ability names (as on the officer cards, js/data.js OFFICERS)
 function alphaStrike() {
@@ -456,12 +443,6 @@ function alphaStrike() {
   // judged: "ready" includes nearly ready - every ability is raised to at least knockFrac x cdMax; one with more than that left keeps its timer
   for (const [k, a] of Object.entries(G.ab)) { const to = a && typeof a === "object" && a.cdMax ? a.cdMax * c.knockFrac : 0; if (to && a.cd < to && !(a.active > 0)) { a.cd = to; hit.push(AB_NAME[k] || k); } }
   return hit;
-}
-function nightWatch() {
-  const c = PACE.encounter.bcAway; if (!c) return; const [lo, hi] = c.cdFrac;
-  for (const a of Object.values(G.ab)) a.cd = Math.max(a.cd, a.cdMax * (lo + Math.random() * (hi - lo)));
-  if (c.torpsMax != null) G.ship.torps = Math.min(G.ship.torps, c.torpsMax);
-  log("T'Ren: 'The night watch has the bridge. Senior staff to their posts — we fight her short-handed until they're here.'", "comm");
 }
 const armed = a => !!(G.sp.battle && !G.sp.battle.dying && a.cd <= 0 && !(a.active > 0));
 function usePattern() { const a = G.ab.pattern; a.cd = a.cdMax; a.active = 20; a.last = "Halved incoming fire — 20s"; log("T'Ren: Attack Pattern Analysis — incoming fire halved for 20 seconds. 'Their firing pattern is a solved equation, Lieutenant.'", "comm"); }

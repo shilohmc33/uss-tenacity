@@ -1,3 +1,6 @@
+// RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
+// night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 15 proof shots + checks at 390x844, 844x390, 1280x800 -> shots/pt14-*.png, shots/pt14-report.json
 //   cardtoast - the battlecruiser through the REAL path (startBattle('enroute'), roll pinned to her row), ~1.6 s in: the red-alert card
 //               AND Hale's "capital-class contact" sensor toast both visible, no overlap (also re-checked at ~4.5 s: the toast is held
