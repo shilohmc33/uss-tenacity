@@ -517,7 +517,14 @@ body.ra-held #toasts:not(.top):not(.side){top:auto}
 /* #10 the "Do this next" strip (the #alertPill) */
 .alert-pill.goal{background:#16304a;color:#cfe6ff;border:1px solid #2f5f8f}.alert-pill.goal .g1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .alert-pill.goal-first,.alert-pill.goal-ds9{background:#2a2350;color:#efe6ff;border-color:#8a7ad8}.alert-pill.goal-board,.alert-pill.goal-spec{background:#3a2c10;color:#ffe2a8;border-color:#c9952e}
-@media (max-width:520px){.alert-pill.goal .g1{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2;font-size:12px}}
+/* fix 1 (Oct 24): the "Do this next" strip and duty pill wrap to two lines at every size; a fault keeps its system name */
+.alert-pill.lc{display:flex;align-items:center;gap:6px;white-space:normal;padding-top:4px;padding-bottom:4px}
+.alert-pill.lc .pring{flex:none}
+.alert-pill.lc .g1,.alert-pill.goal .g1{flex:1 1 auto;min-width:0;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.2;overflow-wrap:anywhere}
+.alert-pill.lc .nm{font-weight:700}
+.alert-pill.pri-2,.alert-pill.pri-3{color:#1b1407}   /* fix 1: readable dark text on the amber / steel duty pill (was the muted grey) */
+.alert-pill.novb .vb,.alert-pill.nosv .sv{display:none}
+@media (max-width:520px){.alert-pill.lc .g1{font-size:12px}}
 /* #10 the info-layout tabs: one panel at a time (ORDERS = orders + status + stations) */
 #infoTabs{display:none}
 body.mode-info #infoTabs{display:flex;gap:4px;position:sticky;top:0;z-index:20;background:var(--bg);padding:2px 0 6px}

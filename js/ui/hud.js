@@ -256,16 +256,18 @@ export function updateHud() {
   } else if (items.length) {
     const top = items[0], rf = top.kind === "task" ? top.task.t / (top.task.dur || 1) : top.kind === "job" && top.job.dur > 0 ? top.job.t / top.job.dur : null;
     const rg = rf == null ? "" : `<i class="pring ${ringBand(rf)}" style="--f:${Math.max(0, Math.min(1, rf)).toFixed(3)}"></i>`;   // Q1: countdown ring (drains green -> amber -> red)
-    pill.innerHTML = rg + esc(top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}` : `${firstWatch() ? "TAP TO REPAIR — " : `${PRI_LABEL[top.pri]} — `}${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`);   // #10: the first watch says what to do
-    pill.className = "alert-pill pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : "");
+    // fix 1: two lines at most; a fault keeps its system name (the verb / priority word goes first, then the severity: fitPill)
+    const body = top.kind === "task" ? esc(`CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s`) : top.kind === "job" ? esc(`${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}`)
+      : `<span class="vb">${firstWatch() ? "TAP TO REPAIR: " : esc(PRI_LABEL[top.pri]) + " — "}</span><span class="nm">${esc(SYSTEMS[top.id].name)}</span><span class="sv"> · ${esc(SEV_LABEL[top.sev])}</span>`;   // #10: the first watch says what to do
+    setPill(pill, "alert-pill lc pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : ""), rg + `<span class="g1">${body}</span>`);
     pill.onclick = () => top.kind === "task" ? sendUse(top.task.node) : top.kind === "job" ? sendUse(top.job.node) : sendRepair(top.id);
   } else if (G.sp.battle) {   // Q1 #6: in a fight with no faults the pill is the red alert and T'Ren's read (never a parked odd job)
     const tr = threatRead(); setRaPill(pill, tr, false); pill.className = "alert-pill pri-1 rapill"; pill.onclick = () => RA.openView();   // RA(a): the battle view (batch (b) hangs its call here)
   } else {   // Bigger wins #10: one goal at a time instead of "All systems nominal"
-    const g = nextGoal(), h = `<span class="g1">${esc(g.text)}</span>`;
-    if (pill.dataset.goal !== h || !pill.classList.contains("goal")) { pill.innerHTML = h; pill.dataset.goal = h; }
-    pill.className = "alert-pill goal goal-" + g.k; pill.onclick = g.act ? () => goalAct(g.act) : null;
+    const g = nextGoal();
+    setPill(pill, "alert-pill lc goal goal-" + g.k, `<span class="g1">${esc(g.text)}</span>`); pill.dataset.goal = g.k; pill.onclick = g.act ? () => goalAct(g.act) : null;
   }
+  if (!PILL.used) { PILL.key = null; PILL.fit = ""; } PILL.used = false;   // another branch wrote the pill: the next setPill rewrites it
   $("#dutyBadge").textContent = items.length || ""; { const b2 = $("#dutyBadge2"); if (b2) b2.textContent = items.length || ""; }
   applyTab(); tickProm();   // #10 the info-layout tab, #12 the Promenade card
   // duty list
@@ -368,6 +370,20 @@ export function wireHud() {
 export function openPanel(name) {
   if (document.body.classList.contains("mode-info")) { setTab(name); return; }
   closeSheet(); document.body.classList.add("sheet-open", "sheet-" + name); $("#sheetTitle").textContent = name.toUpperCase(); if (name === "duty" || name === "crew") MD.ackInjury();
+}
+// fix 1: the strip's text, rewritten only when it changes (or the pill's width does), then fitted to two lines: a fault drops
+// its verb / priority word first (.novb), then its severity (.nosv), so the system name always shows
+const PILL = { key: null, used: false, fit: "" };
+function setPill(pill, cls, h) {
+  PILL.used = true; pill.className = cls + PILL.fit; const key = cls + "|" + h + "|" + pill.clientWidth;
+  if (PILL.key === key) return; PILL.key = key; pill.innerHTML = h; fitPill(pill);
+}
+export function fitPill(pill) {
+  pill.classList.remove("novb", "nosv"); PILL.fit = "";
+  const g = pill.querySelector(".g1"); if (!g || !g.querySelector(".nm")) return;
+  const over = () => g.scrollHeight > g.clientHeight + 1;
+  if (over()) { pill.classList.add("novb"); PILL.fit = " novb"; }
+  if (over()) { pill.classList.add("nosv"); PILL.fit += " nosv"; }
 }
 function goalAct(a) { if (a === "board") { if (BD.boardWaiting()) openBoard(); } else if (a === "spec") openSpec(); else if (a === "prom") openProm(); else if (a === "alert") { if (RA.canRespond()) RA.openView(); } else if (["orders", "duty", "crew", "log"].includes(a)) openPanel(a); }
 export function closeSheet() { document.body.className = document.body.className.replace(/\s?sheet-\w+/g, ""); }

@@ -22,7 +22,7 @@ import { pushMoment } from "./moments.js";   // #11 the Shift Report's best mome
 
 const P = () => G.prog;
 const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
-export const freshStory = () => ({ last: null, seen: {}, legsSince: 99, dayCount: { d: 0, n: 0 }, chain: null, step: null, passed: null, fight: null, pilot: { t: 0, done: false }, n: { fired: 0, success: 0, partial: 0, fail: 0, careful: 0 } });
+export const freshStory = () => ({ last: null, seen: {}, legsSince: 99, dayCount: { d: 0, n: 0 }, chain: null, step: null, passed: null, fight: null, pilot: { t: 0, done: false, repairT: -1 }, n: { fired: 0, success: 0, partial: 0, fail: 0, careful: 0 } });
 export const S = () => { const p = P(); if (!isObj(p.story)) p.story = freshStory(); return p.story; };
 const occ = id => P().crew && P().crew.occ[id];
 const nm = id => id === "lt" ? "you" : occ(id) ? occ(id).short : "someone";
@@ -574,7 +574,7 @@ export const EV = {
     ],
   },
   // ---- Bigger wins #7: the day-1 pilot story (notes/2026-10-24-bigger-wins-plan.md). pilot: never in a pool (poolFor); fired once by
-  // pilotTick after the first repair + ~15 min of present play. Gentle: no fault, no injury, no bonus lock. Careful choices carry on (#8).
+  // pilotTick ~15 min of present play after the first repair (pilot.repairT). Gentle: no fault, no injury, no bonus lock. Careful choices carry on (#8).
   first_watch: {
     title: "First watch", art: "story_firstwatch_a", ckey: "story_firstwatch", type: "ship", gentle: true, pilot: true, where: ["pilot"], w: 0,
     cast: () => { const l = slotIds(["engineer-1", "engineer-2", "crewman", "transporter"]); const a = l.length ? l : juniors(); if (!a.length) return null; const ch = slotIds(["chief-engineer"]).filter(x => !a.includes(x)); const lead = pick(a); return ch.length ? { lead, other: ch[0] } : { lead }; },
@@ -690,8 +690,12 @@ export const bonusAt = (id, node) => { const B = STORY.bonus; return numIn(B[`${
 export function choiceP(c, ch) {
   if (!ch || ch.safe) return null;
   const sk = ltSkill(ch.help ? "composure" : ch.skill);
-  return ch.help ? oddsP(sk, opinionOf(c.cast.lead), c.tier) : oddsP(sk, 0, null);
+  const p = ch.help ? oddsP(sk, opinionOf(c.cast.lead), c.tier) : oddsP(sk, 0, null);
+  return c && EV[c.id] && EV[c.id].pilot ? pilotP(p) : p;   // fix 4: the day-1 pilot only (oddsP and every other story unchanged)
 }
+// fix 4 (Oct 24): the First Watch pilot's rolled choices never read worse than STORY.pilotOdds.floor (full success ~51%,
+// 'likely'); a stronger Lt keeps his own better odds (still capped at STORY.odds.max)
+export function pilotP(p) { const O = STORY.odds, F = STORY.pilotOdds || {}; return Math.min(O.max, Math.max(numIn(p, O.min, O.max, O.base), numIn(F.floor, 0, O.max, 0))); }
 // ---- gates (plan section 6) ----
 let cur = null, seq = 0;
 export const current = () => cur;
@@ -752,14 +756,16 @@ export function setChain(id, ctx = {}) {
 }
 // a step left half-finished at load (hardenStory drops it = the safe choice): one quiet log line on the next tick
 export function storyTick() { const s = S(); if (s.fight && fightReady(s.fight)) { log("The story fight you left is still waiting for you. Red alert!", "fault"); startFight(s.fight); } if (s.passed) { const E = EV[s.passed]; s.passed = null; if (E) log(`${E.title}: the moment passed, and the ship moves on.`, "comm"); } }
-// #7 the day-1 pilot: present seconds count up; it fires once the first repair is done and STORY.pilot.at present seconds have
-// passed (or at STORY.pilot.fallback without a repair), through gateWhy("pilot"). One time: done is set (and saved) when it opens.
+// #7 the day-1 pilot: present seconds count up (t); the first repair stamps repairT = t, and it fires STORY.pilot.at present seconds later
+// (or at STORY.pilot.fallback without a repair), through gateWhy("pilot"). One time: done is set (and saved) when it opens.
 export const PILOT_ID = "first_watch";
 export function pilotTick(dt) {
-  const s = S(), pl = s.pilot; if (pl.done || cur) return false;
-  if (isPresent() && !offRules()) pl.t = Math.min(1e6, pl.t + numIn(dt, 0, 60, 0));
+  const s = S(), pl = s.pilot; if (pl.done) return false;
   const PP = STORY.pilot, ms = P().milestones || {};
-  if (!((ms.firstRepair && pl.t >= PP.at) || pl.t >= PP.fallback)) return false;
+  if (ms.firstRepair && !(pl.repairT >= 0)) pl.repairT = pl.t;   // fix 2: the 15 min start at the first repair (stamped in present seconds)
+  if (cur) return false;
+  if (isPresent() && !offRules()) pl.t = Math.min(1e6, pl.t + numIn(dt, 0, 60, 0));
+  if (!((pl.repairT >= 0 && pl.t - pl.repairT >= PP.at) || pl.t >= PP.fallback)) return false;   // fallback: 30 min of present play from the start
   if (gateWhy("pilot")) return false;
   return startStory(PILOT_ID, { where: "pilot" });
 }
@@ -943,6 +949,10 @@ export function hardenStory(p) {
   // #7: the pilot flag (v17). Missing (an older save): done when the player is past day 1 or has seen any story already
   const pl = isObj(s.pilot) ? s.pilot : null, vet = numIn(p.playDays, 0, 1e9, 0) >= STORY.graceDays || Object.keys(o.seen).length > 0;
   o.pilot = pl ? { t: Math.floor(numIn(pl.t, 0, 1e6, 0)), done: pl.done === true } : { t: 0, done: vet };
+  // fix 2: repairT = the present-play second of the first repair (-1 = none yet). Missing or junk with a repair already made
+  // (a day-1 v16 save, or an early v17 one): the 15 min start now; never after t
+  { const ms = isObj(p.milestones) ? p.milestones : {}, r = pl ? pl.repairT : undefined;
+    o.pilot.repairT = typeof r === "number" && Number.isFinite(r) && r >= 0 ? Math.min(Math.floor(r), o.pilot.t) : ms.firstRepair ? o.pilot.t : -1; }
   if (isObj(s.n)) { for (const k of Object.keys(o.n)) o.n[k] = Math.floor(numIn(s.n[k], 0, 1e9, 0)); if (s.n.expired) o.n.expired = Math.floor(numIn(s.n.expired, 0, 1e9, 0)); }
   p.story = o;
 }

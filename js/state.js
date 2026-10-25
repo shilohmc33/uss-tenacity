@@ -52,9 +52,27 @@ export function resetState() {
   Object.assign(G, freshState());
 }
 export const TAB_RT = { ro: false, why: "" };   // P32 #1 (tablock.js): a read-only tab never saves
+// Save-loss fix (Oct 24): G is the empty {} placeholder until boot() has run loadGame / resetState (after the art preload, which
+// takes seconds). A pagehide / visibilitychange in that window (a tab Chrome restores on relaunch and then navigates or closes, a
+// reload or close while loading) used to write JSON.stringify({savedAt}) over the real save. Guards: nothing is written before
+// the boot marks the state live, or when G lacks its core sections, or when the text is far smaller than the last good save;
+// every good save is also kept as SAVE_KEY + ".bak" (loadGame falls back to it).
+export const BAK_KEY = SAVE_KEY + ".bak";
+export const SAVE_GUARD = { live: false, len: 0, refused: 0, why: "", restored: false };
+const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
+export const hasCore = d => isObj(d) && typeof d.version === "number" && ["ship", "sp", "lt", "prog"].every(k => isObj(d[k]));
 export function saveGame() {
   if (TAB_RT.ro) return false;
-  try { G.savedAt = Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; }
+  const no = why => { SAVE_GUARD.refused++; SAVE_GUARD.why = why; return false; };
+  if (!SAVE_GUARD.live) return no("boot");
+  if (!hasCore(G)) return no("core");
+  try {
+    G.savedAt = Date.now(); const txt = JSON.stringify(G);
+    if (SAVE_GUARD.len && txt.length < SAVE_GUARD.len * 0.4) return no("size");   // much smaller than the last good save: a partial G
+    localStorage.setItem(SAVE_KEY, txt); SAVE_GUARD.len = txt.length;
+    try { localStorage.setItem(BAK_KEY, txt); } catch (e) {}
+    return true;
+  } catch (e) { return false; }
 }
 // P31 / E1: save right now after a roll the player must not reroll (a denial, the shore-leave roll, a story outcome).
 // window.__noSave (tests, the debug Wipe) skips the write; SAVE_RT counts the requests either way so tests can see them.
@@ -67,8 +85,15 @@ export function saveSoon(why = "") {
 export function loadGame() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
+    let data = null; try { data = raw ? JSON.parse(raw) : null; } catch (e) { data = null; }
+    // the main save missing (or unreadable / missing its core sections): the last good backup, when it has them
+    if (!(isObj(data) && isObj(data.ship) && isObj(data.sp))) {
+      let bak = null; try { const b = localStorage.getItem(BAK_KEY); bak = b ? JSON.parse(b) : null; } catch (e) { bak = null; }
+      if (isObj(bak) && isObj(bak.ship) && isObj(bak.sp)) { if (raw) { try { localStorage.setItem(SAVE_KEY + ".corrupt", raw); } catch (e) {} } data = bak; SAVE_GUARD.restored = true; }
+      else if (!raw) return false;
+      else data = JSON.parse(raw);   // no backup: the old path (an unreadable save is kept aside below)
+    }
+    SAVE_GUARD.len = 0;   // the size guard compares with saves written by this build from here on
     const base = freshState();
     // ---- migrations ----
     if (!(data.version >= 2)) { data.prog = migrateProg(data.stats, data.sp && data.sp.rep); data.version = 2; }
@@ -148,4 +173,4 @@ function sanitize(base) {
   }
   if (!Array.isArray(G.log)) G.log = [];
 }
-export function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+export function wipeSave() { try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BAK_KEY); } catch (e) {} SAVE_GUARD.len = 0; }

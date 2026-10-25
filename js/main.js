@@ -1,5 +1,5 @@
 // Boot, main loop (delta time, pause when hidden), input, view modes, save/load, debug.
-import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY, TAB_RT } from "./state.js";
+import { G, resetState, saveGame, loadGame, wipeSave, SAVE_KEY, TAB_RT, SAVE_GUARD } from "./state.js";
 import { initTabLock, TL, check as tabCheck } from "./tablock.js";   // P32 #1: one playing tab
 import { preload, missing, IMG } from "./assets.js";
 import { applyWalkMasks, snapToFloor } from "./path.js";
@@ -185,7 +185,7 @@ async function boot() {
     if (tried) throw e;   // a fresh boot failing too is a code bug, not a save problem: no reload loop
     // pt04 m1 backstop: a save that still breaks the boot after sanitising is set aside (never deleted) and the game starts fresh
     try { const raw = localStorage.getItem(SAVE_KEY); if (raw) localStorage.setItem(SAVE_KEY + ".corrupt", raw); sessionStorage.setItem("tenacity.recovered", String(e && e.message || e)); } catch (e2) {}
-    wipeSave(); location.reload();
+    SAVE_GUARD.live = false; wipeSave(); location.reload();
   }
 }
 function bootGame(params, masks) {
@@ -198,6 +198,8 @@ function bootGame(params, masks) {
     let rec = null; try { rec = sessionStorage.getItem("tenacity.recovered"); sessionStorage.removeItem("tenacity.recovered"); } catch (e) {}
     if (rec) log("Your previous save couldn't be read, so a fresh shift has started. The old save is kept aside (tenacity.save.v1.corrupt).", "fault");
   }
+  SAVE_GUARD.live = true;   // save-loss fix: G is the loaded / fresh state from here on, so the unload and 5 s saves may write
+  if (had && SAVE_GUARD.restored) log("The last save was incomplete, so your shift was restored from the last good backup.", "comm");
   if (had) settleInflightTorps();   // BUG-17
   CB.applyTier();   // phase 4: quarters plate / walk grid / rack for the current rank (before any snap to floor)
   if (!G.lt.path && !G.lt.lift && G.lt.mode !== "use") snapToFloor(G.lt);   // saves from older walk grids

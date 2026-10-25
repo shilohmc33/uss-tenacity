@@ -191,7 +191,8 @@ export const STORY = {
   minLegs: 2,               // legs started since the last story event before the next one in travel (one quiet leg between; so at most 1 per leg)
   perDay: 2,                // story events per ship's day (PROG.dayLength)
   graceDays: 2, gentleUntil: 5,   // play days: none before 2, only the gentle pool before 5
-  pilot: { at: 900, fallback: 1800 },   // Bigger wins #7: the day-1 pilot story fires after the first repair + 900 present s (or at 1800 present s without one)
+  pilot: { at: 900, fallback: 1800 },
+  pilotOdds: { floor: 0.85 },   // fix 4: First Watch only: a rolled choice's p is at least 0.85 (full success 0.6 x 0.85 = 51%, 'likely'); other stories use STORY.odds as-is   // Bigger wins #7: the day-1 pilot story fires after the first repair + 900 present s (or at 1800 present s without one)
   careful: { xp: 0.4, half: 0.5 },      // #8: a careful choice pays 40% of the step's rolled success XP (no rep / skill XP); a follow-up it earned pays half
   odds: { base: 0.35, skill: 0.06, rel: 0.15, friend: 0.10, rival: -0.05, partner: 0.05, min: 0.10, max: 0.90, success: 0.6,
     words: { likely: 0.5, fair: 0.33, long: 0.15, partialHint: 0.6 } },   // P32 #6: the word is on FULL success (0.6p): likely >= 50% (p >= .834), fair odds >= 33% (p >= .55), a long shot >= 15% (p >= .25), else unlikely; '· partial likely' when p (not failing) >= 60% and the word isn't 'likely'
