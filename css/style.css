@@ -554,3 +554,12 @@ body.mode-info:not([class*="itab-"]) #p-orders,body.mode-info:not([class*="itab-
 #promCard .pcbtns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 #promCard .pcb{min-height:44px;border-radius:10px;background:#2a2350;color:#efe6ff;text-align:left;padding:4px 10px;display:flex;flex-direction:column;justify-content:center;line-height:1.15}
 #promCard .pcb b{font-size:13.5px}#promCard .pcb small{font-size:11px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#promCard .pcb[disabled]{opacity:.5}
+/* the Lt's name (Oct 24): the first-time prompt (#namePanel) and the Personal Log rename share this form */
+.nameform{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.nameform label{display:flex;flex-direction:column;gap:4px;font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.nameform label small{text-transform:none;letter-spacing:0;opacity:.8}
+.nameform input{min-height:44px;font-size:16px;padding:8px 12px;border-radius:10px;border:1px solid #3a4f7a;background:#0e1626;color:#eef3ff;text-transform:none;letter-spacing:0}
+.nameform input:focus{outline:2px solid #ffb347;outline-offset:1px}
+.nameform .nprev{margin:2px 0 0;font-size:13px;color:#cfe6ff;min-height:1.2em}
+.nameform .mbtns{margin-top:4px}
+.plrow.namer .nm small{white-space:normal}

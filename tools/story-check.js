@@ -16,7 +16,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
     ok(JSON.stringify(dir) === JSON.stringify(man), 'manifest matches assets/story ' + JSON.stringify({ dir: dir.length, man: man.length }));
     const snap0 = fs.readdirSync(ART).sort().map(f => f + ':' + fs.statSync(ART + f).size + ':' + fs.statSync(ART + f).mtimeMs).join('|');
     // P33: the real art is in now, so the fallback is tested by serving a manifest without story_coolant_c2 (the files are never touched)
-    const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await c.newPage(), reqs = [], tag = 'art';
+    const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), reqs = [], tag = 'art';
     await p.route('**/assets/story/manifest.json', rt => rt.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(man.filter(k => k !== 'story_coolant_c2').concat(['story_ferengi_v2'])) }));
     // P33 fix 5: a stale manifest lists story_ferengi_v2 (not on disk) and story_letter_c1 is served broken (200, junk bytes: no 404 in the console)
     await p.route(/story_(ferengi_v2|letter_c1)\.webp/, rt => rt.fulfill({ status: 200, contentType: 'image/webp', body: 'not a webp' }));
@@ -57,7 +57,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       ['debt_repaid', 1, 'story_debt_c1', 'warning'], ['debt_repaid', 1, 'story_debt_c2', 'standoff'], ['vorta_returns', 1, 'story_vreturn_c1', 'price'], ['vorta_returns', 1, 'story_vreturn_c2', 'retrace']];
     const man = JSON.parse(fs.readFileSync(ART + 'manifest.json', 'utf8')), webp = f => { const b = fs.readFileSync(ART + f + '.webp'); return b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' && b.length < 310 * 1024; };
     ok(NEW.every(([, , f]) => man.includes(f) && webp(f)), 'P35 files in the manifest, webp, < ~300 KB ' + JSON.stringify(NEW.filter(([, , f]) => !(man.includes(f) && webp(f)))));
-    const run = async (route, list, shots) => { const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await c.newPage(), tag = 'p35art', out = [];
+    const run = async (route, list, shots) => { const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), tag = 'p35art', out = [];
       p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`)); p.on('requestfailed', r => errs.push(`${tag}: failed ${r.url()}`));
       if (route) await route(p);
       try { await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
@@ -80,7 +80,7 @@ const MULTI = ['kestrel_derelict', 'subspace_echo'];
       await p.route(/story_kestrel_s2_c4\.webp/, rt => rt.fulfill({ status: 200, contentType: 'image/webp', body: 'not a webp' })); }, NEW.filter(x => ['story_quarks_c4', 'story_debt_c1', 'story_kestrel_s2_c4'].includes(x[2])), {});
     ok(B.fb.length === 3 && B.fb.every(x => x.hit && x.art === x.before && x.art !== x.file && x.w === 1080 && x.op === 1), 'P35 fallback to the main scene ' + JSON.stringify(B.fb)); }
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
-    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage();
+    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })();
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(400);
     await p.evaluate(() => { window.__noSave = true; __T.G.prog.background = __T.G.prog.background || 'none'; { const bp = document.querySelector('#bgPanel'); if (bp) bp.hidden = true; } __T.G.prog.rations = 500; });

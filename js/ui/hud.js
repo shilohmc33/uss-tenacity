@@ -26,8 +26,9 @@ import { sendUse, sendRepair, sendLiftPanel, rideLiftTo, playerInEngineering, lt
 import { BR, missionText, threatRead, alertBattle as BT_alert } from "../battle.js";
 import { ringBand, PACE_RT } from "../pacing.js";   // Q1
 import * as BG from "../background.js";
+import { nameDue, setName, cleanName, ltFull, ltLast, ltNamed, ltAddr, DEFAULT_LAST } from "../ltname.js";   // the player names the Lt
 import { tickWelcome, welcomeDue } from "../welcome.js";
-import { scrapbook } from "../story.js";
+import { scrapbook, storyOpen as ST_open } from "../story.js";
 import { artKey, artReady } from "./story.js";   // Bigger wins: pictures only through the manifest (+ approved stand-ins)
 import { nextGoal, applyTab, setTab, firstWatch } from "./next.js";   // #10
 import { tickProm, promHooks, openProm } from "./promenade.js";   // #12
@@ -81,6 +82,7 @@ export function buildHud() {
   BG.bgUI.shown = () => !$("#bgPanel").hidden; BG.bgUI.hide = () => { $("#bgPanel").hidden = true; };   // Q1b #1
   $("#bgPanel").addEventListener("click", e => { const b = e.target.closest("[data-bg]"); if (!b) return; if (b.dataset.bg !== "later") BG.pickBackground(b.dataset.bg); $("#bgPanel").hidden = true; renderCareer(true); });
   $("#wbCard").addEventListener("click", () => { $("#wbCard").hidden = true; });
+  document.body.insertAdjacentHTML("beforeend", `<div id="namePanel" class="modal" hidden><div class="card"><div id="nameBody"></div></div></div>`);   // the Lt's name (asked once)
   $("#specPanel").addEventListener("click", specClick);
   $("#crewBar").innerHTML = OFFICERS.map(o => `<div class="crew" id="crew-${o.id}"><img src="assets/${o.img}.webp" alt="${o.who}"><div><div class="n">${o.who}</div><div class="r">${o.role}</div><div class="a">${o.ability} — <span class="r">${o.desc}</span></div><div class="s" id="cs-${o.id}"></div></div></div>`).join("");
   on("log", addLogLine);
@@ -421,7 +423,7 @@ export function showReport(r) {
   const hl = r.highlights || [], sub = bm ? "" : hl.length ? hl[0].msg : "Nothing worth waking you for.";
   const pic = () => (bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]);
   const rhead = `<div class="rhead m-${mk}" data-mk="${mk}"><span class="rpic"></span><div class="rtx"><small>${MOMENT_TAG[mk]}</small><b>${esc(bm ? bm.txt : "A quiet watch")}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div></div>`;
-  $("#reportBody").innerHTML = `${bcHead}${rhead}<p><b>Okafor's night-watch log.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
+  $("#reportBody").innerHTML = `${bcHead}${rhead}<p><b>Okafor's night-watch log for ${esc(ltNamed())}.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
   <ul><li>Voyage: ${r.legs} leg${r.legs === 1 ? "" : "s"} completed · ${r.events} event${r.events === 1 ? "" : "s"}</li>
   <li>${fights}${r.avoided ? ` T'Ren steered around ${r.avoided} patrol${r.avoided === 1 ? "" : "s"}.` : ""}</li>
   <li>Night watch cleared <b>${r.crewFixes || 0}</b> fault${r.crewFixes === 1 ? "" : "s"}${r.repairs ? ` · your repairs: ${r.repairs}` : ""}${r.torpsBuilt ? ` · torpedoes replicated: ${r.torpsBuilt}` : ""}</li>
@@ -579,9 +581,38 @@ function renderBgPrompt() {
     <div class="mbtns"><button class="close alt" data-bg="none">NO SPECIALTY</button><button class="close" data-bg="later">LATER</button></div>`;
   $("#bgPanel").hidden = false;
 }
+// ---- the Lt's name: one form, used by the first-time prompt (#namePanel) and the Personal Log rename ----
+let nameAsked = false;
+function nameAsk() {
+  if (!nameDue() || nameAsked || PACE_RT.sessionT < 1.5 || window.__TENACITY_SKIP_NAME === true) return false;   // __TENACITY_SKIP_NAME: older test tools only (like __TENACITY_TEST_DEATHS)
+  const anyModal = [...document.querySelectorAll(".modal")].some(m => !m.hidden);
+  if (anyModal || G.sp.battle || G.sp.alert || document.body.classList.contains("sheet-open") || ST_open()) return false;   // deferred like the Academy prompt
+  nameAsked = true; openNamePrompt(); return true;
+}
+export function openNamePrompt() { const b = $("#nameBody"); b.innerHTML = nameFormHTML(false); wireNameForm(b, () => { $("#namePanel").hidden = true; renderCareer(true); }); $("#namePanel").hidden = false; }
+function nameFormHTML(rename) {
+  const n = (G.lt && G.lt.name) || { first: "", last: "" };
+  return `${rename ? `<button class="plback" data-pl="index">‹ BACK</button>` : ""}<h3>${rename ? "SERVICE RECORD" : "REPORTING FOR DUTY"}</h3>
+    <p class="cnote">${rename ? "Change how the ship's records and your crew name you." : "Before your first watch: how should the duty roster list you?"}</p>
+    <form class="nameform" autocomplete="off" novalidate>
+      <label>First name <small>optional</small><input name="first" maxlength="${20}" value="${esc(n.first)}" spellcheck="false" autocapitalize="words"></label>
+      <label>Surname<input name="last" maxlength="${20}" value="${esc(n.last)}" placeholder="${esc(DEFAULT_LAST)}" spellcheck="false" autocapitalize="words" enterkeyhint="done"></label>
+      <p class="nprev"></p>
+      <div class="mbtns">${rename ? `<button type="button" class="close alt" data-name="cancel">CANCEL</button>` : ""}<button type="submit" class="close" data-name="ok">${rename ? "SAVE" : "REPORT FOR DUTY"}</button></div>
+    </form>`;
+}
+function wireNameForm(root, done) {
+  const f = root.querySelector("form.nameform"), pv = root.querySelector(".nprev");
+  const prev = () => { const a = cleanName(f.first.value), b = cleanName(f.last.value) || DEFAULT_LAST; pv.textContent = `The crew will call you ${addr()} ${b}${a ? ` (${a} ${b} on your service record)` : ""}.`; };   // textContent: never markup
+  f.addEventListener("input", prev); prev();
+  f.addEventListener("submit", e => { e.preventDefault(); const was = G.lt.nameDone === true; setName(f.first.value, f.last.value);
+    log(was ? `Service record updated: ${rankName()} ${ltFull()}.` : `Service record: ${rankName()} ${ltFull()}, reporting to Main Engineering. Okafor: 'Welcome aboard, ${ltNamed()}.'`, "comm"); done(); });
+  const c = root.querySelector('[data-name="cancel"]'); if (c) c.addEventListener("click", () => done());
+}
 function autoModals() {
   renderMedScene();
-  const busy = !$("#report").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden
+  if (nameAsk()) return;   // the Lt's name comes first (a new game: at the start; an older save: once on its next load)
+  const busy = !$("#namePanel").hidden || !$("#report").hidden || !$("#plogPanel").hidden || !$("#decorPanel").hidden || !$("#liftPanel").hidden || !$("#medPanel").hidden || !$("#safetyPanel").hidden || !$("#beatPanel").hidden || !$("#romPanel").hidden
     || !$("#bcCard").hidden;   // pass 15 L3: the safety prompt / board / spec / disclosure wait while the red-alert card is up (dismissed or auto-hidden after 7 s)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && MD.gentlePromptDue()) { renderSafetyPrompt(); return; }
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && RM.pendingDisc()) { openRom({ mode: "disc" }); return; }
@@ -682,7 +713,7 @@ function plogClick(e) {
   if (D.plGive) { const id = plogView.id, r = GF.giveGift(id, D.plGive); plogView = { id, result: r.ok ? r : { why: r.why } }; renderPlog(); card.scrollTop = 0; renderCareer(true); return; }
   if (D.plBuy) { GF.buyForLocker(D.plBuy); renderPlog(); renderCareer(true); return; }
   if (D.plCare) { const r = GF.sendCare(D.plCare); plogView = { id: D.plCare, result: r.ok ? { line: `Care package sent. ${r.r === "pleased" ? "Packed with things you know they like." : "A reply comes back, polite and brief."}` } : { why: r.why } }; renderPlog(); card.scrollTop = 0; renderCareer(true); return; }
-  if (D.pl === "index") openPlog(); else if (D.pl === "insight") { plogView = { mode: "insight" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "locker") { plogView = { mode: "locker" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "scrap") { plogView = { mode: "scrap" }; renderPlog(); card.scrollTop = 0; } else openPlog(D.pl);
+  if (D.pl === "index") openPlog(); else if (D.pl === "rename") { plogView = { mode: "name" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "insight") { plogView = { mode: "insight" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "locker") { plogView = { mode: "locker" }; renderPlog(); card.scrollTop = 0; } else if (D.pl === "scrap") { plogView = { mode: "scrap" }; renderPlog(); card.scrollTop = 0; } else openPlog(D.pl);
 }
 // ---- Personal Log phase 2: gift screens ----
 const FR = () => PROG.currency.short;
@@ -707,7 +738,7 @@ function renderScrap(body) {
   const L = scrapbook();
   const rows = L.map(e => `<div class="scrap">${e.art && artKey(e.art) ? `<img loading="lazy" src="assets/story/${artKey(e.art)}.webp" alt="" onerror="this.style.visibility='hidden'">` : `<span class="noimg"></span>`}<div><b>${esc(e.title)}</b><small>${e.day ? `Day ${e.day}` : "Before the scrapbook"}${e.sd != null ? ` · SD ${e.sd.toFixed(1)}` : ""}</small>
     ${e.label ? `<p class="sc">You chose: ${esc(e.label)}</p>` : `<p class="sc dim">Choice not recorded.</p>`}${e.band ? `<p class="sr ${e.band}"><i>${SCRAP_BAND[e.band]}.</i> ${esc(e.res || "")}</p>` : ""}</div></div>`).join("");
-  body.innerHTML = `<button class="plback" data-pl="index">‹ BACK</button><h3>STORY SCRAPBOOK</h3><p class="cnote">The moments worth keeping, newest first.</p>${rows || `<p class="plnote">No story scenes yet. They start from your second day aboard.</p>`}`;
+  body.innerHTML = `<button class="plback" data-pl="index">‹ BACK</button><h3>STORY SCRAPBOOK</h3><p class="cnote">${esc(ltFull())}: the moments worth keeping, newest first.</p>${rows || `<p class="plnote">No story scenes yet. They start from your second day aboard.</p>`}`;
 }
 function renderLocker(body) {
   const sh = GF.shopState(), inv = G.prog.gifts.inv, n = GF.lockerCount();
@@ -781,7 +812,7 @@ function beatClick(e) {
   const b = e.target.closest("[data-beat]"); if (!b) return; const k = b.dataset.beat;
   if (k === "close" || k === "later") { $("#beatPanel").hidden = true; beatRes = null; return; }
   const v = IN.beatView(); if (!v) return; const o = v.who, r = IN.answerBeat(+k); if (!r) return;
-  beatRes = { good: r.good, line: r.good ? `${o.short} relaxes. 'Thank you, ${addr()}.' (+opinion)` : `${o.short} goes quiet. (−opinion) Tomorrow you can apologise from the Personal Log.` };
+  beatRes = { good: r.good, line: r.good ? `${o.short} relaxes. 'Thank you, ${ltAddr()}.' (+opinion)` : `${o.short} goes quiet. (−opinion) Tomorrow you can apologise from the Personal Log.` };
   renderBeat(); renderCareer(true); lastChips = "";
 }
 // ---- Personal Log phase 4: romance ----
@@ -870,7 +901,8 @@ function renderPlog() {
       return `<button class="plrow" data-pl="${c.id}">${plogFace(c, c.color)}<span class="nm">${c.rankShort} ${esc(c.short)}<small>${c.role.split(" ·")[0]}</small></span><span class="pls">${s.label}<i class="tr t${s.trend.dir}">${s.trend.arrow}</i></span></button>`; }).join("");
     const alRows = alU.map(a => `<button class="plrow alum" data-pl="${a.id}">${plogFace(a, (SPECIES[a.species] || SPECIES.human).color)}<span class="nm">${alumRankShort(a)} ${esc(a.short)}<small>${POSTINGS[a.posting].name}</small></span><span class="pls">${opinionLabel(a.opinion)}${a.opinion >= PROG.fleet.contactMin ? ' <i class="ok">✓</i>' : ""}</span></button>`).join("");
     const memRows = mem.map(m => `<button class="plrow lost" data-pl="${m.id}"><span class="badge" style="background:#3a4560">${m.partner && RM.enabled() ? "♥" : "✦"}</span><span class="nm">${esc(m.name)}<small>${m.role} · lost ship's day ${m.day}${m.partner ? (RM.enabled() ? " · your partner" : " · a close friend") : ""}</small></span><span class="pls"></span></button>`).join("");
-    body.innerHTML = `<h3>PERSONAL LOG</h3><p class="cnote">Stardate ${G.ship.stardate.toFixed(1)}. My own notes on the people I serve with. Tap a name.</p>
+    body.innerHTML = `<h3>PERSONAL LOG</h3><p class="cnote">Stardate ${G.ship.stardate.toFixed(1)}. ${esc(ltFull())}'s own notes on the people I serve with. Tap a name.</p>
+      <button class="plrow namer" data-pl="rename"><span class="badge" style="background:#2f5f8f">✎</span><span class="nm">SERVICE RECORD<small>${esc(rankName())} ${esc(ltFull())} · change your name</small></span></button>
       <button class="plrow lockerb" data-pl="locker"><span class="badge" style="background:#3a4f7a">🎁</span><span class="nm">GIFT LOCKER<small>${GF.lockerCount()}/${PROG.gifts.invMax} · ${GF.shopState().docked ? "the DS9 Promenade is open" : GF.shopState().homeworld ? "homeworld shops open" : "Promenade and homeworld gifts"}</small></span><span class="pls">›</span></button>
       ${romanceRows()}${insightRow()}${scrapRow()}
       <div class="plh">ABOARD · ${list.length}</div>${rows}
@@ -878,6 +910,7 @@ function renderPlog() {
     return;
   }
   if (plogView.mode === "locker") return renderLocker(body);
+  if (plogView.mode === "name") { body.innerHTML = nameFormHTML(true); wireNameForm(body, () => { plogView = null; renderPlog(); renderCareer(true); }); return; }   // the same form as the first-time prompt
   if (plogView.mode === "scrap") return renderScrap(body);
   if (plogView.mode === "insight") return renderInsight(body);
   if (plogView.mode === "gift") return renderGiftPicker(body, plogView.id);

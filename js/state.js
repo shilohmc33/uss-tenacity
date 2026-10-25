@@ -20,6 +20,7 @@ export function freshState() {
       deck: "engineering", x: 0.4792, y: 0.6969, dir: "up", walkPhase: 0, moving: false, walkDist: 0, swingAmp: 0,
       path: null, pathI: 0, intent: null, mode: "idle", node: null, repairSys: null, repairT: 0, seatSide: null,
       resumeTorp: false, note: null,
+      name: { first: "", last: "" }, nameDone: false,   // the player's name for the Lt (ltname.js; additive on v17, asked once)
     },
     sp: {
       location: "ds9", travel: null, travelPaused: false, encAcc: 0, battle: null, awayDefer: 0, evasiveT: 0, rep: 0, lastBattleT: -1e9, torpT: 0,

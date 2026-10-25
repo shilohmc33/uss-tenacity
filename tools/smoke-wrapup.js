@@ -5,7 +5,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await L.launch(); const rep = { url: URL, vp: {}, errors: {} };
   for (const [vp, w, h, m] of [['390x844', 390, 844, 1], ['844x390', 844, 390, 1], ['1280x800', 1280, 800, 0]]) {
-    const errs = []; const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: m ? 2 : 1, isMobile: !!m, hasTouch: !!m }); const p = await ctx.newPage();
+    const errs = []; const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: m ? 2 : 1, isMobile: !!m, hasTouch: !!m }); await ctx.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); const p = await ctx.newPage();
     p.on('pageerror', e => errs.push(e.message)); p.on('console', x => { if (x.type() === 'error') errs.push(x.text()); });
     await p.goto(URL + '?reset=1'); await L.waitFor(p, () => !!window.__T && document.querySelector('#loading').classList.contains('done')); await L.sleep(800);
     await p.evaluate(() => { window.__noSave = true; __T.G.prog.milestones.firstRepair = true; document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden')); });   // bigger wins #10: past the first repair, the Academy prompt opens ~3 s in

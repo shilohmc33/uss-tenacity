@@ -12,6 +12,7 @@ import { PACE, PACE_RT, nightActive } from "./pacing.js";
 import { ltChatPartner } from "./npc-ambient.js";
 import { drainMult } from "./cabin.js";
 import { PROG, repairOutcome, awardXP, repairMult, taskMult, walkMult, tickStationXP, chatXP, milestone, addr } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 
 // ---- manual vs automated (progression): an order is MANUAL when it is issued from inside a player input event
 // (tap / click / key). main.js raises ORDER.manual in capture-phase input listeners and drops it at the start of
@@ -302,8 +303,8 @@ function finishRepair() {
     G.ship.faults[id] = { t: 0, sev: "low", cost: 1, escT: 0, reopened: true };
     log(`The ${sys.name} slips back to amber — the marginal patch didn't hold. LOW fault reopened.`, "fault");
   }
-  if (pri === 1) log(`T'Ren: 'Noted, ${addr()}. The bridge has its ship back.'`, "comm");
-  else if (pri === 2) cheerLog(`Okafor: 'Good work, ${addr()}. That's how my deck runs.'`, "comm");   // pass 08 (5): not in the quiet period
+  if (pri === 1) log(`T'Ren: 'Noted, ${ltAddr()}. The bridge has its ship back.'`, "comm");
+  else if (pri === 2) cheerLog(`Okafor: 'Good work, ${ltAddr()}. That's how my deck runs.'`, "comm");   // pass 08 (5): not in the quiet period
   const n = sys.node ? NODEMAP[sys.node] : null;
   if (n && n.deck === L.deck && dDist(L.x, L.y, n.x, n.y) <= ZONE) {
     L.mode = "use"; L.node = sys.node; faceToward(n.mx, n.my);

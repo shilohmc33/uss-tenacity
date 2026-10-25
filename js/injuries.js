@@ -29,6 +29,7 @@ import { G } from "./state.js";
 import { log, toast } from "./bus.js";
 import { moodAll } from "./mood.js";
 import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, fullName, rankOf, addr, freshMed } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, SPECIES, POSTINGS, pr, Pr } from "./roster.js";
 import { SYSTEMS } from "./data.js";
 import { PACE_RT, nightActive, offRules, isPresent, presentIdle } from "./pacing.js";
@@ -128,7 +129,7 @@ export function injure(cause, opts = {}) {
     toast(`Injured — ${c.short} in sickbay (minor)`, "warn");
   } else {
     const sn = SYSTEMS[sys].name;
-    log(`Medical alert: ${c.name} (${role}) was seriously hurt by ${inj.what} and is on a biobed in sickbay. ${docName(inj.id)}: 'I can hold ${pr(c, "obj")}, ${addr()}, but sickbay needs the ${sn} stable. Soon.'`, "fault");
+    log(`Medical alert: ${c.name} (${role}) was seriously hurt by ${inj.what} and is on a biobed in sickbay. ${docName(inj.id)}: 'I can hold ${pr(c, "obj")}, ${ltAddr()}, but sickbay needs the ${sn} stable. Soon.'`, "fault");
     toast(`MEDICAL ALERT — ${c.short} · restore the ${sn}`, "crit");
     if (isPresent()) alertFx();
   }
@@ -276,7 +277,7 @@ function die(inj, how = "expired") {
   m.hushUntil = G.ship.elapsed + k.hush;
   const why = how === "surgery" ? `${docName(inj.id)} restored ${pr(o, "pos")} heartbeat twice on the table. The third time, it didn't come back.` : `The ${SYSTEMS[inj.sys] ? SYSTEMS[inj.sys].name : "system"} was still down when the window closed; ${docName(inj.id)} did everything sickbay could do without it.`;
   // pass 07 (4): after a surgery loss the doctor tells the Lt it wasn't them
-  const orvin = how === "surgery" ? `${docName(inj.id)}, quietly: 'It wasn't you, ${addr()}.${inj.fast ? ` You got the power back in ${secs(Math.max(1, Math.round(inj.ackT || 0)))}.` : inj.savedBy === "lt" ? " You got sickbay its power back." : ""} Some injuries are past what any of us can do.'` : null;
+  const orvin = how === "surgery" ? `${docName(inj.id)}, quietly: 'It wasn't you, ${ltAddr()}.${inj.fast ? ` You got the power back in ${secs(Math.max(1, Math.round(inj.ackT || 0)))}.` : inj.savedBy === "lt" ? " You got sickbay its power back." : ""} Some injuries are past what any of us can do.'` : null;
   m.scene = { id: o.id, name: entry.name, short: o.short, phase: "lost", why, role: entry.role, partner, orvin, how };
   if (orvin) log(orvin, "comm");
   log(why, "fault");
@@ -340,7 +341,7 @@ export function tickMed(dt) {
         // comes back to more time than they left with (the old flat 30 s floor let a 5 s clock come back as 30 s: leaving beat staying)
         { const cap = Math.min(Number.isFinite(inj.leftAtLeave) ? inj.leftAtLeave : inj.left, k.returnFloor); if (!inj.floored && inj.left < cap) { inj.left = cap; inj.floored = true; } }
         inj.leftAtLeave = null;
-        log(`${docName(inj.id)}: '${inj.short} held while you were off watch, ${addr()}, but sickbay still needs the ${SYSTEMS[inj.sys].name}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault");
+        log(`${docName(inj.id)}: '${inj.short} held while you were off watch, ${ltAddr()}, but sickbay still needs the ${SYSTEMS[inj.sys].name}.' ${secs(Math.max(0, Math.ceil(inj.left)))} on the clock once you're back on it.`, "fault");
         alertFx();
       } else if (inj.paused) {   // pass 08 (3): a short lock / hide / idle (no catch-up): the clock resumes, but under the floor it waits for a re-tap
         inj.paused = false; inj.leftAtLeave = null;

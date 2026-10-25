@@ -9,6 +9,7 @@ import { G } from "./state.js";
 import { log, toast } from "./bus.js";
 import { quirksOf, moodlet } from "./mood.js";
 import { PROG, hooks, nudge, opinionOf, spend, canAfford, addr, crewTouch } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { GIFT, GIFT_ITEMS, CAT_LABEL, tastesOf, L2_ALT } from "./gift-data.js";
 import { pr, Pr, POSTINGS } from "./roster.js";
 import { DESTS } from "./data.js";
@@ -98,7 +99,7 @@ const LINES = {
   polite: "{S} thanks you for {A}, politely, and sets it aside.",
   uncomfortable: "{S} looks at {A} a moment too long. 'That's... kind.' {Sub} {is} uncomfortable.",
 };
-const fillL = (t, o, it) => t.replace(/\{S\}/g, o.short).replace(/\{A\}/g, it.a).replace(/\{lt\}/g, addr()).replace(/\{Sub\}/g, Pr(o)).replace(/\{is\}/g, pr(o, "is"));
+const fillL = (t, o, it) => t.replace(/\{S\}/g, o.short).replace(/\{A\}/g, it.a).replace(/\{lt\}/g, ltAddr()).replace(/\{Sub\}/g, Pr(o)).replace(/\{is\}/g, pr(o, "is"));
 const QUIRK_CATS = { holo: ["holo", "story"], gourmand: ["food", "cooking", "sweets"], homesick: ["family", "home", "sentimental"], devout: ["spiritual"], vulcan: ["vulcan", "logic"],
   workaholic: ["tech", "career"], butterfly: ["game", "music"], loner: ["book"], nightowl: ["coffee", "hot"], green: ["tactical", "career"], oldhand: ["antique", "keepsake"], shortfuse: ["klingon"] };
 export const quirkFit = (id, it) => quirksOf(id).some(q => (QUIRK_CATS[q] || []).some(c => it.cats.includes(c)));

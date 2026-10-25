@@ -6,6 +6,7 @@
 import { G } from "./state.js";
 import { log, toast, cheer, cheerLog, cheerToast, cheerful } from "./bus.js";   // pass 09 (4): light romance lines go through the ONE quiet-period gate
 import { PROG, hooks, nudge, opinionOf, crewList, spend, canAfford, addr, freshRomance, romAuthority } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, POSTINGS, pr, Pr } from "./roster.js";
 import { addEntry, nextDateVariant } from "./plog.js";
 import { favourites } from "./injuries.js";
@@ -19,7 +20,7 @@ export const isRomLog = e => !!e && (e.tag === ROM || (!e.tag && typeof e.msg ==
 export const romLogHidden = e => R().opt !== true && isRomLog(e);
 export const R = () => P().romance || (P().romance = freshRomance());
 const rnd = () => Math.random();
-const fill = (t, o, x = {}) => t.replace(/\{S\}/g, o.short).replace(/\{lt\}/g, addr()).replace(/\{X\}/g, x.X || "")
+const fill = (t, o, x = {}) => t.replace(/\{S\}/g, o.short).replace(/\{lt\}/g, addr()).replace(/\{nm\}/g, ltFirst() || ltLast()).replace(/\{X\}/g, x.X || "")
   .replace(/\{(sub|obj|pos|Sub|Obj|Pos)\}/g, (_, f) => f[0] === f[0].toUpperCase() ? Pr(o, f.toLowerCase()) : pr(o, f)).replace(/\{is\}/g, pr(o, "is")).replace(/\{has\}/g, pr(o, "has")).replace(/\{s\}/g, pr(o, "s"));
 const ACTIVE = ["interested", "courting", "together"];
 export const STAGE_LABEL = { interested: "Interested", courting: "Courting", together: "Together", ended: "Friends (it ended gently)", letters: "Letters", lost: "In memoriam" };
@@ -178,7 +179,7 @@ export function endIt(id, why = "player") {
 const LETTERS = ["The posting at {X} is everything they promised, except you aren't here. I keep turning to tell you things.", "{X} has a viewport over the stars like ours, almost. I saved you a seat at it in my head.",
   "Long shifts here. I read your last letter twice on the worst one.", "Someone here tells the same terrible jokes Hale does. I laughed, then missed the ship so much I had to step out.",
   "I've been thinking about that evening, the one with the dessert. Write when you can.", "They say there's a chance of shore leave near DS9 next year. I'm only mentioning it."];
-const ENDLETTER = "I think we both know the distance is winning. I'll always be glad of us. Look after yourself, {lt}. — {S}";
+const ENDLETTER = "I think we both know the distance is winning. I'll always be glad of us. Look after yourself, {nm}. — {S}";
 export const thread = () => R().thread;
 export const lettersOf = id => R().letters.filter(l => l.id === id);
 // pass 11 m8: a letter always starts with a capital ("{X} has..." openers)

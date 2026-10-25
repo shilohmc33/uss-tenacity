@@ -4,6 +4,7 @@
 import { G, saveSoon } from "./state.js";
 import { PACE, isPresent } from "./pacing.js";
 import { addHardener, crewList, opinionOf, nudge, addr } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { log, toast } from "./bus.js";
 
 const LINES = [
@@ -21,7 +22,7 @@ export function tickWelcome() {
   const inj = new Set(((G.prog.med && G.prog.med.inj) || []).map(x => x.id));
   const pool = crewList().filter(c => !inj.has(c.id)).sort((a, b) => opinionOf(b.id) - opinionOf(a.id)).slice(0, 3);
   G.prog.welcome = null; if (!pool.length) return null;
-  const c = pool[Math.floor(Math.random() * pool.length)], line = LINES[Math.floor(Math.random() * LINES.length)].replace(/\{short\}/g, c.short).replace(/\{addr\}/g, addr());
+  const c = pool[Math.floor(Math.random() * pool.length)], line = LINES[Math.floor(Math.random() * LINES.length)].replace(/\{short\}/g, c.short).replace(/\{addr\}/g, ltNamed());   // the welcome-back line always uses the name
   nudge(c.id, 1, "welcome back"); log(line, "comm"); saveSoon("welcome");
   return { id: c.id, short: c.short, line };
 }

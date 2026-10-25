@@ -32,6 +32,6 @@ export function nextGoal() {
   if (firstWatch()) return { k: "first", text: "FIRST WATCH · Tap here when the first fault shows", act: "duty" };
   if (atDS9() && SP.promSeen && !promUI.shown()) return { k: "ds9", text: "DS9 · Spend shore time on the Promenade ▸", act: "prom" };
   if (readinessVisible()) { const h = readinessHint(); if (h && (h.act || h.hint)) return { k: "ready", text: `NEXT · ${cap1(firstPart(h.act || h.hint))}`, act: "crew" }; }
-  if (p.level < 200) { const need = Math.max(0, xpToNext(p.level) - p.xp); return { k: "ready", text: `NEXT · Level ${p.level + 1}: ${need} XP to go — repairs, deck tasks and odd jobs`, act: "crew" }; }
+  if (p.level < 200) { const need = Math.max(0, xpToNext(p.level) - p.xp); return { k: "ready", text: `NEXT · Level ${p.level + 1}: ${need} XP to go`, act: "crew" }; }
   return { k: "nominal", text: "All systems nominal", act: null };
 }

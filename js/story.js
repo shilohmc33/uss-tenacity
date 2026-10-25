@@ -8,6 +8,7 @@ import { G, saveSoon } from "./state.js";
 import { addScrap, scrapList, SCRAP_MAX } from "./scrapbook.js";   // Q1 #10
 import { STORY, MOOD, isPresent, offRules, storyShare, storyPerDay, oddsWord } from "./pacing.js";
 import { addHardener, nudge, opinionOf, spend, canAfford, awardXP, addr, costText } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { pr, SLOTMAP } from "./roster.js";
 import { log, cheerful } from "./bus.js";
 import { skillLvl, addSkillXp, moodlet, SKILL_LABEL } from "./mood.js";
@@ -629,14 +630,14 @@ export const EV = {
           safe: { partner: ["{lead} walks out with you."], friend: ["{lead} says it was a good first watch."], rival: ["{lead} shrugs."], solo: ["The watch ends."] } },
         choices: [
           { k: "own", label: "Own the slip you made on the way", skill: "composure", act: "owning a mistake in front of the chief", risk: "an awkward minute", grisk: "an awkward minute", res: {
-            success: { fx: { xp: 35, rep: 1, op: 1, op2: 1, sxp: 15, mlet: "storyGood" }, text: "You tell {chief} exactly where you went wrong and how you fixed it. {Chief} looks at you for a long moment, then says that's the kind of engineer {chief} can work with." },
+            success: { fx: { xp: 35, rep: 1, op: 1, op2: 1, sxp: 15, mlet: "storyGood" }, text: "You tell {chief} exactly where you went wrong and how you fixed it. {Chief} looks at you for a long moment, then says that's the kind of engineer {chief} can work with: 'Welcome to my deck, {named}.'" },
             partial: { fx: { xp: 18, sxp: 8 }, text: "You explain the slip, a little too long. {Chief} cuts you off, not unkindly: noted, next time." },
             fail: { fx: { mlet: "storyRough" }, text: "You trip over the explanation, and {chief} says to put it in writing instead." } } },
           { k: "data", label: "Walk {chief} through the readings", skill: "engineering", act: "presenting the repair data", risk: "an awkward minute", grisk: "an awkward minute", res: {
             success: { fx: { xp: 35, rep: 1, op: 1, op2: 1, sxp: 15, mlet: "storyGood" }, text: "You put the before-and-after readings side by side, and the harmonic is simply gone. {Chief} nods slowly, and tells {lead} to keep an eye on how you work." },
             partial: { fx: { xp: 18, sxp: 8 }, text: "The readings make the case, though {chief} finds one number you can't explain." },
             fail: { fx: { mlet: "storyRough" }, text: "You pull up the wrong log first, and by the time you find the right one {chief} has moved on." } } },
-          { k: "report", label: "Hand over a neat written report", safe: true, careful: { text: "You hand {chief} a short, neat written report: what you heard, what you found, what you did. {Chief} reads it twice, initials it and files it, and says it's a good first watch." }, res: {
+          { k: "report", label: "Hand over a neat written report", safe: true, careful: { text: "You hand {chief} a short, neat written report: what you heard, what you found, what you did. {Chief} reads it twice, initials it and files it: 'Good first watch, {named}.'" }, res: {
             safe: { fx: {}, text: "You hand over the log without comment. {Chief} grunts and files it." } } },
         ] },
     ],
@@ -653,7 +654,7 @@ const safeOf = N => N.choices.find(c => c.safe);
 function fill(t, c) {
   const L = occ(c.lead), O = c.other ? occ(c.other) : null, co = P().crew.slots.co;
   const m = { lead: nm(c.lead), other: O ? O.short : "someone", sub: pr(L, "sub"), obj: pr(L, "obj"), pos: pr(L, "pos"), s: pr(L, "s"), is: pr(L, "is"), has: pr(L, "has"), does: pr(L, "s") ? "does" : "do",
-    osub: pr(O, "sub"), oobj: pr(O, "obj"), opos: pr(O, "pos"), chief: slotName("chief-engineer", "the chief engineer"), captain: co && occ(co) ? occ(co).short : "the captain", addr: addr(), ...(c.x || {}) };
+    osub: pr(O, "sub"), oobj: pr(O, "obj"), opos: pr(O, "pos"), chief: slotName("chief-engineer", "the chief engineer"), captain: co && occ(co) ? occ(co).short : "the captain", get addr() { return ltAddr(); }, get named() { return ltNamed(); }, ...(c.x || {}) };
   return String(t).replace(/\{(\w+)\}/g, (all, k) => { const v = m[k.toLowerCase()]; return v == null ? all : k[0] !== k[0].toLowerCase() ? cap1(v) : v; });
 }
 // relationship band of the lead with the Lt (the holodeck relations() approach; the partner only when romance is on)
@@ -765,7 +766,7 @@ export function pilotTick(dt) {
   if (ms.firstRepair && !(pl.repairT >= 0)) pl.repairT = pl.t;   // fix 2: the 15 min start at the first repair (stamped in present seconds)
   if (cur) return false;
   if (isPresent() && !offRules()) pl.t = Math.min(1e6, pl.t + numIn(dt, 0, 60, 0));
-  if (!((pl.repairT >= 0 && pl.t - pl.repairT >= PP.at) || pl.t >= PP.fallback)) return false;   // fallback: 30 min of present play from the start
+  if (!(pl.repairT >= 0 ? pl.t - pl.repairT >= PP.at : pl.t >= PP.fallback)) return false;   // the 30 min fallback (from the start of present play) only while no repair has happened
   if (gateWhy("pilot")) return false;
   return startStory(PILOT_ID, { where: "pilot" });
 }

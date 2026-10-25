@@ -8,7 +8,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const errs = [], fails = [], res = {}, ok = (c, m) => { if (!c) fails.push(m); }, J = JSON.stringify;
   let first = true;
   for (const [w, h] of (process.env.ONE ? [[390, 844]] : [[390, 844], [844, 390], [1280, 800]])) {
-    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage(), R = res[tag] = {};
+    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), R = res[tag] = {};
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });
     await p.evaluate(() => { window.__noSave = true; __T.PACE_RT.idleT = 0; __T.G.prog.milestones.firstRepair = true; });   // bigger wins #10: on a fresh first watch the prompt waits for the first repair

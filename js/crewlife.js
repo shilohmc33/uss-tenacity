@@ -7,6 +7,7 @@ import { pushMoment } from "./moments.js";   // Bigger wins #11
 import { HEAD_Y } from "./data.js";
 import { log, toast, fx } from "./bus.js";
 import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, rankOf, fullName, perkFx, spend, canAfford, addr, costText, computeReadiness, giftShare, romanceCap } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, SPECIES, TAGS, TAG_KEYS, POSTINGS, LADDERS, DEPTS, pr, Pr, prFill } from "./roster.js";
 import { PACE_RT, nightActive } from "./pacing.js";
 
@@ -155,7 +156,7 @@ export function introLine(id) {
   const sl = SLOTMAP[o.slot], best = friendliestAlum();
   const heard = o.heard >= PROG.fleet.newcomer.lineAt && best ? ` 'Heard good things about you from ${rankOf(best)} ${best.short} at ${POSTINGS[best.posting].name}.'` : "";
   const flav = (TAGS[o.tags[0]] || TAGS.warm)[0].replace(/\{short\}/g, o.short).replace(/\{lt\}/g, addr()), flavP = prFill(flav, o);
-  return `New crewmate: ${fullName(o)} (${SPECIES[o.species].name}) introduces ${pr(o, "ref")} — 'Reporting as ${sl.role.split(" ·")[0].toLowerCase()}, ${addr()}. Just in from ${o.from}.'${heard} ${flavP}`;
+  return `New crewmate: ${fullName(o)} (${SPECIES[o.species].name}) introduces ${pr(o, "ref")} — 'Reporting as ${sl.role.split(" ·")[0].toLowerCase()}, ${ltAddr()}. Just in from ${o.from}.'${heard} ${flavP}`;
 }
 export function introDone(id) {
   const o = C().occ[id]; if (!o || !o.intro) return false;

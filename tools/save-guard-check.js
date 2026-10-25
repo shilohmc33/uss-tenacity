@@ -20,7 +20,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     };
     let closing = false; const tearing = () => closing;
     const ready = p => p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });
-    const prep = p => p.evaluate(() => { const G = __T.G; G.prog.background = G.prog.background || 'none'; G.prog.bgDone = true; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); const pc = document.querySelector('#promCard'); if (pc) pc.hidden = true; });
+    const prep = p => p.evaluate(() => { const G = __T.G; G.prog.background = G.prog.background || 'none'; G.prog.bgDone = true; if (G.lt) G.lt.nameDone = true; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); const pc = document.querySelector('#promCard'); if (pc) pc.hidden = true; });
     const raw = p => p.evaluate(k => { const m = localStorage.getItem(k), b = localStorage.getItem(k + '.bak'); const pick = s => { try { const d = JSON.parse(s); return { len: s.length, keys: Object.keys(d).length, repairs: d.stats && d.stats.repairs, parts: d.ship && d.ship.parts, xp: d.prog && d.prog.xp }; } catch (e) { return s == null ? null : { len: s.length, bad: true }; } }; return { main: pick(m), bak: pick(b), corrupt: localStorage.getItem(k + '.corrupt') != null }; }, KEY);
     const prog = p => p.evaluate(() => { const G = __T.G; return { repairs: G.stats.repairs, parts: G.ship.parts, xp: G.prog.xp, level: G.prog.level, tows: G.stats.tows, log: G.log.slice(-4).map(l => l.t || l.text || l.msg || J(l)) }; }).catch(() => null);
     const R = {};

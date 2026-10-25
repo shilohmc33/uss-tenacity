@@ -7,21 +7,26 @@
 const { chromium } = require('playwright-core'); const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = __dirname + '/../shots/';
 const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHOTS !== '0';
 const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.idleT = 0; T.PACE_RT.offline = false; T.PACE_RT.sessionT = 1e6;
-  G.prog.background = G.prog.background || 'none'; G.prog.bgDone = true; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); const pc = document.querySelector('#promCard'); if (pc) pc.hidden = true;
+  G.prog.background = G.prog.background || 'none'; G.prog.bgDone = true; if (G.lt) G.lt.nameDone = true; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); const pc = document.querySelector('#promCard'); if (pc) pc.hidden = true;
   G.sp.battle = null; G.sp.alert = null; G.sp.lastBattleT = -1e9; G.night.battleTimes = []; G.sp.ev.active = null; G.ship.faults = {}; G.ship.hull = 100; if (G.prog.jobs) G.prog.jobs.active = null; };
 (async () => {
   const br = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
   const errs = [], net = [], newArt = [], fails = [], res = {}, ok = (c, m) => { if (!c) fails.push(m); }, J = JSON.stringify, host = new URL(BASE).host;
   const NEW = /story_(firstwatch|report_|promenade)|_c3\.webp/;
-  let first = true;
+  let first = true, planArt = null;
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
-    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage(), R = res[tag] = {};
+    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), R = res[tag] = {};
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
     p.on('response', r => { if (r.status() >= 400) net.push(`${tag}: ${r.status()} ${r.url()}`); });
-    p.on('requestfailed', r => { if (new URL(r.url()).host === host) net.push(`${tag}: failed ${r.url()} ${r.failure() && r.failure().errorText}`); });
+    p.on('requestfailed', r => { if (new URL(r.url()).host !== host) return; const t = r.failure() && r.failure().errorText; net.push(`${tag}: failed ${r.url()} ${t}`); });
     p.on('request', r => { if (NEW.test(r.url())) newArt.push(`${tag}: ${r.url()}`); });
     const boot = async (q = '?reset=1') => { await p.goto(BASE + q); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await p.evaluate(PREP); };
     await boot();
+    if (first) planArt = await p.evaluate(async () => { const want = ['a', 'b', 'c'].map(x => 'story_firstwatch_' + x).concat([1, 2, 3].flatMap(st => [1, 2, 3].map(c => `story_firstwatch_s${st}_c${c}`)), ['story_echo_s1_c3', 'story_echo_s2_c3', 'story_jemhadar_c3', 'story_kestrel_s1_c3', 'story_kestrel_s2_c3', 'story_kestrel_s3_c3', 'story_vorta_c3'], ['bcwin', 'promo', 'story', 'rescue', 'win', 'levelup', 'arrival', 'quiet'].map(k => 'story_report_' + k), ['story_promenade']);
+      const man = await (await fetch('assets/story/manifest.json', { cache: 'no-store' })).json(), names = new Set((Array.isArray(man) ? man : man.images || Object.keys(man)).map(x => String(typeof x === 'string' ? x : x.name || x.file || '').replace(/\.webp$/, '')));
+      const ART = await import('/js/ui/story.js'), bad = [];
+      for (const k of want) { const r = await fetch(`assets/story/${k}.webp`); const b = await r.arrayBuffer(); if (!r.ok || b.byteLength < 1000) bad.push(k + ' ' + r.status + ' ' + b.byteLength); }
+      return { n: want.length, missing: want.filter(k => !names.has(k) && !(ART.hasArt && ART.hasArt(k))), bad, fb: want.filter(k => ART.artKey && ART.artKey(k) !== k) }; });
     if (first) {
       // ---- 7. the pilot: trigger, gates, once only, no day-cap count, not in any pool ----
       R.pilot = await p.evaluate(async () => { const ST = __T.ST, T = __T, G = T.G, PC = await import('/js/pacing.js'), o = {}, s = ST.S();
@@ -59,6 +64,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
           if (Math.abs(got - exp) > 1e-12) o.other.diff.push([id, ch.k, got, exp]); } }
         return o; });
       R.pilotFallback = await p.evaluate(() => { const ST = __T.ST, G = __T.G, s = ST.S(); s.pilot = { t: 1799, done: false }; G.prog.milestones.firstRepair = false; ST.pilotTick(0.5); const a = ST.storyOpen(); ST.pilotTick(1); const b = ST.storyOpen() && ST.current().id; ST.closeStory(); return { at17995: a, at1800: b, done: s.pilot.done }; });
+      R.pilotNoFb = await p.evaluate(() => { const ST = __T.ST, G = __T.G, s = ST.S(), keep = JSON.stringify(s.pilot); s.pilot = { t: 1800, done: false, repairT: 1000 }; G.prog.milestones.firstRepair = true; ST.pilotTick(0.5); const a = ST.storyOpen(); s.pilot.t = 1900; ST.pilotTick(0.5); const b = ST.storyOpen(); if (b) ST.closeStory(); ST.S().pilot = JSON.parse(keep); return { at1800afterRepair: a, at900sinceRepair: b }; });
       R.pilot.harden = await p.evaluate(async () => { const ST = __T.ST, G = __T.G, PG = await import('/js/progression.js'), keep = JSON.stringify(ST.S()), keepR = G.prog.milestones.firstRepair, h = [];   // fix 2: harden repairT on load
         ST.S().pilot = { t: 300.7, done: false }; G.prog.milestones.firstRepair = true; PG.clampProg(); h.push(ST.S().pilot.repairT);   // missing + a repair made: starts now (300)
         ST.S().pilot = { t: 200, done: false, repairT: 'x' }; G.prog.milestones.firstRepair = false; PG.clampProg(); h.push(ST.S().pilot.repairT);   // junk, no repair: -1
@@ -180,6 +186,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     await SETW(true); await p.evaluate(() => { const pl = document.querySelector('#alertPill'); pl.style.flex = '0 0 96px'; pl.style.maxWidth = '96px'; __T.G.ship.faults = { shields: { t: 0, sev: 'crit', cost: 1, escT: 0 } }; }); await sleep(300);
     R.strip2.narrow = await PILLR(); await p.evaluate(() => { const pl = document.querySelector('#alertPill'); pl.style.flex = ''; pl.style.maxWidth = ''; });
     await SETW(false);
+    await p.evaluate(() => { const G = __T.G; G.prog.playDays = 1; G.prog.milestones.firstRepair = true; }); await sleep(400); R.strip2.level = await PILLR();
     if (w === 1280) {
       await boot();
       R.tabs = await p.evaluate(async () => { const o = {}, vis = s => { const e = document.querySelector(s); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0; };
@@ -220,7 +227,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   ok(P.gLegDay1 === 'grace', 'normal stories still in grace on day 1: ' + P.gLegDay1);
   ok(P.fired.open && P.fired.id === 'first_watch' && P.fired.done && P.fired.dayCount && P.fired.legsSince === 0 && P.fired.steps === 3, 'pilot fire ' + J(P.fired));
   ok(P.choices.length === 3 && !P.choices.some(c => c[2] === 'bonus') && P.choices[2][2] === 'careful' && P.choices[2][1] === 3, 'pilot choices ' + J(P.choices));
-  ok(L.pilotUI.shown && L.pilotUI.imgs.every(s => !s || !/firstwatch/.test(s)) && (L.pilotUI.noart || L.pilotUI.imgs.some(s => s && /story_coolant_c4/.test(s))) && /stop here/.test(L.pilotUI.x), 'pilot UI ' + J(L.pilotUI));
+  ok(L.pilotUI.shown && !L.pilotUI.noart && L.pilotUI.imgs.some(s => s && /story_firstwatch_a\.webp/.test(s)) && L.pilotUI.imgs.every(s => !s || !/story_coolant/.test(s)) && /stop here/.test(L.pilotUI.x), 'pilot UI ' + J(L.pilotUI));
   const PCs = L.pilotCareful; ok(PCs.steps.filter(s => s.band).every(s => s.band === 'careful' && /XP/.test(s.xp) && s.word === 'Carefully.') && PCs.steps.filter(s => 'line' in s).every(s => s.line) && PCs.steps[4].next == null, 'pilot careful thread ' + J(PCs.steps));
   ok(PCs.scrap.every(b => b === 'careful') && !PCs.again && PCs.done && PCs.nCareful >= 3, 'pilot once only / scrapbook ' + J(PCs));
   { const PO = L.pilotOdds; ok(PO.formulaSame, 'oddsP formula unchanged');
@@ -228,6 +235,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     ok(PO.live.every(x => x >= 0.85 && x <= 0.9), 'pilot live choiceP ' + J(PO.live));
     ok(PO.other.n > 20 && !PO.other.diff.length, `non-pilot odds identical (${PO.other.n} choices) ` + J(PO.other.diff.slice(0, 4)));
     console.log('pilot odds: ' + PO.rows.map(r => `s${r.step} ${r.k} sk${r.sk}: ${r.before} (${r.beforeWord}, full ${Math.round(r.before * 60)}%) -> ${r.after} (${r.word}, full ${Math.round(r.full * 100)}%)`).join(' | ')); }
+  ok(L.pilotNoFb.at1800afterRepair === false && L.pilotNoFb.at900sinceRepair === true, 'the 30 min fallback only without a repair ' + J(L.pilotNoFb));
   ok(L.pilotFallback.at17995 === false && L.pilotFallback.at1800 === 'first_watch' && L.pilotFallback.done, 'pilot fallback ' + J(L.pilotFallback));
   const C = L.careful;
   ok(J(C.kestrel.out) === J(['careful>1+xp', 'step2', 'careful>2+xp', 'step3', 'careful+xp']) && C.kestrel.chain === 'kestrel_thanks' && C.kestrel.careful, 'kestrel careful ' + J(C.kestrel));
@@ -238,7 +246,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   ok(C.xLabelCareful && C.stop.chain == null && C.stop.last === 'safe' && C.stopVorta == null, 'the ✕ stops ' + J([C.stop, C.stopVorta]));
   ok(C.full.band === 'success' && C.half.band === 'success' && C.half.half && !C.full.half && C.half.line && C.half.xp > 0 && C.half.xp <= Math.ceil(C.full.xp * 0.5) + 1 && C.half.rep <= Math.ceil(C.full.rep * 0.5), 'half pay ' + J([C.full, C.half]));
   ok(C.carefulXp.xp === Math.round(0.4 * (40 + 30) / 2), 'careful xp ' + J(C.carefulXp));
-  ok(L.carefulUI.band === 'Carefully.' && L.carefulUI.cont && !/_c3/.test(L.carefulUI.img || ''), 'careful UI ' + J(L.carefulUI));
+  ok(L.carefulUI.band === 'Carefully.' && L.carefulUI.cont && /story_kestrel_s1_c3/.test(L.carefulUI.img || ''), 'careful UI ' + J(L.carefulUI));
   const G2 = L.goal; ok(G2.freshFault === 45 && G2.ver === 17, 'fresh fault / version ' + J([G2.freshFault, G2.ver]));
   ok(G2.first === 'first' && /FIRST WATCH/.test(G2.pillFirst) && G2.alertOverFault === 'alert' && G2.fault === 'duty' && /TAP TO REPAIR/.test(G2.pillFault), 'goal top ' + J(G2));
   ok((G2.job === 'job' || G2.job === 'no job offered') && G2.board === 'board' && (G2.spec === 'spec' || G2.spec === 'no spec owed') && G2.firstAgain === 'first' && G2.after === 'ready' && G2.ds9 === 'ds9', 'goal order ' + J(G2));
@@ -247,13 +255,15 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     ok(F.h >= 44 && F.inView && !F.clipped && F.lines <= 2 && /^FIRST WATCH · Tap here when the first fault shows$/.test(F.text), `strip first-watch ${sz} ` + J(F));
     const bad = Object.entries(S2.faults).filter(([k, r]) => !(r.h >= 44 && r.inView && !r.clipped && r.lines <= 2 && r.nm && r.nm.vis && r.nm.txt.length > 2));
     ok(!bad.length, `strip fault keeps the system name ${sz} ` + J(bad.slice(0, 3)));
+    const LV = S2.level; ok(LV.h >= 44 && !LV.clipped && LV.lines <= 2 && /^NEXT · /.test(LV.text), `strip NEXT hint fits ${sz} ` + J(LV));
     const NR = S2.narrow; ok(NR.novb && NR.nm && NR.nm.vis && !NR.clipped && NR.h >= 44, `narrow strip drops the verb, keeps the name ${sz} ` + J(NR));
     const sh = S2.faults['fw:shields']; ok(sh && /^TAP TO REPAIR: Shield Generator/.test(sh.text) && (sz !== '1280x800' || !sh.novb), `strip TAP TO REPAIR ${sz} ` + J(sh));
     console.log(`strip ${sz}: first ${F.lines} line(s) ${F.h}px · faults dropping the verb ${Object.values(S2.faults).filter(r => r.novb).length}/${Object.keys(S2.faults).length}, severity ${Object.values(S2.faults).filter(r => r.nosv).length}`); }
   const M = L.moments; ok(M.none === 'quiet' && M.a === 'arrival' && M.b === 'levelup' && M.c === 'win' && M.d === 'rescue' && M.e === 'story' && M.f === 'promo' && M.g === 'bc' && M.tie === 'three', 'ranking ' + J(M));
   ok(M.battle && M.winMoment.length === 1 && /^win:You beat off a Cardassian Galor at \d+% hull$/.test(M.winMoment[0]), 'won fight moment ' + J(M.winMoment));
   ok(M.towBattle && M.towMoments === 0 && M.towBest === 'quiet', 'tow is not a win ' + J([M.towBattle, M.towMoments, M.towBest]));
-  const RP = L.report; ok(RP.head && RP.head.mk === 'rescue' && /RESCUE/.test(RP.head.tag) && RP.head.first && RP.reportT > 0, 'report headline ' + J(RP.head));
+  const RP = L.report; ok(/story_report_rescue\.webp/.test(RP.head && RP.head.img || '') && /story_report_quiet\.webp/.test(RP.quiet && RP.quiet.img || ''), 'report headline real art ' + J([RP.head && RP.head.img, RP.quiet && RP.quiet.img]));
+  ok(RP.head && RP.head.mk === 'rescue' && /RESCUE/.test(RP.head.tag) && RP.head.first && RP.reportT > 0, 'report headline ' + J(RP.head));
   ok(RP.quiet && RP.quiet.mk === 'quiet' && RP.quiet.txt === 'A quiet watch' && RP.manifestOk, 'quiet fallback ' + J(RP.quiet));
   const PR = L.prom; ok(PR.due && PR.shown && PR.seen && J(PR.rows.map(r => r.replace('(off)', ''))) === J(['close', 'gifts', 'shore', 'holo', 'letters']) && /444/.test(PR.line), 'promenade shown ' + J(PR));
   ok(!PR.gifts.card && PR.gifts.plog && /GIFT LOCKER/.test(PR.gifts.h3 || ''), 'gifts button ' + J(PR.gifts));
@@ -267,9 +277,9 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   ok(T.tabs.duty.cls && T.tabs.duty.duty && !T.tabs.duty.orders && T.tabs.duty.saved === 'duty' && T.tabs.duty.on === 'duty' && T.tabs.btnH >= 44, 'tab duty ' + J(T.tabs.duty));
   ok(T.tabsReload.tab === 'duty' && T.tabsReload.cls, 'tab saved ' + J(T.tabsReload));
   for (const t of ['390x844', '844x390']) ok(res[t].tabs.bar === 'none', 'tabs hidden in play ' + t);
-  for (const t of Object.keys(res)) { const f = res[t].fit; ok(f.shown && f.inStage && !f.scroll && f.btn >= 44 && (!f.img || /story_quarks_v2|story_promenade/.test(f.img)), 'promenade fit ' + t + ' ' + J(f)); }
+  for (const t of Object.keys(res)) { const f = res[t].fit; ok(f.shown && f.inStage && !f.scroll && f.btn >= 44 && /story_promenade\.webp/.test(f.img || ''), 'promenade fit ' + t + ' ' + J(f)); }
   for (const t of ['390x844', '1280x800']) { const f = res[t].reportFit; ok(f.h <= 112 && f.inView && f.img, 'report headline fit ' + t + ' ' + J(f)); }
-  ok(!newArt.length, 'requests for not-yet-painted art ' + J(newArt));
+  ok(planArt && planArt.missing.length === 0 && planArt.bad.length === 0 && planArt.n === 28 && planArt.fb.length === 0, 'plan art resolves (28 pictures in the manifest, each 200) ' + J(planArt));
   ok(!net.length, 'failed / 4xx requests ' + J(net));
   ok(!errs.length, 'console errors ' + J(errs));
   console.log(J(res, null, 1).slice(0, 6000));

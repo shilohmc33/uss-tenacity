@@ -10,6 +10,7 @@
 import { G } from "./state.js";
 import { MOOD, offRules, isPresent } from "./pacing.js";
 import { PROG, nudge, addr } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { SLOTMAP, pr } from "./roster.js";
 import { DECKS, NODEMAP } from "./data.js";
 import { log, toast, cheerful } from "./bus.js";
@@ -136,7 +137,7 @@ export function resolveIncident(a) {
   else if (a.inc === "unwell") { r.unwell = Math.min(r.unwell || 0, now() + 3600); r.stress = 0; moodlet(id, "talked"); nudge(id, A, "incident");
     log(`You sit with ${nm(id)} for a while. Nothing medical, just a long week. ${Cap(S(id))}'ll be back on duty within the hour.`, "good"); }
   else if (a.inc === "breakdown") { r.unwell = Math.min(r.unwell || 0, now() + MOOD.major.breakdownS / 2); r.stress = 0; moodlet(id, "heard"); nudge(id, A + 1, "incident");
-    log(`You stay with ${nm(id)} until the shaking stops. ${resp("doctor", id)} halves ${Ps(id)} time off duty: 'Whatever you said, keep saying it, ${addr()}.'`, "good"); }
+    log(`You stay with ${nm(id)} until the shaking stops. ${resp("doctor", id)} halves ${Ps(id)} time off duty: 'Whatever you said, keep saying it, ${ltAddr()}.'`, "good"); }
   else if (a.inc === "insub") { nudge(id, -MOOD.major.insubOp + A, "incident", true); moodlet(id, "heard"); calm(id);
     { const c = respId("captain", id); log(`${nm(id)} apologises before ${c ? nm(c) : "the captain"} has to ask. The mast is dismissed. ${(c && MAST[occ(c).id || c]) || MAST[c] || "'Dismissed.'"}`, "good"); } }
   else if (a.inc === "misset") { moodlet(id, "heard"); calm(id); nudge(id, A, "incident");

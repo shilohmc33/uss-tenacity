@@ -6,7 +6,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const br = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
   const errs = [], fails = [], res = {}, ok = (c, m) => { if (!c) fails.push(m); };
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
-    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage();
+    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })();
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
     const boot = async q => { await p.goto(BASE + q); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(500); };
     await boot('?reset=1');

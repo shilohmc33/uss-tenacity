@@ -8,6 +8,7 @@ import { G } from "./state.js";
 import { DECKS, NODEMAP, HEAD_Y } from "./data.js";
 import { log, toast, fx, cheer } from "./bus.js";
 import { PROG, awardXP, taskMult, taskDone, nudge, crewList, opinionOf, addr } from "./progression.js";
+import { ltAddr, ltNamed, ltFirst, ltLast } from "./ltname.js";   // the player's name for the Lt
 import { PACE, PACE_RT, nightActive, isPresent } from "./pacing.js";
 import { resolveIncident, expireIncident, checkIncident } from "./incidents.js";
 
@@ -81,9 +82,9 @@ function spawn() {
   if (!job) { let opts = JOBS.console.filter(j => NODEMAP[j.node] && j.node !== L.node); const nr = opts.filter(j => fresh("con:" + j.label)); if (nr.length) opts = nr; const j = pick(opts); remember("con:" + j.label); job = { kind: "console", node: j.node, deck: NODEMAP[j.node].deck, label: j.label }; }
   Object.assign(job, { t: k.expire, dur: k.expire, need: rr(k.work), acc: 0, xp: k.xp, id: ++J().n }); J().offers = offers + 1;
   J().active = job;
-  if (job.chain) { log(`${job.short}: '${addr()}, have you got a minute? It's ${job.label.split(" with ")[1]}, and it may take two goes.'`, "comm"); toast(`Odd job (${job.short}, step 1/2) — ${DECKS[job.deck].name}: ${job.label}`, "task"); return; }
+  if (job.chain) { log(`${job.short}: '${ltAddr()}, have you got a minute? It's ${job.label.split(" with ")[1]}, and it may take two goes.'`, "comm"); toast(`Odd job (${job.short}, step 1/2) — ${DECKS[job.deck].name}: ${job.label}`, "task"); return; }
   const who = job.kind === "request" ? job.short : "Okafor";
-  log(job.kind === "request" ? `${job.short}: '${addr()}, have you got a minute? ${job.label.split(" with ")[1].replace(/^./, c => c.toUpperCase())}.'` : `Okafor: 'Quiet minute, ${addr()}? ${job.label}, if you would.'`, "comm");
+  log(job.kind === "request" ? `${job.short}: '${ltAddr()}, have you got a minute? ${job.label.split(" with ")[1].replace(/^./, c => c.toUpperCase())}.'` : `Okafor: 'Quiet minute, ${ltAddr()}? ${job.label}, if you would.'`, "comm");
   toast(`Odd job (${who}) — ${DECKS[job.deck].name}: ${job.label}`, "task");
 }
 export function tickJobs(dt) {
@@ -106,14 +107,14 @@ export function tickJobs(dt) {
         if (a.chain && a.chain.step < a.chain.of && CHAINS[a.chain.i] && NODEMAP[CHAINS[a.chain.i].b.node]) {   // Q1 #5: step 2 of the mini-chain, same crewmate
           const C = CHAINS[a.chain.i], nb = C.b.node; j.xp += xp;
           j.active = { kind: "request", node: nb, deck: NODEMAP[nb].deck, who: a.who, short: a.short, label: `${C.b.thing} for ${a.short}`, chain: { step: 2, of: 2, i: a.chain.i }, t: k.expire, dur: k.expire, need: rr(k.work), acc: 0, xp: k.xp, id: ++j.n };
-          log(`${a.short}: 'Halfway there, ${addr()}. ${C.b.thing}, and we're done.' (+${xp} XP)`, "comm"); toast(`Odd job step 2/2 — ${DECKS[NODEMAP[nb].deck].name}: ${C.b.thing}`, "task");
+          log(`${a.short}: 'Halfway there, ${ltAddr()}. ${C.b.thing}, and we're done.' (+${xp} XP)`, "comm"); toast(`Odd job step 2/2 — ${DECKS[NODEMAP[nb].deck].name}: ${C.b.thing}`, "task");
           fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 }); return;
         }
         if (a.chain && CHAINS[a.chain.i]) { j.done++; j.xp += xp; j.active = null; j.next = rr(GAP()); j.chains = (j.chains | 0) + 1;
           log(`${CHAINS[a.chain.i].pay.replace(/\{short\}/g, a.short).replace(/\{addr\}/g, addr())} (+${xp} XP)`, "good"); toast(`Odd job done · ${a.short} is pleased · +${xp} XP`, "good");
           fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 }); return; }
         j.done++; j.xp += xp; j.active = null; j.next = rr(GAP());
-        log(a.kind === "request" ? `${a.short} — sorted.${cheer(` 'I owe you one, ${addr()}.'`, "")} (+${xp} XP)` : `Odd job done — ${a.label.replace(/^./, c => c.toLowerCase())}. (+${xp} XP)`, "good");
+        log(a.kind === "request" ? `${a.short} — sorted.${cheer(` 'I owe you one, ${ltAddr()}.'`, "")} (+${xp} XP)` : `Odd job done — ${a.label.replace(/^./, c => c.toLowerCase())}. (+${xp} XP)`, "good");
         toast(`Odd job done · +${xp} XP${k.rep > 0 ? ` · +${k.rep} rep` : ""}`, "good");
         fx("floater", { x: L.x, y: L.y - HEAD_Y, text: `+${xp} XP`, color: "#8fd8ff", delay: 0.3, life: 2 });
       }

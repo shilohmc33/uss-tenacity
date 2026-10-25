@@ -13,7 +13,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   const errs = [], fails = [], res = {}, ok = (c, m) => { if (!c) fails.push(m); }, J = JSON.stringify;
   let first = true;
   for (const [w, h] of [[390, 844], [844, 390], [1280, 800]]) {
-    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await c.newPage(), R = res[tag] = {};
+    const tag = `${w}x${h}`, c = await br.newContext({ viewport: { width: w, height: h } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), R = res[tag] = {};
     p.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });
     await p.evaluate(PREP);
@@ -241,7 +241,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     first = false; await c.close();
   }
   { // art fallback: the manifest lacks the dc pictures -> the card without a picture, no broken image, no console error
-    const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await c.newPage(), R = res.fallback = {};
+    const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), R = res.fallback = {};
     p.on('console', m => { if (m.type() === 'error') errs.push(`fallback: ${m.text()}`); }); p.on('pageerror', e => errs.push(`fallback: ${e.message}`));
     await p.route('**/assets/story/manifest.json', async r => { const resp = await r.fetch(), a = (await resp.json()).filter(k => !/^story_dc_/.test(k)); await r.fulfill({ response: resp, body: JSON.stringify(a) }); });
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await p.evaluate(PREP); await sleep(400);
@@ -254,7 +254,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     await c.close();
   }
   { // an image error: the neutral picture fails to decode -> .noart
-    const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await c.newPage(), R = res.fallback2 = {};
+    const c = await br.newContext({ viewport: { width: 390, height: 844 } }), p = await (async () => { await c.addInitScript(() => { window.__TENACITY_SKIP_NAME = true; }); return c.newPage(); })(), R = res.fallback2 = {};
     p.on('pageerror', e => errs.push(`fallback2: ${e.message}`));
     await p.route('**/assets/story/story_dc_*.webp', r => r.fulfill({ status: 200, contentType: 'image/webp', body: 'not an image' }));
     await p.goto(BASE + '?reset=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await p.evaluate(PREP); await sleep(400);
