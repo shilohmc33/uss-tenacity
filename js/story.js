@@ -17,11 +17,12 @@ import { injure, gentle, isInjured } from "./injuries.js";
 import { atDS9 } from "./crewcare.js";
 import { isHolo } from "./holodeck.js";
 import { numIn, clamp, pick } from "./util.js";
-import { startBattle, battleAllowed } from "./battle.js";   // E3: S4 hand-off (battle.js never imports story.js)
+import { startBattle, battleAllowed } from "./battle.js";
+import { pushMoment } from "./moments.js";   // #11 the Shift Report's best moment   // E3: S4 hand-off (battle.js never imports story.js)
 
 const P = () => G.prog;
 const isObj = v => !!v && typeof v === "object" && !Array.isArray(v);
-export const freshStory = () => ({ last: null, seen: {}, legsSince: 99, dayCount: { d: 0, n: 0 }, chain: null, step: null, passed: null, fight: null, n: { fired: 0, success: 0, partial: 0, fail: 0 } });
+export const freshStory = () => ({ last: null, seen: {}, legsSince: 99, dayCount: { d: 0, n: 0 }, chain: null, step: null, passed: null, fight: null, pilot: { t: 0, done: false }, n: { fired: 0, success: 0, partial: 0, fail: 0, careful: 0 } });
 export const S = () => { const p = P(); if (!isObj(p.story)) p.story = freshStory(); return p.story; };
 const occ = id => P().crew && P().crew.occ[id];
 const nm = id => id === "lt" ? "you" : occ(id) ? occ(id).short : "someone";
@@ -201,14 +202,14 @@ export const EV = {
             partial: { fx: { xp: 15, sxp: 10, parts: -2 }, text: "You get the team through to the sealed hold, but a booby-trapped hatch you missed eats a tricorder on the way.", lines: { parts: "Replacing it costs {lost}." } },
             fail: { fx: { op: -1, injure: "a plasma burn from a booby-trapped hatch" }, text: "A booby-trapped hatch you didn't spot goes off as {lead} reaches it. The sweep still makes it to the sealed hold.",
               lines: { injured: "{lead} has a plasma burn across one hand.", unhurt: "{lead} is shaken but unhurt." } } } },
-          { k: "scan", label: "Scan from the Tenacity and keep your distance", safe: true, res: {
+          { k: "scan", label: "Scan from the Tenacity and keep your distance", safe: true, careful: { next: 1, text: "You hold the Tenacity at a safe distance and sweep the Kestrel properly first: the hull is stable, the corridors are clear of traps, and the life signs are behind a cargo hold sealed from the inside. Only then do you take a team across, slowly and by the book." }, res: {
             safe: { fx: {}, text: "You hold the Tenacity at a safe distance, log the Kestrel for the Bajoran Militia and pass on the life signs. A Bajoran rescue ship is on its way." } } },
           { k: "eva", bonus: true, label: "Spacewalk to the bridge hatch and restore power from outside", skill: "fitness", act: "a spacewalk across a tumbling hull", risk: "{lead} shaken", grisk: "{lead} shaken", next: { success: 1, partial: 1, fail: 1 }, res: {
             success: { fx: { xp: 60, rep: 2, sxp: 30 }, text: "You cross the Kestrel's hull in mag boots and bring the emergency power up from the bridge hatch. The corridors light, and the way to the sealed hold is clear." },
             partial: { fx: { xp: 30, sxp: 15 }, text: "You get the emergency lighting on, though the tumble costs you time on the hull." },
             fail: { fx: { mlet: "storyRough" }, text: "The tumble throws you off the hull on your tether, and {lead} has to reel you in before the team goes in the hard way." } } },
         ] },
-      { title: "The sealed hold", art: "story_kestrel_b",
+      { title: "The sealed hold", art: "story_kestrel_b", careful: ["You came in slow and by the book; the frost on the hold door has had longer to thicken."],
         blurb: "The cargo hold door is frosted over and welded shut from the inside. Through it, faintly, someone is tapping a Bajoran prayer rhythm on the bulkhead. {lead} reads eleven life signs, most of them small.",
         vars: { partner: ["{lead} stands close enough that your shoulders touch."], friend: ["{lead} raises an eyebrow: your call, {addr}."], rival: ["{lead} is already reaching for the cutter, waiting to see if you'll stop {obj}."], solo: ["The tapping stops, then starts again, slower."] },
         after: {
@@ -226,14 +227,14 @@ export const EV = {
             success: { fx: { xp: 40, rep: 2, op: 1, sxp: 20, mlet: "storyGood" }, text: "You answer the prayer rhythm with the next line, and after a long minute the seal hisses open from inside. Eleven refugees, cold and wary, and alive." },
             partial: { fx: { xp: 20, sxp: 10, power: -5 }, text: "It takes an hour of talking through the door, but they open up.", lines: { power: "Keeping the corridor warm costs the ship {pw} percent of its power." } },
             fail: { fx: { op: -1, mlet: "storyRough" }, text: "Your words come out wrong and someone inside starts to cry. In the end they open the door only because the cold leaves them no choice." } } },
-          { k: "tow", label: "Seal the hold and tow the freighter to a starbase", safe: true, res: {
+          { k: "tow", label: "Seal the hold and tow the freighter to a starbase", safe: true, careful: { next: 2, text: "You leave the seal alone, lock a tractor beam on the Kestrel and warm the hold through the hull while the right cutting gear comes up from stores. It takes hours. When the door finally opens, eleven Bajoran refugees step out cold, wary and alive." }, res: {
             safe: { fx: {}, text: "You leave the hold sealed, put a tractor beam on the Kestrel and tow it to the nearest starbase, where a Bajoran team opens the hold with the right gear. Everyone inside lives." } } },
           { k: "press", bonus: true, label: "Repressurise the corridor first, then open the seal gently", skill: "engineering", act: "repressurising a dead corridor", risk: "the refugees frightened", grisk: "{lead} shaken", next: { success: 2, partial: 2, fail: 2 }, res: {
             success: { fx: { xp: 60, rep: 3, sxp: 30, mlet: "storyGood" }, text: "You bring the corridor up to pressure and temperature before you touch the seal, and when it opens the refugees step out into warm air instead of vacuum frost." },
             partial: { fx: { xp: 30, sxp: 15, power: -5 }, text: "The corridor holds pressure just long enough to open the hold.", lines: { power: "It costs the Tenacity {pw} percent of its power." } },
             fail: { fx: { mlet: "storyRough" }, text: "The corridor bleeds air faster than you can feed it, and you open the hold in the cold after all." } } },
         ] },
-      { title: "The refugees", art: "story_kestrel_b",
+      { title: "The refugees", art: "story_kestrel_b", careful: ["The careful approach cost time, but nobody aboard the Kestrel is any colder for it."],
         blurb: "The refugees fled a Cardassian-held colony across the Badlands; the phaser scars are from the patrol that chased them in. Their elder, a thin, grey-haired Bajoran called Mehra, asks only where they are going now. A Bajoran transport could meet you in six hours, or the Tenacity could take them to Deep Space Nine.",
         vars: { partner: ["{lead} is sharing {pos} ration bar with the smallest of the children."], friend: ["{lead} has given the elder {pos} jacket without being asked."], rival: ["{lead} mutters that the Tenacity is not a passenger liner, but not loudly."], solo: ["A child is staring at your rank pips as if they were jewels."] },
         after: {
@@ -250,7 +251,7 @@ export const EV = {
             success: { fx: { xp: 40, rep: 3, op: 1, sxp: 20 }, text: "The transport crew greets the refugees like family, and Mehra presses a Bajoran earring into your hand before beaming across." },
             partial: { fx: { xp: 20, rep: 1, sxp: 10 }, text: "The handoff is slow and the transport captain is short with you, but everyone gets across." },
             fail: { fx: { op: -1, mlet: "storyRough" }, text: "The transport is late, the refugees are frightened, and Mehra tells you quietly that the refugees expected more of Starfleet. They get across in the end." } } },
-          { k: "hold", label: "Call Starfleet and hold position", safe: true, res: {
+          { k: "hold", label: "Call Starfleet and hold position", safe: true, careful: { chain: "kestrel_thanks", text: "You call it in and hold position, and keep the refugees fed and warm until a Starfleet transport arrives. Before beaming across, Mehra asks which ship found them, and writes the name down." }, res: {
             safe: { fx: {}, text: "You call it in and hold position until a Starfleet transport arrives to take them on. It's slow and correct, and nobody is in danger." } } },
           { k: "sanctuary", bonus: true, label: "Win them sanctuary on Deep Space Nine over subspace", skill: "composure", act: "making a case to the Bajoran Militia", risk: "the refugees disappointed", grisk: "{lead} shaken", res: {
             success: { fx: { xp: 60, rep: 5, sxp: 30, mlet: "storyGood" }, chain: "kestrel_thanks", text: "You put the case to the Bajoran Militia over subspace with Mehra beside you, and by the time the Kestrel reaches Deep Space Nine there are quarters waiting." },
@@ -280,14 +281,14 @@ export const EV = {
             success: { fx: { xp: 30, rep: 1, sxp: 20, mlet: "storyGood" }, pend: "probe_maker", text: "You fan a tachyon grid out behind the Tenacity, {lead} tuning the emitters, and something flickers in it: a cloaked Breen probe, pinned and painted." },
             partial: { fx: { xp: 15, sxp: 10, parts: -2 }, text: "The grid catches a ripple, enough to prove a cloaked probe is riding your wake.", lines: { parts: "It burns out an emitter coil worth {lost}." } },
             fail: { fx: { fault: "low", sys: "shields", mlet: "storyRough" }, text: "The grid flares, the echo slides away into the noise, and you're left staring at an empty plot.", lines: { fault: "The feedback leaves a small fault in the {fsys}." } } } },
-          { k: "log", label: "Log it and keep course", safe: true, res: {
+          { k: "log", label: "Log it and keep course", safe: true, careful: { next: 1, text: "You log the anomaly and keep course, with a passive watch on it and nothing else. Three hours later the echo makes one mistake, a course change a beat too late, and for a second a squat cloaked hull shows through. Enough to find it again." }, res: {
             safe: { fx: {}, text: "You log the anomaly for Starfleet's sensor analysts and keep course. The echo fades a few hours later." } } },
           { k: "harmonics", bonus: true, label: "Recalibrate the deflector to read the cloak's harmonics", skill: "engineering", act: "recalibrating the deflector on the fly", risk: "a small shield fault", grisk: "{lead} shaken", next: { success: 1, partial: 1 }, res: {
             success: { fx: { xp: 60, rep: 3, sxp: 30 }, pend: "probe_maker", text: "You retune the deflector to the cloak's harmonic and the probe lights up on the plot like a lantern: Breen, and now fully catalogued." },
             partial: { fx: { xp: 30, sxp: 15, power: -6 }, text: "The recalibration is rough, but the probe's outline shows through the cloak.", lines: { power: "It costs {pw} percent of the ship's power." } },
             fail: { fx: { fault: "low", sys: "shields" }, text: "The deflector shudders off-tune and the echo is gone.", lines: { fault: "The strain leaves a small fault in the {fsys}." } } } },
         ] },
-      { title: "The Breen probe", art: "story_echo_b",
+      { title: "The Breen probe", art: "story_echo_b", careful: ["The patience paid off: the probe never noticed you watching."],
         blurb: "Pinned in the sensor beam, the probe drops its cloak: a squat Breen hull bristling with antennae, quietly copying every transmission the Tenacity makes. It has been listening for a while. It is also, very clearly, talking to someone.",
         vars: { partner: ["{lead} touches your hand once under the console, then is all business."], friend: ["{lead} cracks {pos} knuckles: time to find out who's listening."], rival: ["{lead} watches to see whether you'll take the obvious shot."], solo: ["The probe's lights blink in a slow, unbothered rhythm."] },
         after: {
@@ -305,7 +306,7 @@ export const EV = {
               alt: { fx: { xp: 50, rep: 3, sxp: 25, mlet: "storyGood" }, text: "You ride the probe's carrier wave back to a Jem'Hadar fighter running dark at the edge of sensor range. It sees you looking and goes to warp before anyone can fire, and the trace goes to Starfleet Intelligence." } },
             partial: { fx: { xp: 25, sxp: 10 }, text: "You follow the trace halfway before it dissolves into static. Somewhere out there, someone knows you looked." },
             fail: { fx: { op: -1, mlet: "storyRough" }, text: "The probe spots your trace and destroys itself, and {lead} takes it personally." } } },
-          { k: "leave", label: "Log it and leave", safe: true, res: {
+          { k: "leave", label: "Log it and leave", safe: true, careful: { chain: "probe_maker", text: "You log the probe's position and signature and leave it whispering to itself, but you pass its carrier frequency to Starfleet Intelligence with a note to keep watching the lane." }, res: {
             safe: { fx: {}, text: "You log the probe's position and signature and leave it whispering to itself. Starfleet Intelligence sends a curt acknowledgement." } } },
           { k: "spoof", bonus: true, label: "Feed the probe false telemetry for its makers", skill: "engineering", act: "spoofing a Breen telemetry feed", risk: "a small fault in the EPS grid", grisk: "{lead} shaken", res: {
             success: { fx: { xp: 80, rep: 5, sxp: 35 }, text: "You feed the probe a convincing picture of a Starfleet convoy that doesn't exist, and somewhere out there the Breen redeploy against it." },
@@ -315,7 +316,7 @@ export const EV = {
     ],
   },
   kestrel_thanks: {
-    title: "The Kestrel's thanks", art: "story_quarks", ckey: "story_kthanks", type: "crew", gentle: true, chainOnly: true, where: ["dock"], w: 1,
+    title: "The Kestrel's thanks", art: "story_quarks", ckey: "story_kthanks", type: "crew", gentle: true, chainOnly: true, where: ["dock"], w: 1, careful: ["Mehra remembers the ship that waited with them, and says so."],
     cast: () => { const a = crewFree(); return a.length ? { lead: pick(a) } : null; },
     blurb: "The Kestrel's refugees have found their feet on Deep Space Nine, and their elder Mehra has found you, with a basket of hasperat and a request. The Militia wants papers they don't have, and the Promenade wants to throw them a dinner. {lead} came along to see them again.",
     vars: { partner: ["{lead} slips {pos} hand into yours as Mehra talks."], friend: ["{lead} is already sampling the hasperat."], rival: ["{lead} is pretending not to be pleased to see them."], solo: ["The children have found the Promenade's railing and are counting ships."] },
@@ -338,7 +339,7 @@ export const EV = {
     ],
   },
   probe_maker: {
-    title: "The probe's maker", art: "story_generic_space", ckey: "story_maker", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1,
+    title: "The probe's maker", art: "story_generic_space", ckey: "story_maker", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1, careful: ["Starfleet Intelligence passed your note along; the lane has been watched ever since."],
     cast: () => { const l = slotIds(["tactical", "ops", "conn", "security"]); const a = l.length ? l : juniors(); return a.length ? { lead: pick(a) } : null; },
     blurb: "The Breen signature you logged turns up again, faint and steady: a ship running dark along the lane the probe was watching. It hasn't seen the Tenacity. Yet. {lead} has it on the plot.",
     vars: { partner: ["{lead} glances back at you, eyes bright."], friend: ["{lead} whispers, as if the Breen could hear: there it is."], rival: ["{lead} says the smart move is to leave."], solo: ["The bridge is quiet enough to hear the consoles hum."] },
@@ -380,7 +381,7 @@ export const EV = {
         success: { fx: { xp: 50, rep: 3, sxp: 25 }, text: "You run the trace while {lead} asks the Vorta about the weather on Kurill Prime, and the spiderweb closes on a Dominion listening post two sectors over. Starfleet is very interested." },
         partial: { fx: { xp: 25, sxp: 10, power: -6 }, text: "The trace narrows to a sector before the Vorta notices and drops the channel.", lines: { power: "The trace costs {pw} percent of the ship's power." } },
         fail: { fx: { fault: "low", sys: "eps" }, text: "The Vorta notices the trace almost at once and sends a spike back down the line before he goes.", lines: { fault: "The spike leaves a small fault in the {fsys}." } } } },
-      { k: "refuse", label: "Refuse and log the contact", safe: true, res: {
+      { k: "refuse", label: "Refuse and log the contact", safe: true, careful: { chain: "vorta_returns", text: "You close the channel without a word, then log every second of it for Starfleet Intelligence, carrier frequency and all. The Vorta's smile is the last thing on the screen, and you have a feeling it won't be the last time you see it." }, res: {
         safe: { fx: {}, text: "You close the channel without a word and log the contact for Starfleet Intelligence. The Vorta's smile is the last thing on the screen." } } },
       { k: "bluff", bonus: true, label: "Bluff a Jem'Hadar intercept to flush his ship out", skill: "tactical", act: "running a bluff on a Vorta", risk: "{lead} uneasy", grisk: "{lead} shaken", res: {
         success: { fx: { xp: 70, rep: 4, sxp: 30 }, text: "You fake a Jem'Hadar fleet code on a side channel, and the Vorta's ship, much closer than he claimed, breaks cover and runs. Its course goes straight to Starfleet." },
@@ -389,7 +390,7 @@ export const EV = {
     ],
   },
   vorta_returns: {
-    title: "The Vorta returns", art: "story_vorta", ckey: "story_vreturn", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1,
+    title: "The Vorta returns", art: "story_vorta", ckey: "story_vreturn", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1, careful: ["He sounds amused that you logged him. 'So careful, Lieutenant.'"],
     cast: () => { const l = slotIds(["ops", "conn", "tactical", "science"]); const a = l.length ? l : juniors(); return a.length ? { lead: pick(a) } : null; },
     blurb: "The same private channel opens again, and the same pale smile. The Vorta says he has a gift: the name of the Cardassian officer who has been selling the Tenacity's patrol routes. The price, he says, is only a conversation. {lead} is back at the comm station.",
     vars: { partner: ["{lead} reaches for your hand under the console, briefly."], friend: ["{lead} murmurs: round two."], rival: ["{lead} says this time you should let {obj} talk."], solo: ["The Vorta waits, perfectly patient."] },
@@ -487,7 +488,7 @@ export const EV = {
         partial: { fx: { xp: 25, sxp: 10, parts: -2 }, text: "You get most of the weapons clear; one rack is trapped and goes up in a puff of green smoke.", lines: { parts: "It takes {lost} of your kit with it." } },
         fail: { fx: { mlet: "storyRough" }, battle: "story_wreck", text: "While you work the weapons rack, you trip the wreck's distress beacon, and a Jem'Hadar fighter answers it. Red alert.",
           alt: { fx: { mlet: "storyRough" }, text: "While you work the weapons rack, you trip the wreck's distress beacon. A Jem'Hadar fighter answers, circles the clearing once, and leaves you to it." } } } },
-      { k: "beacon", label: "Beam up the flight recorder and leave a comm beacon", safe: true, res: {
+      { k: "beacon", label: "Beam up the flight recorder and leave a comm beacon", safe: true, careful: { chain: "debt_repaid", text: "You beam up the flight recorder and leave a comm beacon on the soldier's frequency, with a field med kit set down within his reach. He says nothing as you go, but his eyes follow the med kit." }, res: {
         safe: { fx: {}, text: "You beam up the flight recorder and leave a comm beacon on the soldier's frequency. His own people will come for him, one way or another." } } },
       { k: "white", bonus: true, label: "Rig the fighter's own synthesiser to make ketracel-white", skill: "engineering", act: "coaxing a Dominion synthesiser back to life", risk: "{lead} uneasy", grisk: "{lead} shaken", res: {
         success: { fx: { xp: 70, rep: 4, sxp: 30 }, chain: "debt_repaid", text: "You bring the fighter's synthesiser back up long enough to fill one vial. The soldier drinks, stands, and salutes you, which no one aboard the Tenacity has ever seen a Jem'Hadar do." },
@@ -496,7 +497,7 @@ export const EV = {
     ],
   },
   debt_repaid: {
-    title: "A debt repaid", art: "story_debt", ckey: "story_debt", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1,
+    title: "A debt repaid", art: "story_debt", ckey: "story_debt", type: "mystery", gentle: true, chainOnly: true, where: ["leg"], w: 1, careful: ["The med kit you left him is clipped to his armour."],
     cast: () => { const l = slotIds(["tactical", "security", "ops", "conn"]); const a = l.length ? l : juniors(); return a.length ? { lead: pick(a) } : null; },
     blurb: "A Jem'Hadar fighter drops out of warp off the bow and does not raise its weapons. On the viewscreen is the soldier from the wreck, alive, armour mended. He says he has a warning for the officer who spared him, and only for that officer. {lead} has a hand hovering over the red alert.",
     vars: { partner: ["{lead} doesn't take {pos} eyes off you."], friend: ["{lead} whispers that this is not in any manual."], rival: ["{lead} wants shields up, and says so."], solo: ["The fighter holds perfectly still."] },
@@ -572,6 +573,74 @@ export const EV = {
         fail: { fx: { mlet: "storyRough" }, text: "You're sure it's a magnet; it turns out to be a warped floor plate. Quark is delighted." } } },
     ],
   },
+  // ---- Bigger wins #7: the day-1 pilot story (notes/2026-10-24-bigger-wins-plan.md). pilot: never in a pool (poolFor); fired once by
+  // pilotTick after the first repair + ~15 min of present play. Gentle: no fault, no injury, no bonus lock. Careful choices carry on (#8).
+  first_watch: {
+    title: "First watch", art: "story_firstwatch_a", ckey: "story_firstwatch", type: "ship", gentle: true, pilot: true, where: ["pilot"], w: 0,
+    cast: () => { const l = slotIds(["engineer-1", "engineer-2", "crewman", "transporter"]); const a = l.length ? l : juniors(); if (!a.length) return null; const ch = slotIds(["chief-engineer"]).filter(x => !a.includes(x)); const lead = pick(a); return ch.length ? { lead, other: ch[0] } : { lead }; },
+    nodes: [
+      { title: "A whine in the deck plates", art: "story_firstwatch_a",
+        blurb: "Halfway through your first watch, {lead} waves you over to a junction in Main Engineering. There's a whine in the deck plates, thin and high, that only comes when the warp core cycles. {Chief} hasn't noticed it yet, and {lead} would very much like it fixed before {chief} does.",
+        vars: { partner: ["{lead} stands a little closer than the junction strictly needs."], friend: ["{lead} grins: your first watch, and already a mystery."], rival: ["{lead} says {sub} could find it alone, but doesn't move away."], solo: ["The core hums, the deck plates sing, and nobody else seems to hear it.", "{lead} taps the deck with a boot: there, hear it?"] },
+        after: {
+          success: { partner: ["{lead} bumps your shoulder, pleased."], friend: ["{lead} says {sub} knew you'd hear it too."], rival: ["{lead} allows that you have good ears."], solo: ["The whine leads somewhere now."] },
+          partial: { partner: ["{lead} says slow is fine."], friend: ["{lead} says it's a start."], rival: ["{lead} says {sub}'d have been quicker."], solo: ["It takes a while, but you have a direction."] },
+          fail: { partner: ["{lead} laughs with you, not at you."], friend: ["{lead} says every engineer chases a ghost once."], rival: ["{lead} hides a smile, badly."], solo: ["You end up where you started, a little wiser."] },
+          safe: { partner: ["{lead} says it can wait for {chief}."], friend: ["{lead} shrugs: tomorrow's problem."], rival: ["{lead} says that's one way to do it."], solo: ["The whine goes into the log."] } },
+        choices: [
+          { k: "trace", label: "Trace the whine with a tricorder", skill: "engineering", act: "tracing a harmonic through the deck plates", risk: "a little embarrassment", grisk: "a little embarrassment", next: { success: 1, partial: 1, fail: 1 }, res: {
+            success: { fx: { xp: 30, op: 1, sxp: 15 }, text: "You sweep the tricorder along the seams until the harmonic peaks behind an access panel, and the readout points you straight into the Jefferies tube." },
+            partial: { fx: { xp: 15, sxp: 8 }, text: "The tricorder picks up three echoes before it finds the real one, but you end up at the right Jefferies tube hatch." },
+            fail: { fx: { mlet: "storyRough" }, text: "You chase the echo round the junction twice before {lead} points out the hatch it's coming from." } } },
+          { k: "crawl", label: "Crawl into the Jefferies tube and listen", skill: "fitness", act: "crawling a Jefferies tube by ear", risk: "a bumped head", grisk: "a bumped head", next: { success: 1, partial: 1, fail: 1 }, res: {
+            success: { fx: { xp: 30, op: 1, sxp: 15 }, text: "You squeeze into the tube and follow the sound with your palm flat on the conduit, until it's singing right under your hand." },
+            partial: { fx: { xp: 15, sxp: 8 }, text: "It's a tight fit and a slow crawl, but you find where the whine is loudest." },
+            fail: { fx: { mlet: "storyRough" }, text: "You crack your head on a junction box and lose the sound for a minute. {lead} talks you back to it." } } },
+          { k: "plans", label: "Pull up the deck schematics first", safe: true, careful: { next: 1, text: "You call the deck schematics up on the nearest console and match the whine to the core's cycle. It only takes a few minutes, and it points you at one coupling in the Jefferies tube." }, res: {
+            safe: { fx: {}, text: "You log the whine for {chief} to look at after the watch. It can wait." } } },
+        ] },
+      { title: "The Jefferies tube", art: "story_firstwatch_b", careful: ["Because you checked the schematics, you already know which coupling it is."],
+        blurb: "The whine comes from a coupling in the Jefferies tube behind the junction, cracked hairline-thin and singing every time the core cycles. {lead} is in there with you, trying hard not to look nervous about the live conduit an inch from {pos} elbow.",
+        vars: { partner: ["{lead} hands you the spanner before you ask, fingers brushing yours."], friend: ["{lead} whispers that this is the most fun {sub} {has} had all week."], rival: ["{lead} says {sub}'ll do it if you'd rather watch."], solo: ["The tube is warm and close, and the coupling hums like a tuning fork."] },
+        after: {
+          success: { partner: ["{lead} lets out a breath and laughs."], friend: ["{lead} high-fives you, awkwardly, in a space built for one."], rival: ["{lead} says, fine, that was neat."], solo: ["The whine is gone."] },
+          partial: { partner: ["{lead} says it's holding, and so are you."], friend: ["{lead} says it'll do till the next refit."], rival: ["{lead} says it'll hold. Probably."], solo: ["It holds, with a faint hum."] },
+          fail: { partner: ["{lead} squeezes your arm: nobody's hurt, that's what matters."], friend: ["{lead} says the next shift can finish it."], rival: ["{lead} sighs and reaches for the clamp."], solo: ["It needs another pair of hands."] },
+          safe: { partner: ["{lead} backs out of the tube with you."], friend: ["{lead} says the next shift owes you one."], rival: ["{lead} says it'll still be there tomorrow."], solo: ["The coupling waits for the next shift."] } },
+        choices: [
+          { k: "fix", label: "Clamp and reseal the coupling in place", skill: "engineering", act: "resealing a live coupling", risk: "a little embarrassment", grisk: "a little embarrassment", next: { success: 2, partial: 2, fail: 2 }, res: {
+            success: { fx: { xp: 30, op: 1, sxp: 15 }, text: "You clamp the coupling, bleed the pressure and reseal it in one clean pass. The core cycles again and the tube is silent." },
+            partial: { fx: { xp: 15, sxp: 8 }, text: "The seal takes two tries and still hums faintly, but the crack has stopped growing." },
+            fail: { fx: { mlet: "storyRough" }, text: "The clamp slips and the coupling has to be isolated after all. Nothing breaks except your pride." } } },
+          { k: "talk", label: "Talk {lead} through the repair", skill: "composure", help: true, act: "talking a nervous crewmate through a repair", risk: "{lead} rattled", grisk: "{lead} rattled", next: { success: 2, partial: 2, fail: 2 }, res: {
+            success: { fx: { xp: 30, op: 2, sxp: 15, mlet: "storyGood" }, text: "You hold the light and talk {lead} through it step by step. {Sub} reseal{s} the coupling with steady hands, and looks quietly proud of it." },
+            partial: { fx: { xp: 15, op: 1, sxp: 8 }, text: "{lead} fumbles the first clamp, but your voice steadies {obj} and the second one holds." },
+            fail: { fx: { mlet: "storyRough" }, text: "{lead} freezes with the clamp half on, and you finish it yourself. {Sub} apologise{s} twice on the way out." } } },
+          { k: "isolate", label: "Isolate the coupling and tag it for the next shift", safe: true, careful: { next: 2, text: "You isolate the coupling, hang a bright warning tag on it and write it up properly, with the readings attached. The next shift reseals it in ten minutes." }, res: {
+            safe: { fx: {}, text: "You isolate the coupling and leave a note for the next shift. Your watch ends quietly." } } },
+        ] },
+      { title: "Okafor's verdict", art: "story_firstwatch_c", careful: ["Your write-up is already on the PADD."],
+        blurb: "By the end of the watch {chief} has heard about it, the way chiefs always do, and asks the two of you into the office off Main Engineering. The repair log is up on a PADD on the desk. {lead} stands very straight beside you.",
+        vars: { partner: ["{lead}'s hand finds yours for a second behind your backs, then lets go."], friend: ["{lead} gives you a tiny nod: we've got this."], rival: ["{lead} looks as if {sub} expect{s} you to take the credit."], solo: ["The office smells of coffee and coolant.", "{Chief} reads the log without looking up."] },
+        after: {
+          success: { partner: ["{lead} walks you to the turbolift and doesn't hurry."], friend: ["{lead} tells the mess hall all about it."], rival: ["{lead} says you did all right, for a first watch."], solo: ["{Chief} adds a line to your record."] },
+          partial: { partner: ["{lead} says {chief} liked you. {Sub} could tell."], friend: ["{lead} says that went fine."], rival: ["{lead} says it could have gone worse."], solo: ["It's a fair start."] },
+          fail: { partner: ["{lead} tells you {chief} is like that with everyone."], friend: ["{lead} says {chief} grumbles at everybody on day one."], rival: ["{lead} doesn't say anything, which is kind of {obj}."], solo: ["{Chief} sends you off with a grunt."] },
+          safe: { partner: ["{lead} walks out with you."], friend: ["{lead} says it was a good first watch."], rival: ["{lead} shrugs."], solo: ["The watch ends."] } },
+        choices: [
+          { k: "own", label: "Own the slip you made on the way", skill: "composure", act: "owning a mistake in front of the chief", risk: "an awkward minute", grisk: "an awkward minute", res: {
+            success: { fx: { xp: 35, rep: 1, op: 1, op2: 1, sxp: 15, mlet: "storyGood" }, text: "You tell {chief} exactly where you went wrong and how you fixed it. {Chief} looks at you for a long moment, then says that's the kind of engineer {chief} can work with." },
+            partial: { fx: { xp: 18, sxp: 8 }, text: "You explain the slip, a little too long. {Chief} cuts you off, not unkindly: noted, next time." },
+            fail: { fx: { mlet: "storyRough" }, text: "You trip over the explanation, and {chief} says to put it in writing instead." } } },
+          { k: "data", label: "Walk {chief} through the readings", skill: "engineering", act: "presenting the repair data", risk: "an awkward minute", grisk: "an awkward minute", res: {
+            success: { fx: { xp: 35, rep: 1, op: 1, op2: 1, sxp: 15, mlet: "storyGood" }, text: "You put the before-and-after readings side by side, and the harmonic is simply gone. {Chief} nods slowly, and tells {lead} to keep an eye on how you work." },
+            partial: { fx: { xp: 18, sxp: 8 }, text: "The readings make the case, though {chief} finds one number you can't explain." },
+            fail: { fx: { mlet: "storyRough" }, text: "You pull up the wrong log first, and by the time you find the right one {chief} has moved on." } } },
+          { k: "report", label: "Hand over a neat written report", safe: true, careful: { text: "You hand {chief} a short, neat written report: what you heard, what you found, what you did. {Chief} reads it twice, initials it and files it, and says it's a good first watch." }, res: {
+            safe: { fx: {}, text: "You hand over the log without comment. {Chief} grunts and files it." } } },
+        ] },
+    ],
+  },
 };
 export const IDS = Object.keys(EV);
 // E3: the step a scene is on (single-step events are their own only step)
@@ -627,7 +696,7 @@ export function choiceP(c, ch) {
 let cur = null, seq = 0;
 export const current = () => cur;
 export const storyOpen = () => !!cur;
-export const storyUI = { show: null, hide: null, blocked: null };   // set by js/ui/story.js
+export const storyUI = { show: null, hide: null, blocked: null, panelWhy: null };   // set by js/ui/story.js
 export function gateWhy(where = "leg") {   // P33 fix 1: follow-ups obey every gate too (the quiet-leg gap, one per DS9 visit)
   if (cur) return "open";
   if (!isPresent()) return "away";
@@ -638,13 +707,14 @@ export function gateWhy(where = "leg") {   // P33 fix 1: follow-ups obey every g
   if (P().jobs && P().jobs.active) return "job";
   if (G.sp.ev && G.sp.ev.active) return "task";
   if (!cheerful()) return "hushed";
+  if (where === "pilot") return storyUI.panelWhy ? storyUI.panelWhy() : null;   // #7: no grace, day cap, leg gap or travel rule; any panel, sheet or the Shift Report holds it
   if (numIn(P().playDays, 0, 1e9, 0) < STORY.graceDays) return "grace";
   const s = S(); if (s.dayCount.d === P().day && s.dayCount.n >= storyPerDay(P().playDays)) return "day cap";   // P33: 1 a ship's day on play days 2-4, then STORY.perDay
   if (where === "dock") { if (!atDS9()) return "not docked"; if (s.legsSince < 1) return "this dock"; }
   else { if (!G.sp.travel) return "not travelling"; if (s.legsSince < STORY.minLegs) return "leg gap"; }
   return null;
 }
-export const poolFor = where => IDS.filter(id => !EV[id].chainOnly && EV[id].where.includes(where) && (EV[id].gentle || numIn(P().playDays, 0, 1e9, 0) >= STORY.gentleUntil));
+export const poolFor = where => IDS.filter(id => !EV[id].chainOnly && !EV[id].pilot && EV[id].where.includes(where) && (EV[id].gentle || numIn(P().playDays, 0, 1e9, 0) >= STORY.gentleUntil));
 export function pickStory(where) {
   let pool = poolFor(where); if (pool.length > 1) pool = pool.filter(id => id !== S().last);
   let r = Math.random() * pool.reduce((a, id) => a + EV[id].w, 0);
@@ -678,24 +748,37 @@ export function storyLeg() {
 export function chainDue(where) { const ch = S().chain; return ch && EV[ch.id] && ch.legs >= ch.wait && EV[ch.id].where.includes(where) ? ch.id : null; }
 export function setChain(id, ctx = {}) {
   const s = S(); if (!EV[id] || s.chain) return false;
-  const C = STORY.chain; s.chain = { id, wait: C.min + Math.floor(Math.random() * (C.max - C.min + 1)), legs: 0, el: 0, ctx: { lead: typeof ctx.lead === "string" ? ctx.lead : null } }; return true;
+  const C = STORY.chain; s.chain = { id, wait: C.min + Math.floor(Math.random() * (C.max - C.min + 1)), legs: 0, el: 0, ctx: { lead: typeof ctx.lead === "string" ? ctx.lead : null, careful: ctx.careful === true } }; return true;
 }
 // a step left half-finished at load (hardenStory drops it = the safe choice): one quiet log line on the next tick
 export function storyTick() { const s = S(); if (s.fight && fightReady(s.fight)) { log("The story fight you left is still waiting for you. Red alert!", "fault"); startFight(s.fight); } if (s.passed) { const E = EV[s.passed]; s.passed = null; if (E) log(`${E.title}: the moment passed, and the ship moves on.`, "comm"); } }
+// #7 the day-1 pilot: present seconds count up; it fires once the first repair is done and STORY.pilot.at present seconds have
+// passed (or at STORY.pilot.fallback without a repair), through gateWhy("pilot"). One time: done is set (and saved) when it opens.
+export const PILOT_ID = "first_watch";
+export function pilotTick(dt) {
+  const s = S(), pl = s.pilot; if (pl.done || cur) return false;
+  if (isPresent() && !offRules()) pl.t = Math.min(1e6, pl.t + numIn(dt, 0, 60, 0));
+  const PP = STORY.pilot, ms = P().milestones || {};
+  if (!((ms.firstRepair && pl.t >= PP.at) || pl.t >= PP.fallback)) return false;
+  if (gateWhy("pilot")) return false;
+  return startStory(PILOT_ID, { where: "pilot" });
+}
 // ---- run one ----
 export function startStory(id, opts = {}) {
   const E = EV[id]; if (!E || cur) return false;
   const s = S(), cl = opts.chain && s.chain && s.chain.id === id && s.chain.ctx ? s.chain.ctx.lead : null;
   const cast = opts.cast && occ(opts.cast.lead) ? opts.cast : cl && free(cl) ? { lead: cl } : E.cast(); if (!cast || !occ(cast.lead)) return false;
   const bands = relBands(cast.lead), tier = bands[0][0];
-  cur = { id, cast, tier, node: 0, pend: null, where: opts.where || "debug", res: null, at: ++seq }; enterNode(cur, 0);
+  const half = !!(s.chain && s.chain.id === id && s.chain.ctx && s.chain.ctx.careful);   // #8: a follow-up earned by a careful choice pays half
+  cur = { id, cast, tier, node: 0, pend: null, where: opts.where || "debug", res: null, at: ++seq, half, careful: half }; enterNode(cur, 0);
   const d = P().day; if (opts.chain || (s.chain && s.chain.id === id)) s.chain = null;
-  seedScrap(); s.last = id; s.seen[id] = (s.seen[id] || 0) + 1; s.legsSince = 0; if (s.dayCount.d !== d) s.dayCount = { d, n: 0 }; s.dayCount.n++; s.n.fired++; s.step = { id, node: 0, pend: null };
+  seedScrap(); s.last = id; s.seen[id] = (s.seen[id] || 0) + 1; s.legsSince = 0; if (E.pilot) { s.pilot.done = true; } else { if (s.dayCount.d !== d) s.dayCount = { d, n: 0 }; s.dayCount.n++; } s.n.fired++; s.step = { id, node: 0, pend: null };   // #7: the pilot never counts toward the day cap
   log(`${E.title}: ${fill("{lead}", cast)} needs a decision from you.`, "comm");
+  if (E.pilot) saveSoon("story");   // #7: once only, even across a reload
   if (storyUI.show) storyUI.show(cur);
   return true;
 }
-function enterNode(c, node) { const N = nodeOf({ id: c.id, node }), v = variant(N.vars, c.id + ":" + node, c.cast.lead); c.node = node; c.vkey = v.key; c.text = fill(N.blurb + " " + v.t, c.cast); c.res = null; }
+function enterNode(c, node) { const N = nodeOf({ id: c.id, node }), v = variant(N.vars, c.id + ":" + node, c.cast.lead), cl = c.careful && Array.isArray(N.careful) && N.careful.length ? " " + pick(N.careful) : ""; c.node = node; c.vkey = v.key; c.text = fill(N.blurb + " " + v.t + cl, c.cast); c.res = null; }   // #8: the careful thread's line
 const gentleFail = (band) => band === "fail" && gentle();
 // story choice art (notes/story-choice-art.md): the main scene and the base for <base>_c<n> choice images
 export function artOf(c = cur) { if (!c) return null; const E = EV[c.id], N = nodeOf(c); return { main: N.art || E.art, cbase: E.nodes ? `${E.ckey || E.art}_s${(c.node | 0) + 1}` : E.ckey || E.art }; }
@@ -703,7 +786,7 @@ export function choicesOf(c = cur) {
   if (!c) return []; const N = nodeOf(c), g = gentle();
   // n = the choice's place in the event's list (the art binding, notes/story-choice-art.md); shown rolled first, the safe one last
   const out = N.choices.map((ch, i) => {
-    if (ch.safe) return { k: ch.k, n: i + 1, safe: true, label: fill(ch.label, c.cast), sub: "no roll · safe", risk: null, ok: true, cost: null, p: null };
+    if (ch.safe) return { k: ch.k, n: i + 1, safe: true, careful: !!ch.careful, label: fill(ch.label, c.cast), sub: ch.careful ? "no roll · careful · carries on" : "no roll · safe", risk: null, ok: true, cost: null, p: null };
     const k = ch.help ? "composure" : ch.skill, lvl = ltSkill(k), sk = `${SKILL_LABEL[k]} ${lvl}`, label = fill(ch.label, c.cast);
     if (ch.bonus) { const need = bonusAt(c.id, c.node); if (lvl < need) { const why = `needs ${SKILL_LABEL[k]} ${need}`; return { k: ch.k, n: i + 1, safe: false, bonus: true, locked: true, label, sub: why, risk: null, ok: false, why, cost: null, p: null, skill: k, lvl, need }; } }
     const p = choiceP(c, ch), o = storyOdds(p), helper = ch.help ? `with ${nm(c.cast.lead)}` : null;
@@ -765,25 +848,34 @@ function outcomeText(c, N, band, o, did, ch) {
   const x = { fsys: did.fault ? (OKAFOR_SHORT[did.fault] || SYSTEMS[did.fault].name.toLowerCase()) : "", lost: partsW(did.lost || 0), got: partsW(did.got || 0), pw: String(did.pw || 0) };
   return { text: fill(parts.join(" "), { ...c.cast, x }), akey: a.key };
 }
-const BANDWORD = { success: "Success.", partial: "Partly.", fail: "It goes wrong.", safe: "" };
-export function choose(k) {
+const BANDWORD = { success: "Success.", partial: "Partly.", fail: "It goes wrong.", safe: "", careful: "Carefully." };
+// #8: a careful choice pays about STORY.careful.xp of the step's rolled success XP (no rep, no skill XP)
+export function carefulFx(N) { const xs = N.choices.filter(c => !c.safe && !c.bonus && c.res.success && c.res.success.fx).map(c => c.res.success.fx.xp || 0); return { xp: xs.length ? Math.max(1, Math.round(STORY.careful.xp * xs.reduce((a, b) => a + b, 0) / xs.length)) : 0 }; }
+const halfFx = fx => { const o = { ...fx }; for (const k of ["xp", "rep", "sxp"]) if (o[k] > 0) o[k] = Math.max(1, Math.round(o[k] * STORY.careful.half)); return o; };
+export const hasCareful = (c = cur) => !!(c && nodeOf(c).choices.some(x => x.safe && x.careful));
+export function choose(k, opts = {}) {
   if (!cur || cur.res) return null;
   const E = EV[cur.id], N = nodeOf(cur), ch = N.choices.find(x => x.k === k) || safeOf(N);
   if (ch.bonus && ltSkill(ch.help ? "composure" : ch.skill) < bonusAt(cur.id, cur.node)) return { ok: false, why: `needs ${SKILL_LABEL[ch.help ? "composure" : ch.skill]} ${bonusAt(cur.id, cur.node)}` };   // P34: a locked bonus choice
   if (ch.cost && !spend(ch.cost, "story")) return { ok: false, why: `${costText(ch.cost)} needed` };   // the cost is on the button and charged only when picked
   let band = "safe", p = null, r = null;
   if (!ch.safe) { p = choiceP(cur, ch); r = Math.random(); band = bandOf(p, r); }
-  let o = ch.res[band], battle = false;
+  else if (ch.careful && !opts.stop) band = "careful";   // #8: picked = careful and carries on; the ✕ (stop) = today's safe ending
+  let o = band === "careful" ? { fx: carefulFx(N), text: ch.careful.text, chain: ch.careful.chain } : ch.res[band], battle = false;
   if (o.battle) { const ctx = typeof o.battle === "string" ? o.battle : "story_echo"; if (!gentleFail(band) && !G.sp.battle && G.sp.travel && battleAllowed(ctx)) battle = ctx; else o = o.alt; }   // E3/E4: the hand-off (CTX tag) only when a fight is allowed (never a gentle-mode fail), else the non-battle outcome (decided now, so the text is honest)
-  const fx = gentleFail(band) ? capGentle(o.fx || {}) : (o.fx || {}), chips = ch.cost ? [["bad", `−${costText(ch.cost)}`]] : [];
+  let fx = gentleFail(band) ? capGentle(o.fx || {}) : (o.fx || {}); if (cur.half && (band === "success" || band === "partial")) fx = halfFx(fx);
+  const chips = ch.cost ? [["bad", `−${costText(ch.cost)}`]] : [];
   const A = applyFx(cur, ch, fx); chips.push(...A.chips);
-  const T = outcomeText(cur, N, band, o, A.did, ch), nx = ch.next && ch.next[band] != null && E.nodes && E.nodes[ch.next[band]] ? ch.next[band] : null;
-  if (o.pend) cur.pend = o.pend; if (o.chain) cur.pend = o.chain;
+  const nb = band === "careful" ? ch.careful.next : ch.next && ch.next[band], T = outcomeText(cur, N, band, o, A.did, ch), nx = nb != null && E.nodes && E.nodes[nb] ? nb : null;
+  if (o.pend) cur.pend = o.pend;
+  if (o.chain) { if (band === "careful" && cur.pend !== o.chain) cur.pendCareful = true; else if (band !== "careful") cur.pendCareful = false; cur.pend = o.chain; }
+  cur.careful = band === "careful";   // the next step's careful line
   if (battle) chips.push(["bad", "red alert: one Jem'Hadar fighter"]);
   cur.res = { k: ch.k, band, p, r, text: T.text, akey: T.akey, did: A.did, word: BANDWORD[band], chips, next: nx, battle };
-  const s = S(); if (band !== "safe") s.n[band]++;
-  if (nx != null) s.step = { id: cur.id, node: nx, pend: cur.pend };   // saved with the roll: a reload drops this step (= its safe choice)
-  else { s.step = null; if (cur.pend && !battle) setChain(cur.pend, cur.cast); }
+  const s = S(); if (band !== "safe") s.n[band] = (s.n[band] || 0) + 1;
+  if (band === "success") pushMoment("story", `${E.title}: ${firstSentence(T.text)}`, { art: artOf(cur).main });   // #11
+  if (nx != null) s.step = { id: cur.id, node: nx, pend: cur.pend, careful: !!cur.pendCareful };   // saved with the roll: a reload drops this step (= its safe choice)
+  else { s.step = null; if (cur.pend && !battle) setChain(cur.pend, { ...cur.cast, careful: !!cur.pendCareful }); }
   if (battle) s.fight = battle;   // P33 fix 2: the hand-off is saved with the roll. P34c: only ever set here; cleared only when the battle starts
   log(`${titleOf(cur)}: ${T.text}`, band === "fail" ? "fault" : band === "safe" ? "comm" : "good");
   addScrap({ id: cur.id, title: titleOf(cur), art: artOf(cur).main, label: fill(ch.label, cur.cast), band, res: firstSentence(T.text), day: P().day, sd: G.ship.stardate });   // Q1 #10
@@ -808,7 +900,7 @@ export function scrapbook() { seedScrap(); return scrapList().slice().reverse();
 export function closeStory() {
   if (!cur) return;
   if (cur.res && cur.res.next != null) next();
-  if (!cur.res) choose(safeOf(nodeOf(cur)).k);
+  if (!cur.res) choose(safeOf(nodeOf(cur)).k, { stop: true });   // #8: the ✕ = stop here (today's safe ending, never the careful branch)
   const bt = cur.res && cur.res.battle; cur = null; if (storyUI.hide) storyUI.hide();
   if (bt && !startFight(bt) && S().fight) log(PENDING_LINE[S().fight] || PENDING_LINE.story_echo, "comm");   // P34c: once, when it goes pending
 }
@@ -840,14 +932,17 @@ export function hardenStory(p) {
   o.legsSince = Math.floor(numIn(s.legsSince, 0, 99, 99));
   if (isObj(s.dayCount)) { o.dayCount.d = Math.floor(numIn(s.dayCount.d, 0, day, 0)); o.dayCount.n = Math.floor(numIn(s.dayCount.n, 0, STORY.perDay, 0)); }
   const C = STORY.chain, lead = x => (isObj(x) && typeof x.lead === "string" && x.lead.length < 40 ? x.lead : null);
-  if (isObj(s.chain) && EV[s.chain.id] && EV[s.chain.id].chainOnly) o.chain = { id: s.chain.id, wait: Math.floor(numIn(s.chain.wait, C.min, C.max, C.min)), legs: Math.floor(numIn(s.chain.legs, 0, 99, 0)), el: Math.floor(numIn(s.chain.el, 0, C.expire - 1, 0)), ctx: { lead: lead(s.chain.ctx) } };
+  if (isObj(s.chain) && EV[s.chain.id] && EV[s.chain.id].chainOnly) o.chain = { id: s.chain.id, wait: Math.floor(numIn(s.chain.wait, C.min, C.max, C.min)), legs: Math.floor(numIn(s.chain.legs, 0, 99, 0)), el: Math.floor(numIn(s.chain.el, 0, C.expire - 1, 0)), ctx: { lead: lead(s.chain.ctx), careful: !!(isObj(s.chain.ctx) && s.chain.ctx.careful === true) } };
   // a half-finished step is dropped: it counts as that step's safe choice (no effects), with one 'the moment passed' log line;
   // a follow-up the earlier steps had already earned (S4's good scan) is kept, as the safe ending would keep it
-  if (isObj(s.step) && EV[s.step.id]) { o.passed = s.step.id; const pd = s.step.pend; if (!o.chain && typeof pd === "string" && EV[pd] && EV[pd].chainOnly) o.chain = { id: pd, wait: C.min + Math.floor(Math.random() * (C.max - C.min + 1)), legs: 0, el: 0, ctx: { lead: null } }; }
+  if (isObj(s.step) && EV[s.step.id]) { o.passed = s.step.id; const pd = s.step.pend; if (!o.chain && typeof pd === "string" && EV[pd] && EV[pd].chainOnly) o.chain = { id: pd, wait: C.min + Math.floor(Math.random() * (C.max - C.min + 1)), legs: 0, el: 0, ctx: { lead: null, careful: s.step.careful === true } }; }
   else if (typeof s.passed === "string" && EV[s.passed]) o.passed = s.passed;
   // P33 fix 2: a story fight saved with its roll starts on load (storyTick), so a reload can't keep the reward and skip it
   o.fight = typeof s.fight === "string" && FIGHTS.includes(s.fight) ? s.fight : null;
   o.step = null;
+  // #7: the pilot flag (v17). Missing (an older save): done when the player is past day 1 or has seen any story already
+  const pl = isObj(s.pilot) ? s.pilot : null, vet = numIn(p.playDays, 0, 1e9, 0) >= STORY.graceDays || Object.keys(o.seen).length > 0;
+  o.pilot = pl ? { t: Math.floor(numIn(pl.t, 0, 1e6, 0)), done: pl.done === true } : { t: 0, done: vet };
   if (isObj(s.n)) { for (const k of Object.keys(o.n)) o.n[k] = Math.floor(numIn(s.n[k], 0, 1e9, 0)); if (s.n.expired) o.n.expired = Math.floor(numIn(s.n.expired, 0, 1e9, 0)); }
   p.story = o;
 }

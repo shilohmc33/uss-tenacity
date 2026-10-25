@@ -8,7 +8,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
     const errs = []; const ctx = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: m ? 2 : 1, isMobile: !!m, hasTouch: !!m }); const p = await ctx.newPage();
     p.on('pageerror', e => errs.push(e.message)); p.on('console', x => { if (x.type() === 'error') errs.push(x.text()); });
     await p.goto(URL + '?reset=1'); await L.waitFor(p, () => !!window.__T && document.querySelector('#loading').classList.contains('done')); await L.sleep(800);
-    await p.evaluate(() => { window.__noSave = true; document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden')); });
+    await p.evaluate(() => { window.__noSave = true; __T.G.prog.milestones.firstRepair = true; document.querySelectorAll('.modal:not(.hidden)').forEach(m => m.classList.add('hidden')); });   // bigger wins #10: past the first repair, the Academy prompt opens ~3 s in
     const R = rep.vp[vp] = { decks: {} };
     for (const deck of ['bridge', 'engineering', 'medical', 'berthing', 'lounge']) {
       await p.evaluate(deck => { const Lt = __T.G.lt; Lt.deck = deck; Lt.lift = null; Lt.x = 0.5; Lt.y = 0.66; Lt.mode = 'idle'; Lt.path = null; __T.cam.snap = true; __T.cam.manualT = 0; }, deck);

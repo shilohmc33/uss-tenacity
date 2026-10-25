@@ -12,7 +12,8 @@ import { spawnFault, FAULT_RT, impairing, shieldCap, medFrozen, medDepends } fro
 import { playerInEngineering, cancelRepairIf } from "./crew.js";
 import { PACE, PACE_RT, nightActive, offRules, oddsWord, isPresent } from "./pacing.js";
 import { hooks } from "./progression.js";
-import { suspendPrompt } from "./background.js";   // Q1b #1: the Academy prompt steps aside for a red alert / battle
+import { suspendPrompt } from "./background.js";
+import { pushMoment } from "./moments.js";   // Bigger wins #11   // Q1b #1: the Academy prompt steps aside for a red alert / battle
 import { fxTimeScale, deathTotal, clearShipFx } from "./render/shipfx.js";
 import { SHIPS, makeAlly, makeEnemy, foe, liveOf, shipOf, gunOf, gunGap, hullPct, SLOTS } from "./ships.js";
 
@@ -280,6 +281,8 @@ function endBattleVictory() {
   const SP = G.sp, S = G.ship, B0 = SP.battle, kind = B0 ? B0.ctx : null, d = shipOf(foe(B0)), killed = B0 ? B0.enemies.map(shipOf) : [d];
   recBc(SP.battle, "won", S.hull);
   SP.battle = null; SP.evasiveT = 0; G.stats.wins++; clearShipFx();   // P21 #2
+  if (B0 && kind !== "debug") { const bc = B0.enemies.some(e => e.ship === "jh_battlecruiser"), n = killed.length, hp = Math.round(S.hull);   // #11: a won fight is a Shift Report moment (a tow never is)
+    pushMoment(bc ? "bc" : "win", bc ? `You beat off a Jem'Hadar battlecruiser at ${hp}% hull` : n > 1 ? `You beat off ${n} ships at ${hp}% hull` : `You beat off ${d.a || "an enemy ship"} at ${hp}% hull`, { n }); }
   moodAll("win"); addSkillXp("lt", "tactical", MOOD_XP.win); for (const sl of Object.values(AB_OWNER)) addSkillXp(G.prog.crew && G.prog.crew.slots[sl], "tactical", MOOD_XP.win);   // N2
   const salvage = Math.max(0, Math.min(killed.reduce((a, k) => a + (k.salvage ?? 3), 0), S.partsCap - S.parts)); S.parts += salvage;   // multi-ship P1: every kill's salvage
   log(`Victory. Tractor crews pull ${salvage} usable part(s) from the wreckage.`, "good");

@@ -28,6 +28,10 @@ import { ringBand, PACE_RT } from "../pacing.js";   // Q1
 import * as BG from "../background.js";
 import { tickWelcome, welcomeDue } from "../welcome.js";
 import { scrapbook } from "../story.js";
+import { artKey, artReady } from "./story.js";   // Bigger wins: pictures only through the manifest (+ approved stand-ins)
+import { nextGoal, applyTab, setTab, firstWatch } from "./next.js";   // #10
+import { tickProm, promHooks, openProm } from "./promenade.js";   // #12
+import { bestMoment, markReported, MOMENT_ART, MOMENT_TAG } from "../moments.js";   // #11
 import * as RA from "./redalert.js";   // RA(a)
 import { updateDC } from "./dccall.js";   // RA(b)
 import { foe, shipOf, hullPct, combatantRows, FACTIONS } from "../ships.js";
@@ -252,13 +256,18 @@ export function updateHud() {
   } else if (items.length) {
     const top = items[0], rf = top.kind === "task" ? top.task.t / (top.task.dur || 1) : top.kind === "job" && top.job.dur > 0 ? top.job.t / top.job.dur : null;
     const rg = rf == null ? "" : `<i class="pring ${ringBand(rf)}" style="--f:${Math.max(0, Math.min(1, rf)).toFixed(3)}"></i>`;   // Q1: countdown ring (drains green -> amber -> red)
-    pill.innerHTML = rg + esc(top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}` : `${PRI_LABEL[top.pri]} — ${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`);
+    pill.innerHTML = rg + esc(top.kind === "task" ? `CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s` : top.kind === "job" ? `${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}` : `${firstWatch() ? "TAP TO REPAIR — " : `${PRI_LABEL[top.pri]} — `}${SYSTEMS[top.id].name} · ${SEV_LABEL[top.sev]}`);   // #10: the first watch says what to do
     pill.className = "alert-pill pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : "");
     pill.onclick = () => top.kind === "task" ? sendUse(top.task.node) : top.kind === "job" ? sendUse(top.job.node) : sendRepair(top.id);
   } else if (G.sp.battle) {   // Q1 #6: in a fight with no faults the pill is the red alert and T'Ren's read (never a parked odd job)
     const tr = threatRead(); setRaPill(pill, tr, false); pill.className = "alert-pill pri-1 rapill"; pill.onclick = () => RA.openView();   // RA(a): the battle view (batch (b) hangs its call here)
-  } else { pill.textContent = "All systems nominal"; pill.className = "alert-pill"; pill.onclick = null; }
-  $("#dutyBadge").textContent = items.length || "";
+  } else {   // Bigger wins #10: one goal at a time instead of "All systems nominal"
+    const g = nextGoal(), h = `<span class="g1">${esc(g.text)}</span>`;
+    if (pill.dataset.goal !== h || !pill.classList.contains("goal")) { pill.innerHTML = h; pill.dataset.goal = h; }
+    pill.className = "alert-pill goal goal-" + g.k; pill.onclick = g.act ? () => goalAct(g.act) : null;
+  }
+  $("#dutyBadge").textContent = items.length || ""; { const b2 = $("#dutyBadge2"); if (b2) b2.textContent = items.length || ""; }
+  applyTab(); tickProm();   // #10 the info-layout tab, #12 the Promenade card
   // duty list
   const dk = items.map(i => i.kind + i.id + i.sev + i.pri + (i.task ? Math.ceil(i.task.t) : "") + (i.job ? Math.round(i.job.acc / i.job.need * 10) : "")).join("|") + L.mode + L.repairSys + (G.prog.med ? G.prog.med.inj.map(x => x.id + x.state).join() : "");
   if (dk !== lastDuty) {
@@ -331,9 +340,10 @@ export function updateHud() {
 }
 export function wireHud() {
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-rom-open],[data-beat-open],[data-plog-open],[data-node],[data-lift],[data-fix],[data-task],[data-close],[data-req],[data-fav],[data-sink],[data-kit],[data-slot],[data-spec=open],[data-board-open],[data-pin],[data-gentle]");
+    const t = e.target.closest("[data-itab],[data-rom-open],[data-beat-open],[data-plog-open],[data-node],[data-lift],[data-fix],[data-task],[data-close],[data-req],[data-fav],[data-sink],[data-kit],[data-slot],[data-spec=open],[data-board-open],[data-pin],[data-gentle]");
     if (!t) return;
     if (t.dataset.spec === "open") { openSpec(); return; }
+    if (t.dataset.itab) { setTab(t.dataset.itab); return; }   // #10 the info-layout tabs
     if (t.dataset.plogOpen) { openPlog(); return; }
     if (t.dataset.beatOpen) { openBeat(); return; }
     if (t.dataset.romOpen) { openRom({ mode: "signal" }); return; }   // Personal Log (the CREW sheet stays open behind it)
@@ -354,6 +364,12 @@ export function wireHud() {
     if (t.closest("#panels") && document.body.classList.contains("mode-play") && !t.dataset.close && !t.closest("[data-req],[data-fav],[data-sink],[data-kit],[data-slot]")) closeSheet();
   });
 }
+// #10: the strip's action keys; a panel opens as the play-mode sheet or the info-layout tab
+export function openPanel(name) {
+  if (document.body.classList.contains("mode-info")) { setTab(name); return; }
+  closeSheet(); document.body.classList.add("sheet-open", "sheet-" + name); $("#sheetTitle").textContent = name.toUpperCase(); if (name === "duty" || name === "crew") MD.ackInjury();
+}
+function goalAct(a) { if (a === "board") { if (BD.boardWaiting()) openBoard(); } else if (a === "spec") openSpec(); else if (a === "prom") openProm(); else if (a === "alert") { if (RA.canRespond()) RA.openView(); } else if (["orders", "duty", "crew", "log"].includes(a)) openPanel(a); }
 export function closeSheet() { document.body.className = document.body.className.replace(/\s?sheet-\w+/g, ""); }
 let liftPanelDeck = null;
 export function closeLiftPanel() { $("#liftPanel").hidden = true; liftPanelDeck = null; }
@@ -384,7 +400,12 @@ export function showReport(r) {
   // pass 13: a battlecruiser fought while away is the night's headline - first thing in the report
   const BCO = { won: h => `beaten off — hull ${h}%`, towed: () => "she crippled us; the Tenacity was towed to Deep Space Nine", disengaged: h => `T'Ren broke off and ran — hull ${h}%`, ongoing: h => `still fighting her now — hull ${h}%` };
   const bcHead = (r.bcFights || []).length ? `<div class="bcHead" role="alert"><b>⚠ While you were off watch: ${r.bcFights.length === 1 ? "a Jem'Hadar battlecruiser" : `${r.bcFights.length} Jem'Hadar battlecruisers`}</b> — ${r.bcFights.map(f => `${(BCO[f.out] || BCO.won)(f.hull)}${f.lost && f.out !== "towed" ? ` (−${f.lost}% in the fight)` : ""}`).join(" · ")}.</div>` : "";
-  $("#reportBody").innerHTML = `${bcHead}<p><b>Okafor's night-watch log.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
+  // Bigger wins #11: the best moment since the last report leads, with a small painted picture; else "A quiet watch"
+  const bm = bestMoment(), mk = bm ? bm.k : "quiet"; markReported();
+  const hl = r.highlights || [], sub = bm ? "" : hl.length ? hl[0].msg : "Nothing worth waking you for.";
+  const pic = () => (bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]);
+  const rhead = `<div class="rhead m-${mk}" data-mk="${mk}"><span class="rpic"></span><div class="rtx"><small>${MOMENT_TAG[mk]}</small><b>${esc(bm ? bm.txt : "A quiet watch")}</b>${sub ? `<i>${esc(sub)}</i>` : ""}</div></div>`;
+  $("#reportBody").innerHTML = `${bcHead}${rhead}<p><b>Okafor's night-watch log.</b> You were off watch for <b>${fmt(r.away)}</b>${r.simulated < r.away ? ` (the log covers the first ${fmt(r.simulated)}; after that she held station)` : ""}. The Tenacity kept flying — she's ${where}.</p>
   <ul><li>Voyage: ${r.legs} leg${r.legs === 1 ? "" : "s"} completed · ${r.events} event${r.events === 1 ? "" : "s"}</li>
   <li>${fights}${r.avoided ? ` T'Ren steered around ${r.avoided} patrol${r.avoided === 1 ? "" : "s"}.` : ""}</li>
   <li>Night watch cleared <b>${r.crewFixes || 0}</b> fault${r.crewFixes === 1 ? "" : "s"}${r.repairs ? ` · your repairs: ${r.repairs}` : ""}${r.torpsBuilt ? ` · torpedoes replicated: ${r.torpsBuilt}` : ""}</li>
@@ -397,6 +418,8 @@ export function showReport(r) {
   <li>Faults awaiting you: <b>${r.faults}</b>${r.faults ? " — see DUTY." : " — the deck is clean."}</li>
   ${G.prog.board ? `<li><b>A promotion board is waiting for you</b> — ${BD.CHAIR[G.prog.board.chair].name} convened it while you were off watch. It sits when you resume duty.</li>` : ""}${BD.specPending() ? `<li>Specialisation pick waiting (level ${G.prog.level}).</li>` : ""}</ul>
   ${r.highlights.length ? `<p><b>Log highlights</b></p><ul>${r.highlights.map(e => `<li>SD ${e.sd} — ${e.msg.replace(/</g, "&lt;")}</li>`).join("")}</ul>` : ""}`;
+  const fillPic = () => { const sp = $("#reportBody .rpic"), k = pic(); if (!sp) return; if (k && !sp.firstChild) sp.innerHTML = `<img src="assets/story/${k}.webp" alt="">`; sp.classList.toggle("none", !sp.firstChild); };   // never a broken image: only manifest art
+  fillPic(); artReady().then(fillPic);
   $("#report").hidden = false;
 }
 // progression: flash the LT LEVEL tile on a level-up
@@ -535,7 +558,7 @@ function renderSafetyPrompt() {
 let wbTimer = 0;
 function showWelcome(w) { const el = $("#wbCard"); if (!el) return; { const st = $("#stage"); if (st && el.parentNode !== st) st.appendChild(el); } /* Q1b #5: docked at the top of the stage, clear of the chip / button rows */ el.innerHTML = `<div class="k">WELCOME BACK</div><p>${esc(w.line)}</p><div class="tap">TAP TO DISMISS</div>`; el.hidden = false; clearTimeout(wbTimer); wbTimer = setTimeout(() => { el.hidden = true; }, 9000); }
 function renderBgPrompt() {
-  $("#bgBody").innerHTML = `<h3>ACADEMY RECORD</h3><p class="cnote">Before your first watch: which track did you take at the Academy? It's a small lean, picked once.</p>
+  $("#bgBody").innerHTML = `<h3>ACADEMY RECORD</h3><p class="cnote">One question for your service record: which track did you take at the Academy? It's a small lean, picked once.</p>
     <div class="bgopts">${Object.entries(BG.BACKGROUNDS).map(([k, b]) => `<button class="bgopt" data-bg="${k}"><b>${b.name}</b><small>${esc(b.blurb)}</small></button>`).join("")}</div>
     <div class="mbtns"><button class="close alt" data-bg="none">NO SPECIALTY</button><button class="close" data-bg="later">LATER</button></div>`;
   $("#bgPanel").hidden = false;
@@ -548,7 +571,8 @@ function autoModals() {
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && !G.sp.battle && RM.pendingDisc()) { openRom({ mode: "disc" }); return; }
   const anyModal = [...document.querySelectorAll(".modal")].some(m => !m.hidden);
   if (!anyModal && !G.sp.battle && welcomeDue()) { const w = tickWelcome(); if (w) showWelcome(w); }   // Q1 #8: after RESUME DUTY, present, nothing open
-  if (!anyModal && !G.sp.battle && BG.promptDue() && PACE_RT.sessionT >= 3) { BG.markAsked(); renderBgPrompt(); return; }   // Q1 #9: once
+  if (!anyModal && !G.sp.battle && BG.promptDue() && PACE_RT.sessionT >= 3 && (!firstWatch() || PACE_RT.sessionT >= 120)) {   // Bigger wins #10: on a fresh first watch it waits for the first repair (or 2 min)
+    BG.markAsked(); renderBgPrompt(); return; }   // Q1 #9: once
   if (!busy && $("#boardPanel").hidden && BD.boardWaiting() && !G.sp.battle) openBoard();   // pass 16 B2: never mid-fight (it waits for the all-clear, like the others)
   if (!busy && $("#boardPanel").hidden && $("#specPanel").hidden && BD.specPending() && (G.prog.specOffered || 0) < BD.specOwed() && !G.sp.battle) { G.prog.specOffered = BD.specOwed(); openSpec(); }
 }
@@ -625,6 +649,9 @@ function decorClick(e) {
 
 // ============================== Personal Log (phase 1: read-only) ==============================
 let plogView = null;   // null = index, else { id }
+// #12: the Promenade card's Gifts / Letters home buttons open these Personal Log views
+promHooks.locker = () => { PL.ensureSnapshot(); plogView = { mode: "locker" }; renderPlog(); $("#plogPanel").hidden = false; $("#plogPanel .card").scrollTop = 0; };
+promHooks.letters = () => { openPlog(); const a = document.querySelector("#plogPanel .plrow.alum"); if (a) a.scrollIntoView({ block: "center" }); };
 const initials = o => (o.short || o.name || "?").replace(/[^A-Za-z]/g, "").slice(0, 2);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 function plogFace(o, color) { return o.img ? `<img src="assets/${o.img}.webp" alt="">` : `<span class="badge" style="background:${color}">${esc(initials(o))}</span>`; }
@@ -658,11 +685,11 @@ function renderGiftPicker(body, id) {
     ${locker ? `<div class="plh">FROM YOUR GIFT LOCKER</div>${locker}` : ""}<div class="plh">DELGADO'S GALLEY REPLICATOR</div>${galley}<div class="plh">ASHORE (VIA THE GIFT LOCKER)</div>${ashore}`;
 }
 // Q1 #10: the story scrapbook (each painted scene seen, the choice made and how it went; newest first)
-const SCRAP_BAND = { success: "Success", partial: "Partly", fail: "It went wrong", safe: "Played it safe" };
+const SCRAP_BAND = { success: "Success", partial: "Partly", fail: "It went wrong", safe: "Played it safe", careful: "Carefully" };
 function scrapRow() { const n = scrapbook().length; return `<button class="plrow scrapb" data-pl="scrap"><span class="badge" style="background:#5a3f7a">📖</span><span class="nm">STORY SCRAPBOOK<small>${n ? `${n} scene${n > 1 ? "s" : ""}` : "no scenes yet"}</small></span><span class="pls">›</span></button>`; }
 function renderScrap(body) {
   const L = scrapbook();
-  const rows = L.map(e => `<div class="scrap">${e.art ? `<img loading="lazy" src="assets/story/${e.art}.webp" alt="" onerror="this.style.visibility='hidden'">` : `<span class="noimg"></span>`}<div><b>${esc(e.title)}</b><small>${e.day ? `Day ${e.day}` : "Before the scrapbook"}${e.sd != null ? ` · SD ${e.sd.toFixed(1)}` : ""}</small>
+  const rows = L.map(e => `<div class="scrap">${e.art && artKey(e.art) ? `<img loading="lazy" src="assets/story/${artKey(e.art)}.webp" alt="" onerror="this.style.visibility='hidden'">` : `<span class="noimg"></span>`}<div><b>${esc(e.title)}</b><small>${e.day ? `Day ${e.day}` : "Before the scrapbook"}${e.sd != null ? ` · SD ${e.sd.toFixed(1)}` : ""}</small>
     ${e.label ? `<p class="sc">You chose: ${esc(e.label)}</p>` : `<p class="sc dim">Choice not recorded.</p>`}${e.band ? `<p class="sr ${e.band}"><i>${SCRAP_BAND[e.band]}.</i> ${esc(e.res || "")}</p>` : ""}</div></div>`).join("");
   body.innerHTML = `<button class="plback" data-pl="index">‹ BACK</button><h3>STORY SCRAPBOOK</h3><p class="cnote">The moments worth keeping, newest first.</p>${rows || `<p class="plnote">No story scenes yet. They start from your second day aboard.</p>`}`;
 }

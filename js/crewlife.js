@@ -3,6 +3,7 @@
 // Data: js/roster.js (slots, species, tags, postings). Tuning: PROG.roster / crewEvents / fleet / favours / sinks.
 // Runs inside stepSim (so the offline catch-up rolls days and lands arrivals too); the npc-ambient layer only draws.
 import { G } from "./state.js";
+import { pushMoment } from "./moments.js";   // Bigger wins #11
 import { HEAD_Y } from "./data.js";
 import { log, toast, fx } from "./bus.js";
 import { PROG, hooks, crewList, crewTouch, opinionOf, nudge, rankOf, fullName, perkFx, spend, canAfford, addr, costText, computeReadiness, giftShare, romanceCap } from "./progression.js";
@@ -145,7 +146,7 @@ export function arrive(slot, occ = null) {
   p.opinions[o.id] = PROG.opinion.startDefault + bonus; o.heard = bonus;
   log(`Transfer aboard: ${fullName(o)}, ${SPECIES[o.species].name}, reports from ${o.from} as ${sl.role} (${sl.deck}).${bonus >= N.lineAt ? " Word of the Tenacity's engineer got here first." : ""}`, "good");
   toast(`New crewmate — ${fullName(o)} (${SPECIES[o.species].name})`, "info");
-  note("arrival", o.id, fullName(o), { slot });
+  note("arrival", o.id, fullName(o), { slot }); pushMoment("arrival", `${fullName(o)} reported aboard as ${sl.role}`);
   return o;
 }
 // the newcomer's first chat with the Lt (npc-ambient walks them over when he's on their deck)

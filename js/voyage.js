@@ -116,6 +116,7 @@ export function arriveAtDest() {
   if (id === "ds9") {
     SP.cap.dest = "convoy";
     SP.cap.decideT = rr(PACE.dockDwell); SP.torpT = 0;
+    SP.promDue = true; SP.promSeen = false;   // Bigger wins #12: the Promenade card (ui/promenade.js), once this visit
     SP.cap.reason = "Docked at Deep Space Nine — patching, resupply and rearming before the next convoy. Departure pending my hull minimum of 40%.";
     onDock();   // phase 3: favours waiting at the dock (parts shipment, priority slot)
     log(`Docking clamps away — the Tenacity holds station at Deep Space Nine. Station crews begin hull patching; the quartermaster opens resupply${S.torps < S.torpCap ? " and the ordnance crews start loading torpedoes" : ""}.`, "good");

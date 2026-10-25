@@ -4,7 +4,7 @@ import { freshEnc, hardenEnc, seedEnc } from "./encounters.js";
 import { DECKS, NODEMAP, SYSTEMS, DESTS } from "./data.js";
 import { freshProg, migrateProg, migrateProg3, migrateProg4, migrateProg5, migrateProg6, migrateProg7, migrateProg8, migrateProg9, migrateProg10, migrateProg11, migrateProg12, migrateProg13, clampProg, clampResources } from "./progression.js";
 export const SAVE_KEY = "tenacity.save.v1";   // key kept; the schema version lives in G.version
-export const SAVE_VERSION = 16;   // v16: story events (G.prog.story, story.js; additive)   // v15: crew needs (G.prog.needs, needs.js; additive)
+export const SAVE_VERSION = 17;   // v17: bigger wins (G.prog.story.pilot, moments, reportT, ui.tab; G.sp.promDue / promSeen; additive)     // v16: story events (G.prog.story, story.js; additive)   // v15: crew needs (G.prog.needs, needs.js; additive)
 //               // v2: progression (G.prog); v3: relationships, readiness, rank track, locker tiers; v4: crew roster, fleet rep, favours; v5: rations + quarters; v6: latinum (hidden) + boards + specialisations; v7: sickbay / In Memoriam / gentle mode (G.prog.med); v8: Personal Log (G.prog.plog) + crew pronouns (memo 'v7'; memo v8/v9/v10 -> v9/v10/v11); v9: gifts + tastes known (G.prog.gifts / G.prog.know; memo 'v8'); v10: pass 06 presence-based injury clock, surgery outcome, play-day high-water mark (memo 'v9' Insight is now v11); v11: Insight (G.prog.insight, memo 'v9'), seeded second likes, avoid known; v12: romance (G.prog.romance, memo 'v10'); v13: pass 07 present-time play days (G.prog.dayPresent), paused surgery + assist; v14: battle combatants (G.sp.battle.allies[] / enemies[] / target, js/ships.js)
 export const G = {};
 export function freshState() {
@@ -13,7 +13,7 @@ export function freshState() {
     ship: {
       hull: 100, power: 82, shields: 64, parts: 6, partsCap: 20, torps: 4, torpCap: 8,
       energy: 88, charge: 0, lockerT: 0, gen: 0, load: 0,
-      stardate: 51504.2, elapsed: 0, faults: {}, nextFault: 210,
+      stardate: 51504.2, elapsed: 0, faults: {}, nextFault: 45,   // Bigger wins #10: a fresh save's first ambient fault at 45 s (was 210); later ones PACE.faultEvery
       hullFloorWarned: false, powerWarned: false, energyWarned: false, tubeFlash: -9, alertT: 0,
     },
     lt: {
@@ -23,7 +23,8 @@ export function freshState() {
     },
     sp: {
       location: "ds9", travel: null, travelPaused: false, encAcc: 0, battle: null, awayDefer: 0, evasiveT: 0, rep: 0, lastBattleT: -1e9, torpT: 0,
-      escortT: 0, escortDone: true, escortChecked: false, resupT: 0, visit: null, preScanned: false, enc: freshEnc(),   // enc: encounter weighting (additive, v14 shape)
+      escortT: 0, escortDone: true, escortChecked: false, resupT: 0, visit: null, preScanned: false, promDue: false, promSeen: false, enc: freshEnc(),   // promDue / promSeen: #12 the DS9 Promenade card, once per visit
+        // enc: encounter weighting (additive, v14 shape)
       cap: { dest: "convoy", reason: "Convoy escort — the ship's assigned duty, pending departure from Deep Space Nine.", decideT: 3, holdLogged: false, legCount: 0, lastDiplo: null, sinceDiplo: 0 },
       ev: { active: null, lastId: null, nextT: -1, legTarget: 0, legFired: 0 },
     },
@@ -85,6 +86,7 @@ export function loadGame() {
     if (data.version < 14) { migrateBattle14(data.sp); data.version = 14; }
     if (data.version < 15) { if (data.prog) data.prog.needs = {}; data.version = 15; }
     if (data.version < 16) { if (data.prog && typeof data.prog === "object") data.prog.story = null; data.version = 16; }   // story events: the story.js hardener fills freshStory()   // crew needs: filled lazily (everyone starts rested and fed)   // battle groundwork: a saved battle's single enemy -> battle.enemies[] / allies[]
+    if (data.version < 17) { if (data.prog && typeof data.prog === "object" && data.prog.story && typeof data.prog.story === "object") delete data.prog.story.pilot; data.version = 17; }   // v17 (bigger wins): story.js hardenStory derives the pilot flag (done for a veteran save: playDays >= 2 or any story seen); moments / reportT / ui.tab / promDue default
     // pass 13: a save without encounter memory (pre-encounter builds, or a junk value) rebuilds it from its battle + ship log; a valid one is kept as-is
     if (data.sp && typeof data.sp === "object" && !Array.isArray(data.sp) && !(data.sp.enc && typeof data.sp.enc === "object" && !Array.isArray(data.sp.enc))) data.sp.enc = seedEnc(data.sp, data.prog, data.log);
     for (const k of Object.keys(G)) delete G[k];

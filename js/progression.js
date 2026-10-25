@@ -6,6 +6,7 @@ import { hardenNeeds } from "./needs.js";
 import { hardenSkills } from "./mood.js";
 import { hardenInc } from "./incidents.js";
 import { G } from "./state.js";
+import { pushMoment } from "./moments.js";   // Bigger wins #11 (moments.js only calls the hoisted addHardener at load)
 import { log, toast, fx, cheerful, cheer, cheerToast } from "./bus.js";
 import { clamp } from "./util.js";
 import { PACE_RT, nightActive, TRAVEL_SCALE } from "./pacing.js";
@@ -614,7 +615,7 @@ function levelUp() {
   log(`Level ${L} — ${LEVEL_LINES[(L - 2) % LEVEL_LINES.length]} (repairs +${r}%, walk +${w}%, excellent ${ex}% on your orders)`, "good");
   cheerToast(`LEVEL UP — Lieutenant reaches level ${L} · repairs +${r}% · excellent ${ex}%`, "good", `Level ${L} · repairs +${r}% · excellent ${ex}%`);   // pass 10 (2): sober in the quiet period
   fx("levelUp", { level: L });   // gold burst + big floater + tile flash: dropped in the quiet period (bus.js CHEER_FX)
-  hooks.levelUp.forEach(f => f(L));
+  hooks.levelUp.forEach(f => f(L)); pushMoment("levelup", `You reached level ${L}`);
 }
 
 // ---- repair outcome (called by crew.finishRepair): quality, XP, rep, parts. Pure numbers + flavour line. ----
@@ -1105,7 +1106,7 @@ export function promote(reason = "readiness") {
   log(`T'Ren, at the chair, without preamble: 'By order of Starfleet Command, you are promoted to ${n.name}. ${why} Carry on, ${n.addr}.'${cheer(" The crew applauds — Hale loudest.", "")}`, "good");
   cheerToast(`PROMOTED — ${n.name}`, "good", `Promoted to ${n.name}`);   // pass 10 (2): sober in the quiet period (the promotion itself still happens)
   fx("promotion", { name: n.name, short: n.short });
-  hooks.promoted.forEach(f => f(n, reason));
+  hooks.promoted.forEach(f => f(n, reason)); pushMoment("promo", `You were promoted to ${n.name}`);
   computeReadiness();
   return true;
 }

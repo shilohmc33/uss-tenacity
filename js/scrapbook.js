@@ -5,7 +5,7 @@ import { G } from "./state.js";
 import { addHardener } from "./progression.js";
 
 export const SCRAP_MAX = 40;
-const BANDS = ["success", "partial", "fail", "safe"];
+const BANDS = ["success", "partial", "fail", "safe", "careful"];
 const str = (v, n) => typeof v === "string" ? v.slice(0, n) : null;
 function clean(e) {
   if (!e || typeof e !== "object" || typeof e.id !== "string" || !/^[a-z0-9_]{1,40}$/.test(e.id)) return null;

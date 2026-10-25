@@ -8,7 +8,8 @@ import { spawnFault } from "./faults.js";
 import { ZONE } from "./crew.js";
 import { startBattle as _sb, battleAllowed } from "./battle.js";
 import { PACE, PACE_RT, rr, travelS, STORY } from "./pacing.js";
-import { legStory, tickStoryDock, storyLeg, storyTick } from "./story.js";   // E1 story events (story.js never imports events.js)
+import { legStory, tickStoryDock, storyLeg, storyTick, pilotTick } from "./story.js";
+import { pushMoment } from "./moments.js";   // Bigger wins #11   // E1 story events (story.js never imports events.js)
 
 // pass 09 (4): light events skipped in the quiet period after a death (bus.js cheerful gate)
 const LIGHT_EVENTS = ["crewmoment", "ferengi"];
@@ -65,7 +66,7 @@ export function fireEvent(id) {
     case "refugee":
       evBegin(id, null);
       log("Diallo: Captain — a refugee convoy out of the Bajoran colonies requests escort and supplies. Six hundred colonists.", "comm");
-      S.power = clamp(S.power - 12, 0, 100); SP.rep += 2;
+      S.power = clamp(S.power - 12, 0, 100); SP.rep += 2; pushMoment("rescue", "You escorted six hundred Bajoran colonists clear");   // #11
       log("Diallo coordinates the hand-off: replicator stock, medical supplies, shields spread over the convoy. Power −12. " + cheer("The colonists' elder names a newborn for the ship: reputation +2.", "Reputation +2."), "good");
       evScheduleNext(); break;
     case "defector":
@@ -115,6 +116,7 @@ export function fireEvent(id) {
 export function tickEvents(dt) {
   const SP = G.sp, ev = SP.ev, act = ev.active, L = G.lt;
   storyTick();   // E3: one 'the moment passed' line for a story step dropped at load
+  pilotTick(dt);   // Bigger wins #7: the day-1 pilot story (once)
   if (act) {
     // NEW-06: offline nobody can answer a deck task, so the bridge handles it at once (same outcome as letting it
     // expire, without the countdown warning or the "window closed" line cluttering the shift report)
@@ -165,6 +167,7 @@ export function resolveEvent(bonus) {   // exported for tools (pt07 hush checks)
 }
 function resolveEffects(act, bonus, SP, S) {
   if (act.id === "distress") {
+    pushMoment("rescue", "You answered the Kestrel Wind's distress call; her life support is holding");   // #11
     if (bonus) { SP.rep += 3; log("The Lieutenant's regulator goes over by transporter — the Kestrel Wind's life support steadies. Reputation +3, not one spare part spent. The log credits the Lieutenant by name.", "good"); }
     else if (S.parts >= 2) { S.parts -= 2; SP.rep += 3; log("The Tenacity's own spares patch the freighter's life support — 2 parts out of the locker. Reputation +3.", "good"); }
     else { S.power = clamp(S.power - 20, 0, 100); SP.rep += 1; log("No spares to give — the rescue runs slow and hungry instead. Power −20. Reputation +1.", "comm"); }

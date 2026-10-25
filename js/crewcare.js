@@ -118,7 +118,7 @@ export function shoreLeave() {
   const line = `${a.said} Shore leave on DS9: Quark's is loud, the Promenade is crowded, and the crew come back lighter.`;
   log(line, "good"); toast("Shore leave granted", "good"); saveSoon("shore"); return { ok: true, line };
 }
-export function tickCare() { if (!atDS9() && C().shoreUsed) { C().shoreUsed = false; C().shoreDenied = false; } }   // a new dock, a new shore leave
+export function tickCare() { if (!atDS9() && C().shoreUsed) { C().shoreUsed = false; C().shoreDenied = false; } if (!atDS9() && G.sp && (G.sp.promDue || G.sp.promSeen)) { G.sp.promDue = false; G.sp.promSeen = false; } }   // Bigger wins #12: the Promenade card, once per visit   // a new dock, a new shore leave
 // ---- Insight gates (plan section 5) ----
 export const barsShown = () => insightLvl() >= CARE.insightBars;
 export function quirksShown(id) { const l = insightLvl(), q = quirkNames(id); return l >= CARE.insightQuirks ? q : l >= CARE.insightQuirk1 ? q.slice(0, 1) : []; }

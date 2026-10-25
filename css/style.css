@@ -513,3 +513,37 @@ body.ra-held #toasts:not(.top):not(.side){top:auto}
 /* Q1b #5: the welcome-back card docks at the top of the stage (over the deck view), never over the chip or button rows */
 #stage #wbCard{position:absolute;top:36px;bottom:auto;width:min(calc(100% - 16px),460px);max-height:calc(100% - 44px);overflow:hidden;z-index:8;padding:8px 12px}
 @media (max-height:500px){#stage #wbCard p{font-size:13px;margin:2px 0}}
+/* ---- Bigger wins (notes/2026-10-24-bigger-wins-plan.md) ---- */
+/* #10 the "Do this next" strip (the #alertPill) */
+.alert-pill.goal{background:#16304a;color:#cfe6ff;border:1px solid #2f5f8f}.alert-pill.goal .g1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.alert-pill.goal-first,.alert-pill.goal-ds9{background:#2a2350;color:#efe6ff;border-color:#8a7ad8}.alert-pill.goal-board,.alert-pill.goal-spec{background:#3a2c10;color:#ffe2a8;border-color:#c9952e}
+@media (max-width:520px){.alert-pill.goal .g1{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2;font-size:12px}}
+/* #10 the info-layout tabs: one panel at a time (ORDERS = orders + status + stations) */
+#infoTabs{display:none}
+body.mode-info #infoTabs{display:flex;gap:4px;position:sticky;top:0;z-index:20;background:var(--bg);padding:2px 0 6px}
+body.mode-info #infoTabs button{flex:1;border-radius:12px;background:#26324d;color:var(--ink);font-size:12.5px;padding:0 4px;letter-spacing:.06em}
+body.mode-info #infoTabs button.on{background:var(--lc1);color:#141a2a;font-weight:700}
+#dutyBadge2{background:var(--bad);color:#fff;border-radius:8px;padding:0 5px;font-size:10px}#dutyBadge2:empty{display:none}
+body.mode-info #panels .panel{display:none}
+body.mode-info.itab-orders #p-orders,body.mode-info.itab-orders #p-status,body.mode-info.itab-orders #p-chips,body.mode-info.itab-duty #p-duty,body.mode-info.itab-crew #p-crew,body.mode-info.itab-log #p-log{display:block}
+body.mode-info:not([class*="itab-"]) #p-orders,body.mode-info:not([class*="itab-"]) #p-status,body.mode-info:not([class*="itab-"]) #p-chips{display:block}
+/* #8 the careful choice; #7/#8 a story with no picture in the manifest (never a broken image) */
+.stc.safe.careful{background:#b9d9c2}
+.storyscene.noart .storyframe img.sl,.storyframe img.sl:not([src]){visibility:hidden}
+/* #11 the Shift Report headline */
+#reportBody .rhead{display:flex;gap:10px;align-items:center;background:#13233a;border:1px solid #6fb3ff;border-radius:10px;padding:6px 10px 6px 6px;margin:0 0 8px;max-height:110px}
+#reportBody .rhead .rpic{flex:none;width:54px;height:96px;border-radius:6px;overflow:hidden;background:#0a1220}#reportBody .rhead .rpic.none{display:none}
+#reportBody .rhead .rpic img{width:100%;height:100%;object-fit:cover;display:block}
+#reportBody .rhead .rtx{min-width:0;display:flex;flex-direction:column;gap:2px}#reportBody .rhead small{color:var(--lc1);letter-spacing:.12em;font-size:11px}
+#reportBody .rhead b{color:#fff;font-size:15px;line-height:1.25}#reportBody .rhead i{color:var(--muted);font-size:12.5px;line-height:1.25;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#reportBody .rhead.m-quiet{border-color:#33415e;background:#0f1a2c}
+/* #12 the DS9 Promenade card (non-modal, in the stage) */
+#promCard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:40;width:min(420px,calc(100% - 16px));max-height:calc(100% - 12px);overflow:auto;background:#0d1424f2;border:1px solid var(--lc2);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.6);color:var(--ink)}
+#promCard[hidden]{display:none}
+#promCard .pcpic{height:clamp(64px,20vh,170px);overflow:hidden;border-radius:13px 13px 0 0;background:#1a1530}#promCard .pcpic.none{height:8px}
+#promCard .pcpic img{width:100%;height:100%;object-fit:cover;object-position:50% 40%;display:block}
+#promCard .pcx{position:absolute;top:4px;right:4px;width:44px;height:44px;min-width:44px;min-height:44px;border-radius:50%;background:#000a;color:#fff;font-size:18px}
+#promCard .pcbody{padding:6px 10px 10px}#promCard .pct{display:block;color:var(--lc1);letter-spacing:.1em;font-size:13px}#promCard .pcl{margin:2px 0 6px;font-size:12.5px;color:var(--muted)}#promCard .pcl b{color:var(--ink)}
+#promCard .pcbtns{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#promCard .pcb{min-height:44px;border-radius:10px;background:#2a2350;color:#efe6ff;text-align:left;padding:4px 10px;display:flex;flex-direction:column;justify-content:center;line-height:1.15}
+#promCard .pcb b{font-size:13.5px}#promCard .pcb small{font-size:11px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#promCard .pcb[disabled]{opacity:.5}
