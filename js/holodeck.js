@@ -12,6 +12,8 @@ import { PROG, addHardener, nudge, opinionOf, spend, canAfford, addr, localDate 
 import { SLOTMAP } from "./roster.js";
 import { log, toast } from "./bus.js";
 import { needsOf, NEED_KEYS, shiftNow } from "./needs.js";
+import { dayKey, addDays, laterDay, dayActive, daysUntil, isDay, shipToDay } from "./util.js";
+import { badClock, BAD_CLOCK_WHY } from "./clock.js";   // R2: no booking (and no dates stored) on a bad clock   // Oct 26 A(b): real-day cooldowns
 import { quirksOf, moodlet, addSkillXp } from "./mood.js";
 
 const now = () => (G.ship && G.ship.elapsed) || 0;
@@ -28,7 +30,7 @@ const injured = () => new Set(((P().med && P().med.inj) || []).map(x => x.id));
 export const busyUntil = id => { const b = H().busy[id]; return b && b.endT > now() ? b.endT : 0; };
 export const isHolo = id => busyUntil(id) > 0;
 export const buffOf = id => { const b = H().buffs[id]; return b && b.t1 > now() ? b.k : null; };
-export const comfortLocked = id => (H().lock[id] || 0) > now();
+export const comfortLocked = id => dayActive(H().lock[id]);   // Risa comfort: until the next local midnight
 // The Lt's daily slot (HOLO.ltPerDay per real local day, reset at local midnight). His own session is instant: the scene
 // plays, the effect lands and he is back on duty, so he never holds a booking timer (the old bug: a busy timer of pg.min
 // SHIP minutes, which in v18 only runs while the game does, so "You're already in a session" could last for days of real
@@ -41,13 +43,14 @@ export function ltNextAt(at = new Date()) {   // local midnight after the later 
 }
 export function ltNextText(at = new Date()) {
   const n = ltNextAt(at), tm = n.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), tom = new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1);
-  return `Next available: ${n.getTime() === tom.getTime() ? "tomorrow" : n.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} ${tm}`;
+  return `Next available: ${n.getTime() === tom.getTime() ? "tomorrow" : n.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", ...(n.getFullYear() !== at.getFullYear() ? { year: "numeric" } : {}) })} ${tm}`;
 }
 export const ltUsedWhy = (at = new Date()) => `Your holodeck time today is used · ${ltNextText(at)}`;
 export const fits = (id, pid) => id !== "lt" && PROGS[pid].fit.some(q => quirksOf(id).includes(q));
 // can `id` (crew id or "lt") be booked into program `pid`; paid = the Lt pays
 export function bookState(pid, id = "lt", paid = true) {
   const pg = PROGS[pid]; if (!pg) return { ok: false, why: "unknown program" };
+  if (badClock()) return { ok: false, why: BAD_CLOCK_WHY };   /* R2 */
   if (id !== "lt") {
     if (!occ(id)) return { ok: false, why: "not aboard" };
     if (injured().has(id)) return { ok: false, why: `${nm(id)} is in sickbay` };
@@ -59,7 +62,7 @@ export function bookState(pid, id = "lt", paid = true) {
   }
   if (id === "lt" && ltLeft() <= 0) return { ok: false, why: ltUsedWhy(), used: true };   // the daily slot; crew bookings never touch it
   if (id !== "lt" && isHolo(id)) return { ok: false, why: `${nm(id)} is already in a session` };
-  if (pg.gapDays && (H().risa[id] || -1e12) > now() - pg.gapDays * PROG.dayLength) return { ok: false, why: `once every ${pg.gapDays} ship's days` };
+  if (pg.gapDays && dayActive(H().risa[id])) { const n = daysUntil(H().risa[id]); return { ok: false, why: `once every ${pg.gapDays} days · again in ${n} day${n === 1 ? "" : "s"}` }; }   // real local days (was ship time: 5 x 16 h of play)
   if (G.sp.battle) return { ok: false, why: "not during battle" };
   if (paid && !canAfford({ rations: pg.fr })) return { ok: false, why: `${pg.fr} ${PROG.currency.hud} needed` };
   return { ok: true };
@@ -152,16 +155,16 @@ function applyTo(id, pid, ctx) {
   if (pid === "klingon_calisthenics") { n.rest = clamp(n.rest + 10 * mult, 0, 100); if (q.includes("shortfuse")) moodlet(id, "holoCal", { v: 6 * mult }); }
   else if (pid === "vulcan_garden") { r.stress = (r.stress || 0) * 0.5; moodlet(id, "holoZen", { v: 5 * mult }); }
   else if (pid === "dixon_hill") {
-    const over = (h.over[id] || 0) > t; n.fun = 100;
+    const over = dayActive(h.over[id]); n.fun = 100;
     moodlet(id, "holoNovel", { v: 10 * mult * (q.includes("holo") ? HOLO.addict : 1) * (over ? 0.5 : 1) });
     if (q.includes("holo") && dd.n > HOLO.overuse.perDay && !over) {
-      h.over[id] = t + HOLO.overuse.days * PROG.dayLength; r.slip = t + MOOD.minor.slipS;
+      h.over[id] = laterDay(h.over[id], addDays(dayKey(), HOLO.overuse.days)); r.slip = t + MOOD.minor.slipS;   // 2 real days
       log(`${nm(id)} is late to post again, still half in 1941. Too many holonovels; the novel's shine wears off for a couple of days.`, "warn");
     }
   }
   else if (pid === "captain_proton") { n.fun = clamp(n.fun + 60 * funMult, 0, 100); n.social = clamp(n.social + 40 * mult, 0, 100); moodlet(id, "holoProton", { v: 6 * mult }); }
   else if (pid === "vics_lounge") { n.social = 100; moodlet(id, "holoVic", { v: 8 * mult }); }
-  else if (pid === "risa_beach") { for (const k of NEED_KEYS) n[k] = Math.max(n[k], 90); r.stress = 0; moodlet(id, "holoRisa", { v: 20 * mult }); h.lock[id] = t + PROG.dayLength; }
+  else if (pid === "risa_beach") { for (const k of NEED_KEYS) n[k] = Math.max(n[k], 90); r.stress = 0; moodlet(id, "holoRisa", { v: 20 * mult }); h.lock[id] = laterDay(h.lock[id], addDays(dayKey(), 1)); }   // comfort held until the next local midnight
   if (pg.kind === "group" && q.includes("loner")) moodlet(id, "holoCrowd");
   if (q.includes("green") && pid === "tactical_sim") r.wins = (r.wins || 0) + 1;   // counts toward the 3-fight threshold
   if (ctx.paid && fits(id, pid)) moodlet(id, "holoLoved");
@@ -177,8 +180,8 @@ export function book(pid, lead = "lt", paid = true) {
   const pg = PROGS[pid], h = H(), t = now();
   if (paid) { spend({ rations: pg.fr }, "holodeck"); h.n.spent += pg.fr; }
   const who = [lead, ...(pg.kind === "group" ? groupFor(lead) : [])];
-  for (const id of who) { applyTo(id, pid, { paid }); if (id !== "lt") h.busy[id] = { prog: pid, endT: t + pg.min * 60, self: !paid }; if (pg.gapDays) h.risa[id] = t; }   // the Lt's own session is instant (no timer)
-  if (lead === "lt") { const d = localDate(), u = h.lt && dOf(h.lt.d) === d ? h.lt : { d, n: 0 }; u.n++; h.lt = u; }
+  for (const id of who) { applyTo(id, pid, { paid }); if (id !== "lt") h.busy[id] = { prog: pid, endT: t + pg.min * 60, self: !paid }; if (pg.gapDays) h.risa[id] = laterDay(h.risa[id], addDays(dayKey(), pg.gapDays)); }   // the Lt's own session is instant (no timer)
+  if (lead === "lt") { const d = laterDay(localDate(), dOf(h.lt && h.lt.d)), u = h.lt && dOf(h.lt.d) === d ? h.lt : { d, n: 0 }; u.n++; h.lt = u; }   // A(a): the stored date never moves back
   const bl = blurbFor(pid, lead);
   if (paid && lead !== "lt") {   // gift-like: +1 opinion, max 1 per person per ship's day
     if (h.paid[lead] !== P().day) { h.paid[lead] = P().day; nudge(lead, HOLO.opinion, "holodeck"); }
@@ -209,9 +212,10 @@ export function hardenHolo(p) {
   const map = (src, fn) => { const o = {}; if (src && typeof src === "object") for (const [id, v] of Object.entries(src)) if (ok(id)) { const x = fn(v); if (x !== undefined) o[id] = x; } return o; };
   out.busy = map(s.busy, v => v && PROGS[v.prog] && f(v.endT) ? { prog: v.prog, endT: Math.min(v.endT, t + 120 * 60), self: !!v.self } : undefined);
   delete out.busy.lt;   // pre-fix saves: the Lt's stuck booking timer goes (his sessions are instant now)
-  { const today = localDate(), d = s.lt && dOf(s.lt.d); out.lt = d ? { d: d > today ? today : d, n: clamp(Math.floor(+s.lt.n || 0), 0, 99) } : { d: "", n: 0 }; }   // a future date (wrong clock) is pulled back to today
+  { const today = localDate(), d = s.lt && dOf(s.lt.d); out.lt = d ? { d, n: clamp(Math.floor(+s.lt.n || 0), 0, 99) } : { d: "", n: 0 }; void today; }   // A(a): never pulled back (a clock round trip gave a second session)
   out.buffs = map(s.buffs, v => v && ["drilled", "sharp"].includes(v.k) && f(v.t1) ? { k: v.k, t1: Math.min(v.t1, t + HOLO.buffS) } : undefined);
-  for (const k of ["risa", "over", "lock"]) out[k] = map(s[k], v => f(v) ? Math.min(v, t + (k === "risa" ? 0 : k === "lock" ? PROG.dayLength : HOLO.overuse.days * PROG.dayLength)) : undefined);
+  { const cap = { risa: (PROGS.risa_beach.gapDays || 5), over: HOLO.overuse.days, lock: 1 };   // A(b): until-dates; an old ship-time number converts to the play days it had left (at most the real-day length)
+    for (const k of ["risa", "over", "lock"]) out[k] = map(s[k], v => isDay(v) ? (k === "lock" && v > addDays(dayKey(), 1) ? addDays(dayKey(), 1) : v) : f(v) ? shipToDay(k === "risa" ? v + cap.risa * PROG.dayLength : v, t, PROG.dayLength, cap[k]) : undefined); }
   out.paid = map(s.paid, v => Number.isInteger(v) ? v : undefined);
   out.day = map(s.day, v => v && Number.isInteger(v.d) && f(v.n) ? { d: v.d, n: clamp(Math.floor(v.n), 0, 99) } : undefined);
   out.uses = map(s.uses, v => { if (!v || typeof v !== "object") return undefined; const o = {}; for (const [pid, u] of Object.entries(v)) if (PROGS[pid] && u && Number.isInteger(u.d) && f(u.n)) o[pid] = { d: u.d, n: clamp(Math.floor(u.n), 0, 99) }; return o; });

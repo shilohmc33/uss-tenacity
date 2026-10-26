@@ -75,6 +75,16 @@ async function mode(p, m) { await p.evaluate(m => document.querySelector(m === '
     await p.evaluate(async () => { const PR = await import('/js/progression.js'); const G = __T.G; PR.awardXP(20000, 'manual'); Object.assign(G.prog.opinions, { tren: 58, okafor: 81, diallo: 66, hale: 40 }); G.prog.perf.q = 0.95; G.prog.perf.resp = 0.95; G.prog.service = 5; G.prog.repLifetime = 12000; G.prog.rankSince.rep = 0; G.prog.playDays = 20; PR.promotionDue('readiness'); }); await sleep(800);
     await opened(p, tag, 'board', '#boardPanel'); n += await measure(p, tag, 'board'); await closeAll(p);
     await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.showBackOnWatch(3 * 3600); }); await sleep(800); await opened(p, tag, 'back on watch', '#wbCard'); n += await measure(p, tag, 'back on watch'); await p.evaluate(() => { document.querySelector('#wbCard').hidden = true; });   // v18: the BACK ON WATCH card replaces the Shift Report await closeAll(p);
+    // Oct 26: transient controls, forced visible: BACK ON WATCH with away happenings, the Sensors chip + the other
+    // on-demand chips (romance / beat signals, injected with their real classes), and the vignette tap-bonus button
+    await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.showBackOnWatch(3 * 3600, [{ line: 'Diallo ran a long-range sensor sweep.', xp: 8 }, { line: 'Okafor flushed the plasma manifold.', xp: 8 }]); }); await sleep(800);
+    await opened(p, tag, 'back on watch + happenings', '#wbCard .bowHaps'); n += await measure(p, tag, 'back on watch + happenings'); await p.evaluate(() => { document.querySelector('#wbCard').hidden = true; });
+    await p.evaluate(() => { const VG = __T.VG, G = __T.G; G.sp.battle = null; G.sp.alert = null; G.sp.ev.active = null; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); VG.endVig('x'); G.prog.day = 12; VG.startVig(VG.VIGS.find(v => v.id === 'convoy'), { dur: 40, bonus: 'xp' }); }); await sleep(600);
+    await p.evaluate(() => { for (const id of ['chipsPlay', 'chipsInfo']) { const r = document.getElementById(id); if (r) r.insertAdjacentHTML('afterbegin', '<button class="chip romc t44x">💌 Seo</button><button class="chip beatc t44x">💬 Diallo</button>'); } });
+    await opened(p, tag, 'sensors chip', '.chip.vigc'); n += await measure(p, tag, 'deck + sensors / signal chips'); await p.evaluate(() => document.querySelectorAll('.t44x').forEach(e => e.remove()));
+    await p.evaluate(() => { [...document.querySelectorAll('.chip.vigc')].find(b => b.offsetParent !== null)?.click(); __T.VG.tickVig(4); }); await sleep(600);
+    await opened(p, tag, 'vignette bonus', '#vigBox .vbBonus'); n += await measure(p, tag, 'vignette bonus');
+    await p.evaluate(() => { __T.VG.endVig('x'); __T.setView('deck'); }); await sleep(300);
     await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.openLiftPanel(); }); await sleep(800); await opened(p, tag, 'turbolift', '#liftPanel'); n += await measure(p, tag, 'turbolift'); await closeAll(p);
     await p.evaluate(() => document.querySelector('#btnView').click()); await sleep(600); n += await measure(p, tag, 'space view');
     await p.evaluate(async () => { const B = await import('/js/battle.js'); B.startBattle(); }); await sleep(1500); n += await measure(p, tag, 'battle'); 

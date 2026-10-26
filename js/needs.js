@@ -4,6 +4,7 @@
 // (v18: no away floor - nothing runs while he is away). Saved in G.prog.needs[occupantId] (save v15). Mood and incidents are N2/N3.
 import { G } from "./state.js";
 import { NEEDS } from "./pacing.js";
+import { dayActive } from "./util.js";
 import { PROG } from "./progression.js";
 import { quirksOf, tickMood, hardenMood, moodlet, skillLvl } from "./mood.js";
 
@@ -77,7 +78,7 @@ export function tickNeeds(dt) {
     n.social += (A === "eat" || A === "fun" ? Gn.socialGroup * gSoc : -D.social * mSoc) * h;
     n.comfort += clamp(clamp(ct + cAdj, 0, 100) - n.comfort, -NEEDS.comfort.rate * h, NEEDS.comfort.rate * h);
     for (const k of NEED_KEYS) n[k] = clamp(n[k], floor, 100);
-    { const lk = G.prog.holo && G.prog.holo.lock && G.prog.holo.lock[id]; if (lk > ((G.ship && G.ship.elapsed) || 0)) n.comfort = Math.max(n.comfort, 90); }   // N4: Risa keeps Comfort high for a day
+    { const lk = G.prog.holo && G.prog.holo.lock && G.prog.holo.lock[id]; if (dayActive(lk)) n.comfort = Math.max(n.comfort, 90); }   // N4: Risa keeps Comfort high for a day
     r.act = alert ? "duty" : choose(r, id);
     tickMood(id, r, h, r.shift === sh);   // N2: mood, stress, skills XP, minor incidents
   }

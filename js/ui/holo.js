@@ -1,5 +1,6 @@
 // N4 UI: the Holodeck panel (no walkable room: a list of programs, a target, then a full-screen scene with the story blurb),
 // the lounge / DS9 chips, and the Personal Log "Lately" line + CREW CARE tools.
+import { badClock } from "../clock.js";   // B2: the re-sync state replaces the session line
 import { G } from "../state.js";
 import { PROG } from "../progression.js";
 import { HOLO, CARE } from "../pacing.js";
@@ -13,8 +14,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const FR = () => PROG.currency.short;
 const occ = id => G.prog.crew.occ[id];
 const DESC = {
-  tactical_sim: "Tactical drill · Tactical XP · Drilled: faster phasers and torpedo loading for 4 h",
-  warp_core_breach: "Engineering drill · Engineering XP · Sharp: faster repairs for 4 h",
+  tactical_sim: "Tactical drill · Tactical XP · Drilled: faster phasers and torpedo loading for 4 h of duty",
+  warp_core_breach: "Engineering drill · Engineering XP · Sharp: faster repairs for 4 h of duty",
   klingon_calisthenics: "Bat'leth forms · Fitness XP · Rest +10",
   vulcan_garden: "Meditation · Composure XP · stress halved",
   dixon_hill: "Holonovel · Fun to full · a good mood for a day",
@@ -48,10 +49,10 @@ function renderPanel(note = "") {   // note: the reason a tapped row can't book 
   if (target !== "lt" && !occ(target)) target = "lt";
   const opts = [`<option value="lt"${target === "lt" ? " selected" : ""}>You</option>`].concat(crew.map(id => `<option value="${id}"${id === target ? " selected" : ""}>${esc(occ(id).short)}</option>`)).join("");
   const rows = HD.PROG_IDS.map(pid => {
-    const pg = HD.PROGS[pid], st = HD.bookState(pid, target, true), fit = target !== "lt" && lvl >= CARE.insightQuirk1 && HD.fits(target, pid);
-    return `<div class="req holorow${st.ok ? "" : " off"}"><img class="holothumb" src="assets/holodeck/holo_${pid}.webp" alt=""><div>${esc(pg.name)}${fit ? ` <b class="holofit" title="suits their quirks">♥</b>` : ""}<small>${pg.min} min · ${DESC[pid]}${st.ok ? "" : ` · ${esc(st.why)}`}</small></div><button data-holo-book="${pid}"${st.ok ? "" : ' aria-disabled="true"'}>${pg.fr} ${FR()}</button></div>`;
+    const pg = HD.PROGS[pid], st = HD.bookState(pid, target, true), rs = badClock(), fit = target !== "lt" && lvl >= CARE.insightQuirk1 && HD.fits(target, pid);
+    return `<div class="req holorow${st.ok ? "" : " off"}"><img class="holothumb" src="assets/holodeck/holo_${pid}.webp" alt=""><div>${esc(pg.name)}${fit ? ` <b class="holofit" title="suits their quirks">♥</b>` : ""}<small>${pg.min} min · ${DESC[pid]}${st.ok || rs ? "" : ` · ${esc(st.why)}`}</small></div><button data-holo-book="${pid}"${st.ok ? "" : ' aria-disabled="true"'}>${pg.fr} ${FR()}</button></div>`;
   }).join("");
-  const used = target === "lt" && HD.ltLeft() <= 0, lim = used ? `<p class="hololimit${note ? " flash" : ""}" role="${note ? "alert" : "status"}"><b>UNAVAILABLE TODAY</b> You've had your holodeck time today. ${esc(HD.ltNextText())}.</p>` : target === "lt" ? `<p class="cnote hololeft">Your holodeck time: ${HD.ltLeft()} session${HD.ltLeft() === 1 ? "" : "s"} left today (resets at midnight). Bookings for crewmates don't count.</p>` : "", why = note && !used ? `<p class="hololimit flash" role="alert"><b>CAN'T BOOK THAT</b> ${esc(note)}</p>` : "";
+  const used = target === "lt" && HD.ltLeft() <= 0, lim = badClock() ? `<p class="hololimit" role="status"><b>RE-SYNCING</b> Re-syncing ship's chronometer… Holodeck bookings resume once it settles (about an hour).</p>` : used ? `<p class="hololimit${note ? " flash" : ""}" role="${note ? "alert" : "status"}"><b>UNAVAILABLE TODAY</b> You've had your holodeck time today. ${esc(HD.ltNextText())}.</p>` : target === "lt" ? `<p class="cnote hololeft">Your holodeck time: ${HD.ltLeft()} session${HD.ltLeft() === 1 ? "" : "s"} left today (resets at midnight). Bookings for crewmates don't count.</p>` : "", why = note && !used ? `<p class="hololimit flash" role="alert"><b>CAN'T BOOK THAT</b> ${esc(note)}</p>` : "";
   m.innerHTML = `<div class="card holocard"><h3>HOLODECK</h3>${lim}${why}<p class="cnote">${G.prog.rations} ${FR()} on hand. Booking for <select id="holoFor">${opts}</select>${lvl < CARE.insightQuirk1 ? " · Insight 2 shows which programs suit someone" : ""}</p>${rows}<button class="close" data-holo-close="1">CLOSE</button></div>`;
 }
 export function openHolo(forId = "lt") { target = forId || "lt"; renderPanel(); modal("holoPanel").hidden = false; }

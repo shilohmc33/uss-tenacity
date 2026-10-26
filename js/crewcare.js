@@ -3,7 +3,8 @@
 // a shift swap (Okafor approves engineering, T'Ren the rest; once per ship's day), shore leave at DS9 (ship-wide, once
 // per dock, 10 rep). Plus the Personal Log "Lately" line and the Insight gates for quirks / need bars.
 import { G, saveSoon } from "./state.js";
-import { numIn } from "./util.js";
+import { numIn, dayKey, addDays, laterDay, dayActive, daysUntil, isDay, shipToDay } from "./util.js";
+import { badClock, BAD_CLOCK_WHY } from "./clock.js";   // R2
 import { CARE, MOOD } from "./pacing.js";
 import { PROG, addHardener, nudge, spend, canAfford, addr, opinionOf } from "./progression.js";
 import { SLOTMAP, pr } from "./roster.js";
@@ -53,7 +54,7 @@ const parts = ids => {   // P31 low 3: junk inputs (NaN, strings, negatives) cla
 };
 export function chance(ids) { const f = parts(ids); return numIn(R.base + R.stressW * f.st + R.needW * f.nd + R.opW * f.op, R.min, R.max, R.base); }
 export const oddsWord = p => p >= 0.75 ? "likely" : p >= 0.5 ? "fair odds" : p >= 0.3 ? "a long shot" : "unlikely";
-const denyLeft = (id, k) => { const t = (C().deny[id] || {})[k]; return t != null ? t + R.denyDays * PROG.dayLength - now() : 0; };
+const denyLeft = (id, k) => dayActive((C().deny[id] || {})[k]) ? 1 : 0;   // A(b): a captain's no holds until the next local midnight (was 1 ship's day of play)
 const hrs = s => { const h = Math.ceil(s / 3600); return `${h} h`; };
 function noReason(ids, f) {   // one reason, the weakest factor
   const who = ids.length === 1 ? nm(ids[0]) : "The crew";
@@ -67,14 +68,15 @@ function askCaptain(ids) {
   const said = yes ? `${capName()}: "Approved."` : `${capName()}: "${noReason(ids, f)}"`;
   return { ok: yes, said, p };
 }
-function deny(id, k, said) { (C().deny[id] = C().deny[id] || {})[k] = now(); C().n.denied++; log(said, "warn"); saveSoon("deny"); return { ok: false, denied: true, why: said, line: said }; }
+function deny(id, k, said) { const o = (C().deny[id] = C().deny[id] || {}); if (!badClock()) o[k] = laterDay(o[k], addDays(dayKey(), R.denyDays));   /* R2: no date stored from a bad clock */ C().n.denied++; log(said, "warn"); saveSoon("deny"); return { ok: false, denied: true, why: said, line: said }; }
 export function toolState(id) {
   const c = C(), r = needsOf(id), co = occ(id) && occ(id).slot === "co", base = common(id);
   const rest = base || (co ? (direct() ? "you can't order rest for the captain" : "you can't request rest for the captain") : r.unwell > now() ? `${nm(id)} is already off duty` : c.rest[id] === day() ? "once per ship's day" : null);
-  const lastC = c.counsel[id], cd = lastC != null ? Math.max(0, Math.ceil(CARE.counselGapDays - (now() - lastC) / PROG.dayLength)) : 0;
-  const counsel = base || (cd > 0 ? `again in ${cd} ship's day${cd === 1 ? "" : "s"}` : null);
+  const cd = daysUntil(c.counsel[id]);   // A(b): real local days (was ship time)
+  const bad = badClock() ? BAD_CLOCK_WHY : null;   /* R2: no counselor on a bad clock */
+  const counsel = base || bad || (cd > 0 ? `again in ${cd} day${cd === 1 ? "" : "s"}` : null);
   const swap = base || (co ? "the captain sets her own watch" : c.swap[id] === day() ? "once per ship's day" : null);
-  const dl = k => !direct() && denyLeft(id, k) > 0 ? `the captain said no · ask again in ${hrs(denyLeft(id, k))}` : null;
+  const dl = k => !direct() && denyLeft(id, k) > 0 ? (n => `the captain said no · ask again ${n <= 1 ? "tomorrow" : `in ${n} days`}`)(daysUntil((C().deny[id] || {})[k])) : null;
   const restW = rest || dl("rest"), swapW = swap || dl("swap"), d = direct(), odds = d ? null : oddsWord(chance([id]));
   return { direct: d, odds, rest: { ok: !restW, why: restW }, counsel: { ok: !counsel, why: counsel }, swap: { ok: !swapW, why: swapW, to: SHIFT_NAME[(r.shift + 1) % 3] } };
 }
@@ -87,7 +89,7 @@ export function orderRest(id) {
 }
 export function counsel(id) {
   const st = toolState(id).counsel; if (!st.ok) return { ok: false, why: st.why };
-  const r = needsOf(id); r.stress = 0; C().counsel[id] = now(); C().n.counsel++; moodlet(id, "counsel"); nudge(id, 1, "counselor");
+  const r = needsOf(id); r.stress = 0; C().counsel[id] = laterDay(C().counsel[id], addDays(dayKey(), CARE.counselGapDays)); C().n.counsel++; moodlet(id, "counsel"); nudge(id, 1, "counselor");
   const line = `You ask ${doctor(id)} to make time for ${nm(id)}. An hour in the counselor's office, and ${pr(occ(id), "sub")} come${pr(occ(id), "s")} out standing straighter.`;
   log(line, "good"); return { ok: true, line };
 }
@@ -146,9 +148,9 @@ export function hardenCare(p) {
   const s = p.care && typeof p.care === "object" ? p.care : {}, out = freshCare(), t = (G.ship && G.ship.elapsed) || 0;
   const ok = id => !!(p.crew && p.crew.occ && p.crew.occ[id]);
   for (const k of ["rest", "swap"]) if (s[k] && typeof s[k] === "object") for (const [id, v] of Object.entries(s[k])) if (ok(id) && Number.isInteger(v) && v <= (p.day || 0)) out[k][id] = v;
-  if (s.counsel && typeof s.counsel === "object") for (const [id, v] of Object.entries(s.counsel)) if (ok(id) && typeof v === "number" && Number.isFinite(v)) out.counsel[id] = Math.min(v, t);
+  if (s.counsel && typeof s.counsel === "object") for (const [id, v] of Object.entries(s.counsel)) if (ok(id)) { const u = isDay(v) ? v : typeof v === "number" && Number.isFinite(v) ? shipToDay(v + CARE.counselGapDays * PROG.dayLength, t, PROG.dayLength, CARE.counselGapDays) : undefined; if (u) out.counsel[id] = u; }   // A(b): until-date (old: the ship time of the visit)
   out.shoreUsed = !!s.shoreUsed; out.shoreDenied = !!s.shoreDenied && out.shoreUsed;
-  if (s.deny && typeof s.deny === "object") for (const [id, v] of Object.entries(s.deny)) if (ok(id) && v && typeof v === "object") { const o = {}; for (const k of ["rest", "swap"]) if (typeof v[k] === "number" && Number.isFinite(v[k])) o[k] = Math.min(v[k], t); if (Object.keys(o).length) out.deny[id] = o; }
+  if (s.deny && typeof s.deny === "object") for (const [id, v] of Object.entries(s.deny)) if (ok(id) && v && typeof v === "object") { const o = {}; for (const k of ["rest", "swap"]) { const u = isDay(v[k]) ? v[k] : typeof v[k] === "number" && Number.isFinite(v[k]) ? shipToDay(v[k] + R.denyDays * PROG.dayLength, t, PROG.dayLength, R.denyDays) : undefined; if (u) o[k] = u; } if (Object.keys(o).length) out.deny[id] = o; }
   if (s.n && typeof s.n === "object") for (const k of Object.keys(out.n)) if (Number.isFinite(s.n[k])) out.n[k] = Math.max(0, Math.floor(s.n[k]));
   p.care = out;
 }

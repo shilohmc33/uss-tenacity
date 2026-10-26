@@ -27,7 +27,10 @@ import { awardXP, PROG, qualityOdds, markPlayDay, tickPlayDay } from "./progress
 // phase 6 test override: tools force deaths ON (DEATHS=1) or OFF (DEATHS=0) via an init script; default = PROG.deaths.enabled (true since retune v2)
 if (typeof window !== "undefined" && typeof window.__TENACITY_TEST_DEATHS === "boolean") PROG.deaths.enabled = window.__TENACITY_TEST_DEATHS;
 import { setupDebug } from "./debug.js";
-import * as ST from "./story.js";   // E1 story events; the overlay (ui/story.js) registers on import
+import * as ST from "./story.js";
+import { rollAway } from "./away.js";
+import { badClock, clockCheck, clockHooks } from "./clock.js";   // R2 / B1: bad-clock (re-sync) mode and its acceptance
+import * as VG from "./vignettes.js";   // Oct 26 D: the ambient vignette lane   // Oct 26 B: away happenings (small XP on return)   // E1 story events; the overlay (ui/story.js) registers on import
 import "./ui/story.js";
 import { settleInflightTorps } from "./battle.js";
 
@@ -150,8 +153,8 @@ function frame(now) {
   rt += dt;
   tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
   let simDt = dt * app.timeScale;
-  while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); simDt -= s; }
-  seenT -= dt; if (seenT <= 0 && isPresent()) { seenT = 1; G.prog.lastSeen = Date.now(); G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, G.prog.lastSeen); }   // v18: the last moment on watch (BACK ON WATCH)
+  while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); VG.tickVig(s); simDt -= s; }
+  seenT -= dt; if (seenT <= 0 && isPresent()) { seenT = 1; if (badClock()) clockCheck(); else { G.prog.lastSeen = Date.now(); G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, G.prog.lastSeen); } }   // R2: a bad clock stores no time; v18: the last moment on watch (BACK ON WATCH)
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }
   saveT += dt; if (saveT > 5) { saveT = 0; saveGame(); }
@@ -160,12 +163,14 @@ function frame(now) {
 let hiddenAt = 0;
 document.addEventListener("visibilitychange", () => {
   PACE_RT.hidden = document.hidden;   // pass 06: never 'present' while hidden
-  if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (G.prog) G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, hiddenAt); if (!window.__noSave) saveGame(); }
+  if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (G.prog && !badClock()) G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, hiddenAt); if (!window.__noSave) saveGame(); }
   else {
     tabCheck();   // P32 #1: yield first if another tab took over while this one was hidden
     if (TAB_RT.ro) return;
-    const gap = Math.max(0, (Date.now() - Math.max(hiddenAt, (G.prog && +G.prog.maxSeen) || 0)) / 1000);   // never a negative gap; measured from the latest time seen
-    if (hiddenAt && gap >= PACE.backAfter) { showBackOnWatch(gap); G.prog.restT = 0; }   // same rule as a reload: rested only after a real absence
+    const bad = badClock() && clockCheck() !== "accepted";   /* R2: nothing granted, nothing stored (B1: unless the new time is accepted now; the hook paid the one absence) */
+    const gap = bad ? 0 : Math.max(0, (Date.now() - Math.max(hiddenAt, (G.prog && +G.prog.maxSeen) || 0)) / 1000);   // never a negative gap; measured from the latest time seen
+    if (hiddenAt && gap >= PACE.backAfter) { const haps = rollAway(gap); showBackOnWatch(gap, haps); G.prog.restT = 0; }
+    if (hiddenAt && G.prog && !bad) G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, Date.now());   /* Oct 26 B: the absence is spent: a reload cannot claim it again */   // same rule as a reload: rested only after a real absence
     if (hiddenAt && gap > 600) { PACE_RT.sessionT = 0; markPlayDay(); }   // back after a real break = a new session (calm opening again)
     playerInput();
     app.paused = false; last = performance.now();
@@ -173,6 +178,9 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", () => { if (!window.__noSave) saveGame(); });
 
+// B1: the re-sync accepted the new time: the gap from the old maxSeen is ONE normal absence (<= 3 happenings, 24 XP cap,
+// one rested window), then normal play
+clockHooks.accept = gap => { if (gap >= PACE.backAfter) { const haps = rollAway(gap); showBackOnWatch(gap, haps); G.prog.restT = 0; PACE_RT.sessionT = 0; } markPlayDay(); };
 async function boot() {
   resize();
   await preload(p => { $("#loadBar").style.width = Math.round(p * 100) + "%"; });
@@ -215,17 +223,21 @@ function bootGame(params, masks) {
   // v18 (no offline quests): no catch-up. A pre-v18 save gets one 'held station' line; any absence of PACE.backAfter s or
   // more opens the BACK ON WATCH card. The only reward for time away is the rested XP bonus of the new session.
   if (had && (G.prog.lastSeen || G.savedAt)) {
-    const gap = Math.max(0, (Date.now() - Math.max(G.prog.lastSeen || 0, G.savedAt || 0, +G.prog.maxSeen || 0)) / 1000);   // from the latest time ever seen: a clock set back then forward adds no absence
+    const bad = badClock() && clockCheck() !== "accepted";   /* R2: a bad clock: no card, no happenings, no rested window; maxSeen not advanced (B1: accepted -> the hook paid one absence) */
+    const gap = bad ? 0 : Math.max(0, (Date.now() - Math.max(G.prog.lastSeen || 0, G.savedAt || 0, +G.prog.maxSeen || 0)) / 1000);   // from the latest time ever seen: a clock set back then forward adds no absence
     if (MIG_RT.from != null && MIG_RT.from < 18 && gap > 30) log("The ship held station while you were away.", "comm");
-    if (gap >= PACE.backAfter) { showBackOnWatch(gap); G.prog.restT = 0; }   // a real absence: a fresh rested window (a quick reload keeps the old one as it was)
+    if (gap >= PACE.backAfter) { const haps = rollAway(gap); showBackOnWatch(gap, haps); G.prog.restT = 0; }
+    if (!bad) G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, Date.now());   /* Oct 26 B: measured from maxSeen, then maxSeen = now */   // a real absence: a fresh rested window (a quick reload keeps the old one as it was)
   }
+  if (!badClock()) clockCheck();   /* B1: a clock back in range drops any stale candidate */
   PACE_RT.sessionT = 0; PACE_RT.idleT = 0;   // a new session (the rested bonus runs for its first PROG.xp.rested.first s)
   markPlayDay();   // progression: real calendar days with play
   if (missing.length) log("Missing art (placeholders drawn): " + missing.join(", "), "fault");
   if (masks.length < 5) console.warn("Walk masks missing for some decks; using fallback rects.");
   $("#loading").classList.add("done");
   if (params.has("debug")) setupDebug(app, { setView, setMode });
-  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, retrigger, PACE_RT, idle: { up: () => idleUp, resume: resumeIdle }, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds, ST, TL, TAB_RT };
+  window.__T = { G, app, cam, sendUse, sendRepair, sendTo, saveGame, retrigger, PACE_RT, idle: { up: () => idleUp, resume: resumeIdle }, tren, trenTo, ambient, ambientTo, npcOf, visibleOn, tickAmbient, CL, CB, BD, MD, PL, GF, IN, RM, playerOrder, ORDER, awardXP, PROG, qualityOdds, ST, TL, TAB_RT, VG, setView: v => setView(v) };
+  VG.vigRT.toSpace = () => setView("space");
   updateHud();
   requestAnimationFrame(t => { last = t; frame(t); });
 }

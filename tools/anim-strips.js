@@ -8,7 +8,7 @@ const { chromium } = require('playwright-core');
 const fs = require('fs');
 const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
 const TAG = process.env.TAG || 'before';
-const OUT = `/workspace/anim-strips/${TAG}/`;
+const OUT = process.env.OUT || require('path').resolve(__dirname, '..', '..', 'anim-strips', TAG) + '/';   // frames beside the repo, never a hard-coded path
 const VPS = { phone: { width: 390, height: 844, dsf: 2, mobile: true }, desk: { width: 1280, height: 800, dsf: 1, mobile: false } };
 const vpSel = process.env.VP ? process.env.VP.split(',') : ['phone', 'desk'];
 const HOOK = () => {
@@ -215,7 +215,7 @@ async function run() {
     console.log(vpn, 'errors', errs.length);
     await ctx.close();
   }
-  fs.mkdirSync('/workspace/tenacity/shots', { recursive: true });
+  fs.mkdirSync(require('path').resolve(__dirname, '..', 'shots'), { recursive: true });
   fs.writeFileSync(require('path').resolve(__dirname, '..', 'shots', `anim-${TAG}-metrics.json`), JSON.stringify(M, null, 1));
   console.log(JSON.stringify(M.desk || M.phone, null, 0));
   await browser.close();

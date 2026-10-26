@@ -62,7 +62,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       // crew care (v18: crew self-book the holodeck while the sim runs, as intended; clear self-bookings so the rest / captain's-call answers are the captain's)
       const clearSelf = () => { const hb = G.prog.holo && G.prog.holo.busy; if (hb) for (const k of Object.keys(hb)) if (hb[k].self) delete hb[k]; }; clearSelf();
       const cid = C.slots['security']; out.rest = withR(0, () => [CC.orderRest(cid).ok, CC.orderRest(cid).why, CC.orderRest(C.slots.co).why]); out.restUnwell = N.needsOf(cid).unwell > t0();
-      N.needsOf(id2).stress = 6; out.counsel = [CC.counsel(id2).ok, N.needsOf(id2).stress, CC.counsel(id2).why]; CC.C().counsel[id2] -= 3 * PG.PROG.dayLength; out.counselLater = CC.toolState(id2).counsel.ok;
+      N.needsOf(id2).stress = 6; out.counsel = [CC.counsel(id2).ok, N.needsOf(id2).stress, CC.counsel(id2).why]; CC.C().counsel[id2] = '2000-01-01';   /* A(b): an until-date in the past */ out.counselLater = CC.toolState(id2).counsel.ok;
       const s0 = N.needsOf(id2).shift; out.swap = withR(0, () => [CC.shiftSwap(id2).ok, (s0 + 1) % 3 === N.needsOf(id2).shift, CC.shiftSwap(id2).why]);
       G.sp.location = 'ds9'; G.sp.travel = null; G.sp.rep = 100; const rep0 = G.sp.rep; out.shore = withR(0, () => [CC.shoreLeave().ok, rep0 - G.sp.rep, CC.shoreLeave().why]); G.sp.location = 'patrol'; CC.tickCare(); out.shoreReset = CC.C().shoreUsed === false;
       // P31: captain's call
@@ -71,7 +71,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
         dr.stress = 8; dr.n[N.NEED_KEYS[0]] = 5; const pStress = CC.chance([did]); G.prog.opinions[cap] = 60; const pOp = CC.chance([did]);
         G.prog.opinions[cap] = 0; dr.stress = 0; for (const k of N.NEED_KEYS) dr.n[k] = 90;
         const d = withR(0.999, () => CC.orderRest(did)), cd = CC.toolState(did).rest, ds = withR(0.999, () => CC.shiftSwap(did));
-        CC.C().deny[did].rest -= PG.PROG.dayLength; const after = CC.toolState(did).rest.ok;
+        CC.C().deny[did].rest = '2000-01-01'; const after = CC.toolState(did).rest.ok;
         G.sp.location = 'ds9'; G.sp.travel = null; G.sp.rep = 100; const sd = withR(0.999, () => CC.shoreLeave()), sdRep = 100 - G.sp.rep, sd2 = CC.shoreLeave().why; G.sp.location = 'patrol'; CC.tickCare();
         G.prog.rank = 2; CC.C().rest = {}; CC.C().swap = {}; CC.C().deny = {}; dr.unwell = 0; const dir = withR(0.999, () => CC.orderRest(did)), dirSw = withR(0.999, () => CC.shiftSwap(did)); G.prog.rank = 1;
         out.p31 = { pLow: +pLow.toFixed(2), pStress: +pStress.toFixed(2), pOp: +pOp.toFixed(2), deny: d.ok + ' | ' + d.why, cd: cd.why, swapDeny: ds.ok, afterDay: after, shoreDeny: sd.ok + ' | ' + sd.why, shoreRepOnDeny: sdRep, shoreAgain: sd2, directRest: dir.ok + ' | ' + dir.line, directSwap: dirSw.ok }; }
@@ -90,7 +90,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       let you = 0; for (const pid of HD.PROG_IDS) for (let i = 0; i < 12; i++) if (/\byou\b|\byour\b/i.test(HD.blurbFor(pid, id).text)) you++; out.crewYou = you;
       // harden junk
       G.prog.holo = { busy: { ghost: { prog: 'x', endT: 1 }, [id]: { prog: 'risa_beach', endT: 1e15 } }, buffs: { [id]: { k: 'zzz' } }, risa: { [id]: 1e15 }, n: { sessions: -5 } }; G.prog.care = { rest: { [id]: 1e9 }, counsel: { ghost: 1 }, n: 'x' };
-      PG.clampProg(); out.harden = { busy: Object.keys(G.prog.holo.busy).length, endOk: G.prog.holo.busy[id] && G.prog.holo.busy[id].endT <= t0() + 7200, buffs: Object.keys(G.prog.holo.buffs).length, risa: G.prog.holo.risa[id] <= t0(), sessions: G.prog.holo.n.sessions, rest: Object.keys(G.prog.care.rest).length, counsel: Object.keys(G.prog.care.counsel).length };
+      PG.clampProg(); out.harden = { busy: Object.keys(G.prog.holo.busy).length, endOk: G.prog.holo.busy[id] && G.prog.holo.busy[id].endT <= t0() + 7200, buffs: Object.keys(G.prog.holo.buffs).length, risa: /^\d{4}-\d\d-\d\d$/.test(G.prog.holo.risa[id] || ''),   /* A(b): converted to a real-day until-date (at most 5 days) */ sessions: G.prog.holo.n.sessions, rest: Object.keys(G.prog.care.rest).length, counsel: Object.keys(G.prog.care.counsel).length };
       return out; });
     await c.close();
   }

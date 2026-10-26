@@ -573,3 +573,15 @@ body.mode-info:not([class*="itab-"]) #p-orders,body.mode-info:not([class*="itab-
 .holorow button[aria-disabled="true"]{opacity:.55;filter:grayscale(.6)}
 .hololimit.flash{animation:holoflash .9s ease-out 1}
 @keyframes holoflash{0%{box-shadow:0 0 0 0 rgba(255,179,90,.9);background:rgba(180,90,20,.7)}100%{box-shadow:0 0 0 10px rgba(255,179,90,0)}}
+/* Oct 26 C: away happenings on BACK ON WATCH */
+#wbCard.bow .bowHaps{margin:4px 0 6px;font-size:12.5px;color:#dfe9ff}#wbCard.bow .bowHaps small{display:block;letter-spacing:.06em;text-transform:uppercase;font-size:10.5px;color:#8fb4ff;margin-bottom:2px}
+#wbCard.bow .bowHaps ul{margin:0;padding-left:16px}#wbCard.bow .bowHaps li{margin:2px 0;line-height:1.3}#wbCard.bow .bowXp{color:#ffd76a;font-weight:700;white-space:nowrap}
+#stage #wbCard.bow{overflow-y:auto}
+/* Oct 26 D: ambient vignette bubbles (space view only) + the Sensors chip (deck view only) */
+#vigBox{position:absolute;left:8px;bottom:10px;z-index:6;width:min(calc(100% - 16px),430px);display:flex;flex-direction:column;gap:5px;pointer-events:none}
+#vigBox[hidden],body:not(.view-space) #vigBox{display:none}
+#vigBox .vb{background:rgba(10,22,40,.86);color:#e8f2ff;border:1px solid #4f86c9;border-radius:12px 12px 12px 3px;padding:6px 10px;font-size:13px;line-height:1.32;opacity:.72;box-shadow:0 3px 12px rgba(0,0,0,.45)}
+#vigBox .vb.now{opacity:1;border-color:#8fc2ff}#vigBox .vb b{color:#ffcf6a;margin-right:3px}
+#vigBox .vbBonus{pointer-events:auto;align-self:flex-start;background:#1f4d7a;color:#fff;border:1px solid #8fc2ff;border-radius:14px;padding:6px 12px;font:600 12.5px inherit;cursor:pointer;min-height:44px}
+.chip.vigc{background:#173a5e;border-color:#6fb3ff}body.view-space .chip.vigc{display:none}
+@media (max-height:500px){#vigBox .vb{font-size:12px;padding:4px 9px}#vigBox{gap:3px;bottom:6px}}

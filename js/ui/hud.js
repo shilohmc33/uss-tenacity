@@ -1,5 +1,6 @@
 // DOM HUD: stat bar, alert chip, orders, duty list, crew cards, chips, log, toasts, lift panel, report.
 import { G } from "../state.js";
+import * as VG from "../vignettes.js";   // Oct 26 D: the Sensors chip
 import { NEED_KEYS, NEED_LABEL, SHIFT_NAME, needsOf, statusOf } from "../needs.js";
 import { moodOf, bandOf, bandLabel, effOf, quirkNames, SKILL_KEYS, SKILL_LABEL, skillLvl } from "../mood.js";
 const skillLine = id => SKILL_KEYS.map(k => `${SKILL_LABEL[k]} ${skillLvl(id, k)}`).join(" · ");
@@ -305,11 +306,11 @@ export function updateHud() {
   renderCareer();
   autoModals();
   // chips
-  const bp = IN.pending(), sg = RM.pendingSignal(), uk = upkeepState(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck) + (uk.unlocked ? uk.active ? "U" + uk.step : "u" : "-");
+  const bp = IN.pending(), sg = RM.pendingSignal(), uk = upkeepState(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck) + (uk.unlocked ? uk.active ? "U" + uk.step : "u" : "-") + (VG.vigChip() ? "V" : "");
   if (ck !== lastChips) {
     lastChips = ck;
     // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
-    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + upkeepChip(uk) + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + VG.vigChip() + upkeepChip(uk) + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
      
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;
@@ -345,8 +346,9 @@ export function updateHud() {
 }
 export function wireHud() {
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-itab],[data-rom-open],[data-beat-open],[data-plog-open],[data-node],[data-lift],[data-upkeep],[data-fix],[data-task],[data-close],[data-req],[data-fav],[data-sink],[data-kit],[data-slot],[data-spec=open],[data-board-open],[data-pin],[data-gentle]");
+    const t = e.target.closest("[data-itab],[data-rom-open],[data-beat-open],[data-plog-open],[data-node],[data-lift],[data-upkeep],[data-fix],[data-task],[data-close],[data-req],[data-fav],[data-sink],[data-kit],[data-slot],[data-spec=open],[data-board-open],[data-pin],[data-gentle],[data-vig]");
     if (!t) return;
+    if (t.dataset.vig) { if (VG.vigRT.toSpace) VG.vigRT.toSpace(); return; }   /* Oct 26 D: Sensors chip -> the space view */
     if (t.dataset.spec === "open") { openSpec(); return; }
     if (t.dataset.itab) { setTab(t.dataset.itab); return; }   // #10 the info-layout tabs
     if (t.dataset.plogOpen) { openPlog(); return; }
@@ -409,7 +411,7 @@ function upkeepChip(u) { return `<button class="chip upk${u.active ? " on" : ""}
 // v18 B (no offline quests): the BACK ON WATCH card after an absence of PACE.backAfter s or more (main.js). Non-modal, docked
 // at the top of the stage: the time away, "everything held as you left it" (nothing ran while he was gone), the best moment
 // of the last session (moments.js, with its painted picture) and one crewmate's line by name (welcome.js; no opinion reward).
-export function showBackOnWatch(away) {
+export function showBackOnWatch(away, haps = []) {   // Oct 26 C: haps = away.js rollAway() [{line, xp}]
   const el = $("#wbCard"); if (!el) return null;
   { const st = $("#stage"); if (st && el.parentNode !== st) st.appendChild(el); }
   const fmt = s => s >= 86400 ? `${Math.floor(s / 86400)}d ${Math.floor(s % 86400 / 3600)}h` : s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.max(1, Math.floor(s / 60))}m`;
@@ -417,14 +419,15 @@ export function showBackOnWatch(away) {
   const pic = (bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]);
   const w = welcomeLine();
   const rhead = `<div class="rhead m-${mk}" data-mk="${mk}"><span class="rpic"></span><div class="rtx"><small>${bm ? "LAST WATCH · " + MOMENT_TAG[mk] : MOMENT_TAG[mk]}</small><b>${esc(bm ? bm.txt : "A quiet watch")}</b></div></div>`;
-  el.innerHTML = `<div class="k">BACK ON WATCH</div>${rhead}<p class="bowAway">Away <b>${fmt(away)}</b>. Everything held as you left it.</p>${w ? `<p class="bowLine">${esc(w.line)}</p>` : ""}<div class="tap">TAP TO CLOSE</div>`;
+  el.innerHTML = `<div class="k">BACK ON WATCH</div>${rhead}<p class="bowAway">Away <b>${fmt(away)}</b>. Everything held as you left it.</p>${haps.length ? `<div class="bowHaps"><small>While you were away:</small><ul>${haps.map(h => `<li>${esc(h.line)}${h.xp ? ` <b class="bowXp">+${h.xp} XP</b>` : ""}</li>`).join("")}</ul></div>` : ""}${w ? `<p class="bowLine">${esc(w.line)}</p>` : ""}<div class="tap">TAP TO CLOSE</div>`;
   el.classList.add("bow"); el.dataset.away = String(Math.round(away));
   const sp = el.querySelector(".rpic");
   const fillPic = () => { if (!sp || !sp.isConnected) return; if (pic && !sp.firstChild && !sp.dataset.err) { const im = picImg(pic); im.addEventListener("error", () => { if (!im.isConnected) sp.dataset.err = "1"; }); sp.appendChild(im); } sp.classList.toggle("none", !sp.firstChild); };   // never a broken image: manifest art; a failed load falls back (guardImg)
   fillPic(); artReady().then(fillPic);
   el.hidden = false; clearTimeout(wbTimer); wbTimer = setTimeout(() => { el.hidden = true; }, 20000);
   if (w) log(w.line, "comm");
-  return { mk, line: w ? w.line : null, away };
+  el.dataset.haps = String(haps.length);
+  return { mk, line: w ? w.line : null, away, haps };
 }
 // progression: flash the LT LEVEL tile on a level-up
 export function flashLevel() {

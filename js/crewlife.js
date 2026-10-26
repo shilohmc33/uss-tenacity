@@ -280,7 +280,7 @@ export function callFavour(id) {
   else if (id === "dock") { p.fav.fx.dock = G.sp.location === "ds9" && !G.sp.travel ? "active" : "pending"; what = "a priority slot at DS9 (resupply twice as fast)"; }
   else if (id === "intel") { G.sp.preScanned = true; what = "the next hostile's shield frequencies"; }
   else if (id === "ordnance") { const got = st.n; S.torps += got; what = `+${got} torpedo${got === 1 ? "" : "es"}, no questions asked`; }
-  else if (id === "calibration") { p.fav.fx.calUntil = S.elapsed + FX.calibrationDur; what = "+10% Excellent chance for the next 24 hours"; }
+  else if (id === "calibration") { p.fav.fx.calUntil = S.elapsed + FX.calibrationDur; what = "+10% Excellent chance for the next 24 h of duty"; /* play time: an effect, not a cooldown */ }
   else if (id === "letter") { p.readyBonus = (p.readyBonus || 0) + FX.letter; computeReadiness(); what = `+${FX.letter} board readiness`; }
   else if (id === "round") { for (const m of crewList()) nudge(m.id, f.opinion, "a round on the Lt", true); what = "the whole ship drinks to the engineer (+opinion with everyone)"; }
   else if (id === "cadet") { p.fav.fx.cadets = (p.fav.fx.cadets || 0) + 1; addFleetRep(f.fleet, `a cadet at the Academy on the Tenacity scholarship (${p.fav.fx.cadets} sponsored)`); what = `a scholarship in the Tenacity's name — cadet #${p.fav.fx.cadets}`; }

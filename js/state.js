@@ -69,7 +69,7 @@ export function saveGame() {
   if (!SAVE_GUARD.live) return no("boot");
   if (!hasCore(G)) return no("core");
   try {
-    G.savedAt = Date.now(); const txt = JSON.stringify(G);
+    { const ms = +(G.prog && G.prog.maxSeen) || 0, t = Date.now(); if (!(ms > 0 && t > ms + 30 * 864e5)) G.savedAt = t; }   /* R2: a bad clock (clock.js) stores no savedAt */ const txt = JSON.stringify(G);
     if (SAVE_GUARD.len && txt.length < SAVE_GUARD.len * 0.4) return no("size");   // much smaller than the last good save: a partial G
     localStorage.setItem(SAVE_KEY, txt); SAVE_GUARD.len = txt.length;
     try { localStorage.setItem(BAK_KEY, txt); } catch (e) {}

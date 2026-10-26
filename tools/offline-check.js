@@ -148,7 +148,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHO
       ok(near(b.fault, a.fault, 3) && b.nf === a.nf, `${tag} ${lbl}: fault timer resumes ` + J([a.fault, b.fault, a.nf, b.nf]));
       ok(near(b.job, a.job, 3), `${tag} ${lbl}: odd job kept, timer held ` + J([a.job, b.job]));
       ok(!a.inj || (b.inj && b.inj.id === a.inj.id && b.inj.heal === a.inj.heal && b.inj.state === a.inj.state), `${tag} ${lbl}: injury held ` + J([a.inj, b.inj]));
-      ok(near(b.hull, a.hull, 0.5) && b.parts === a.parts && b.torps === a.torps && b.xp === a.xp && b.rep === a.rep && b.day === a.day && b.pd === a.pd && near(b.energy, a.energy, 1) && b.op === a.op, `${tag} ${lbl}: no progress at all ` + J([a, b]));
+      ok(near(b.hull, a.hull, 0.5) && b.parts === a.parts && b.torps === a.torps && b.xp >= a.xp && b.xp - a.xp <= 24 /* Oct 26 B: away happenings pay up to 24 XP */ && b.rep === a.rep && b.day === a.day && b.pd === a.pd && near(b.energy, a.energy, 1) && b.op === a.op, `${tag} ${lbl}: no progress at all ` + J([a, b]));
     };
     same(s0, s1, 'v18 8h'); same(t0, t1, 'v17 8h');
     for (const [k, C] of [['v18', R.card1], ['v17', R.card2]]) ok(C.shown && C.k === 'BACK ON WATCH' && /^Away 8h 0m\. Everything held as you left it\.$/.test(C.away) && !C.modal && C.inView && C.img !== false && (!C.line || C.line.includes(C.name)) && !C.modals.length, `${tag} BACK ON WATCH card (${k}) ` + J(C));

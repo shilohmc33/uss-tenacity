@@ -414,6 +414,8 @@ export function freshProg() {
     sinks: { overhaulAt: -1e9, spent: { rep: 0, parts: 0 }, n: {} },   // phase 3: sink bookkeeping (sim + report)
     upkeep: { order: null, n: 0 },   // v18 D: the Lt's ordered UPKEEP round (upkeep.js); never automatic
     restT: 0,                        // rested window used (s of play, saved): only a real absence (PACE.backAfter) resets it, so a reload never restarts the bonus
+    vig: { pt: 0, st: [], w: null, bt: -1e9 },   // Oct 26 fix: the vignette lane (vignettes.js), saved so reloads cannot reset the cap
+    away: { d: "", xp: 0 },         // Oct 26 B: away happenings (away.js): the real day and the XP paid on it (cap 40)
     maxSeen: 0,                      // the latest Date.now() ever seen on watch (main.js): absences are measured from it
     lastSeen: 0,                     // v18: real time (ms) the player was last on watch (main.js; the BACK ON WATCH card)
     rations: PROG.rations.start, rationsLife: PROG.rations.start, rationsBy: {}, chatRR: { day: 0, n: 0 },   // phase 4: currency
@@ -598,7 +600,7 @@ const HUSH_PRAISE = ["{crew} notes the work in the log. Nobody makes a fuss toda
 export function awardXP(amount, src = "auto", why = "") {
   const p = P();
   let a = amount;
-  if (PACE_RT.sessionT < PROG.xp.rested.first && num(p.restT, 0) < PROG.xp.rested.first) a *= PROG.xp.rested.mult;   // rested bonus (v18: the only reward for time away)
+  if (src !== "away" && src !== "vig" && PACE_RT.sessionT < PROG.xp.rested.first && num(p.restT, 0) < PROG.xp.rested.first) a *= PROG.xp.rested.mult;   // rested bonus (v18: the only reward for time away)
   const xp = Math.max(0, Math.round(a));
   if (!xp) return 0;
   p.xp += xp; p.totalXp += xp;
@@ -702,6 +704,7 @@ export function playDayDue(now = new Date()) {
 // present = seconds of present play while the day was due (defaults to the saved accumulator); tests / sims may pass it
 export function markPlayDay(now = new Date(), present = null) {
   const p = P();
+  { const ms = +p.maxSeen || 0; if (ms > 0 && now.getTime() > ms + 30 * 864e5) return false; }   /* R2: no play day from a bad clock (clock.js) */
   if (!playDayDue(now)) return false;
   const s = present == null ? num(p.dayPresent, 0) : present;
   if (!(s >= PROG.playDayPresentS)) return false;

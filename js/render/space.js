@@ -6,6 +6,7 @@ import { voyageView } from "../voyage.js";
 import { clamp } from "../util.js";
 import { SHIPS, FORMATION, foe, shipOf } from "../ships.js";
 import { drawShip, drawShipLabel } from "./ships.js";
+import { drawVig } from "../vignettes.js";   // Oct 26 D: ambient vignettes (outside battle, behind the Tenacity)
 import { startShipDeath, shipFxHidden, tickShipFx, drawShipFx, fxShake } from "./shipfx.js";
 
 const bg = { cur: null, prev: null, f: 1 };
@@ -62,6 +63,7 @@ export function drawSpace(ctx, t, dt) {
   const jcy = portrait ? h * 0.2 + w * 0.133 : h * 0.16 + Math.min(w * 0.32, h * 0.8) / 3.92;
   const jx = Math.min(w * (portrait ? 0.46 : 0.62), w * 0.985 - jw) + (1 - enter) * w * 0.6, jy = jcy - jh / 2;
   SFX.jemRect = { x: jx / w, y: jy / h, w: jw / w, h: jh / h };
+  if (!B) drawVig(ctx, w, h, L, t);
   // ships
   const fx = SFX.anim || {}, rects = SFX.rects = {};
   const boxOf = (c, side) => {
