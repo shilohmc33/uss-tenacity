@@ -20,5 +20,7 @@ export function welcomeLine() {
   const c = pool[Math.floor(Math.random() * pool.length)], line = LINES[Math.floor(Math.random() * LINES.length)].replace(/\{short\}/g, c.short).replace(/\{addr\}/g, ltNamed());
   return { id: c.id, short: c.short, line };
 }
-addHardener(p => { delete p.welcome; const rt = Number(p.restT); p.restT = Number.isFinite(rt) && rt >= 0 ? rt : PROG.xp.rested.first;   // a save without it: no fresh window until a real absence
-  const t = Number(p.lastSeen), now = Date.now(); p.lastSeen = Number.isFinite(t) && t > 0 ? Math.min(t, now) : 0; });
+addHardener(p => { delete p.welcome; const rt = Number(p.restT); p.restT = Number.isFinite(rt) && rt >= 0 ? rt : 0;   // a save from before restT: one full rested window on its first load (the field is saved from then on)
+  const t = Number(p.lastSeen), now = Date.now(); p.lastSeen = Number.isFinite(t) && t > 0 ? Math.min(t, now) : 0;
+  const ms = Number(p.maxSeen); p.maxSeen = Math.max(Number.isFinite(ms) && ms > 0 ? ms : 0, p.lastSeen, Number.isFinite(G.savedAt) ? G.savedAt : 0);   // the latest real time ever seen (never pulled back: a clock moved back then forward measures the true gap)
+});

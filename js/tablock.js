@@ -10,7 +10,7 @@ let id = "", ep = 0, bc = null, timer = null;
 const now = () => Date.now();
 const read = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); return v && typeof v.id === "string" ? v : null; } catch (e) { return null; } };
 const write = (o) => { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} };
-const fresh = l => l && now() - (+l.t || 0) < STALE;
+const fresh = l => l && Math.abs(now() - (+l.t || 0)) < STALE;   // a lock stamped in the future (clock moved back after a tab died without pagehide) is stale, not fresh; a live tab re-stamps it every second
 const beats = (l, myEp) => (+l.ep || 0) > myEp || ((+l.ep || 0) === myEp && l.id < id);   // does another tab's claim win over mine?
 export const TL = { get id() { return id; }, get ep() { return ep; }, ro: () => TAB_RT.ro, takeover, check };
 function goRO(why, saveFirst) {

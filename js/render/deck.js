@@ -331,12 +331,13 @@ export function drawDeck(ctx, t, dt) {
   ctx.setTransform(cam.scale * dpr, 0, 0, cam.scale * dpr, (cam.w / 2 - cam.x * cam.scale) * dpr, (cam.h / 2 - cam.y * cam.scale) * dpr);
   const plate = IMG[dk.plate];
   if (plate) { drawEdges(ctx, plate, dk); ctx.drawImage(plate, 0, 0, DW, DH); drawDoors(ctx, L.deck); } else { ctx.fillStyle = "#1b2233"; ctx.fillRect(0, 0, DW, DH); ctx.fillStyle = "#8af"; ctx.fillText(dk.name + " (plate missing)", 20, 30); }
-  if (dk.cabin) drawCabin(ctx, t, !L.lift);   // phase 4: decor in the Lt's quarters (placeholder boxes until the art lands)
-  // node rings
+  if (dk.cabin) drawCabin(ctx, t, DBG.walk);   // empty decor slots: no outline on the floor (still tappable); the walk overlay shows them   // phase 4: decor in the Lt's quarters (placeholder boxes until the art lands)
+  // node rings: the action spots are NOT drawn on the floor (they stay tappable: hitTest is unchanged); only the
+  // ?debug=1&walk=1 overlay outlines them. The torpedo bay's charge gauge stays while he is loading (a meter, not a zone).
   for (const [id, n] of Object.entries(dk.nodes)) {
     const active = L.mode === "use" && L.node === id;
     if (active && id === "torpbay") ring(ctx, n.x * DW, n.y * DH, 15 * K, G.ship.charge / 100, "#ffb36b");
-    else ring(ctx, n.x * DW, n.y * DH, 15 * K, active ? 1 : 0, active ? "#7fe0ff" : "rgba(160,200,255,0.4)", active ? 2.5 : 1.5);
+    else if (DBG.walk) ring(ctx, n.x * DW, n.y * DH, 15 * K, active ? 1 : 0, active ? "#7fe0ff" : "rgba(160,200,255,0.4)", active ? 2.5 : 1.5);
   }
   // lift glow
   const lf = dk.lift, near = dDist(L.x, L.y, lf.x, lf.y) < ZONE * 1.6;

@@ -216,7 +216,7 @@ async function run() {
     await ctx.close();
   }
   fs.mkdirSync('/workspace/tenacity/shots', { recursive: true });
-  fs.writeFileSync(`/workspace/tenacity/shots/anim-${TAG}-metrics.json`, JSON.stringify(M, null, 1));
+  fs.writeFileSync(require('path').resolve(__dirname, '..', 'shots', `anim-${TAG}-metrics.json`), JSON.stringify(M, null, 1));
   console.log(JSON.stringify(M.desk || M.phone, null, 0));
   await browser.close();
 }

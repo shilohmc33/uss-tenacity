@@ -8,7 +8,7 @@
 // one self-booked slot at a time, and only while the sim runs (v18: never while he is away).
 import { G } from "./state.js";
 import { HOLO, MOOD } from "./pacing.js";
-import { PROG, addHardener, nudge, opinionOf, spend, canAfford, addr } from "./progression.js";
+import { PROG, addHardener, nudge, opinionOf, spend, canAfford, addr, localDate } from "./progression.js";
 import { SLOTMAP } from "./roster.js";
 import { log, toast } from "./bus.js";
 import { needsOf, NEED_KEYS, shiftNow } from "./needs.js";
@@ -22,13 +22,28 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 export const PROGS = HOLO.progs, PROG_IDS = Object.keys(HOLO.progs);
 export const H = () => { const p = P(); if (!p.holo || typeof p.holo !== "object") p.holo = freshHolo(); return p.holo; };
-export const freshHolo = () => ({ busy: {}, uses: {}, buffs: {}, recent: {}, risa: {}, over: {}, lock: {}, paid: {}, day: {}, n: { sessions: 0, spent: 0, crew: 0, self: 0 } });
+export const freshHolo = () => ({ lt: { d: "", n: 0 }, busy: {}, uses: {}, buffs: {}, recent: {}, risa: {}, over: {}, lock: {}, paid: {}, day: {}, n: { sessions: 0, spent: 0, crew: 0, self: 0 } });
 const aboard = () => Object.values(P().crew.slots).filter(id => id && occ(id));
 const injured = () => new Set(((P().med && P().med.inj) || []).map(x => x.id));
 export const busyUntil = id => { const b = H().busy[id]; return b && b.endT > now() ? b.endT : 0; };
 export const isHolo = id => busyUntil(id) > 0;
 export const buffOf = id => { const b = H().buffs[id]; return b && b.t1 > now() ? b.k : null; };
 export const comfortLocked = id => (H().lock[id] || 0) > now();
+// The Lt's daily slot (HOLO.ltPerDay per real local day, reset at local midnight). His own session is instant: the scene
+// plays, the effect lands and he is back on duty, so he never holds a booking timer (the old bug: a busy timer of pg.min
+// SHIP minutes, which in v18 only runs while the game does, so "You're already in a session" could last for days of real
+// time and survive reloads). A stored date later than today (the clock moved back) counts as today: no extra session.
+const dOf = s => typeof s === "string" && /^\d{4}-\d\d-\d\d$/.test(s) ? s : "";
+export function ltLeft(at = new Date()) { const u = H().lt || {}, d = localDate(at); return dOf(u.d) && dOf(u.d) >= d ? Math.max(0, HOLO.ltPerDay - (u.n | 0)) : HOLO.ltPerDay; }
+export function ltNextAt(at = new Date()) {   // local midnight after the later of today and the stored date
+  const u = H().lt || {}, d = localDate(at), base = dOf(u.d) > d ? new Date(u.d + "T00:00:00") : new Date(at.getFullYear(), at.getMonth(), at.getDate());
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1);
+}
+export function ltNextText(at = new Date()) {
+  const n = ltNextAt(at), tm = n.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), tom = new Date(at.getFullYear(), at.getMonth(), at.getDate() + 1);
+  return `Next available: ${n.getTime() === tom.getTime() ? "tomorrow" : n.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} ${tm}`;
+}
+export const ltUsedWhy = (at = new Date()) => `Your holodeck time today is used · ${ltNextText(at)}`;
 export const fits = (id, pid) => id !== "lt" && PROGS[pid].fit.some(q => quirksOf(id).includes(q));
 // can `id` (crew id or "lt") be booked into program `pid`; paid = the Lt pays
 export function bookState(pid, id = "lt", paid = true) {
@@ -42,7 +57,8 @@ export function bookState(pid, id = "lt", paid = true) {
     if (r.act === "sleep") return { ok: false, why: `${nm(id)} is asleep` };
     if (r.shift === shiftNow()) return { ok: false, why: `${nm(id)} is on shift` };
   }
-  if (isHolo(id)) return { ok: false, why: `${id === "lt" ? "You're" : nm(id) + " is"} already in a session` };
+  if (id === "lt" && ltLeft() <= 0) return { ok: false, why: ltUsedWhy(), used: true };   // the daily slot; crew bookings never touch it
+  if (id !== "lt" && isHolo(id)) return { ok: false, why: `${nm(id)} is already in a session` };
   if (pg.gapDays && (H().risa[id] || -1e12) > now() - pg.gapDays * PROG.dayLength) return { ok: false, why: `once every ${pg.gapDays} ship's days` };
   if (G.sp.battle) return { ok: false, why: "not during battle" };
   if (paid && !canAfford({ rations: pg.fr })) return { ok: false, why: `${pg.fr} ${PROG.currency.hud} needed` };
@@ -161,7 +177,8 @@ export function book(pid, lead = "lt", paid = true) {
   const pg = PROGS[pid], h = H(), t = now();
   if (paid) { spend({ rations: pg.fr }, "holodeck"); h.n.spent += pg.fr; }
   const who = [lead, ...(pg.kind === "group" ? groupFor(lead) : [])];
-  for (const id of who) { applyTo(id, pid, { paid }); h.busy[id] = { prog: pid, endT: t + pg.min * 60, self: !paid }; if (pg.gapDays) h.risa[id] = t; }
+  for (const id of who) { applyTo(id, pid, { paid }); if (id !== "lt") h.busy[id] = { prog: pid, endT: t + pg.min * 60, self: !paid }; if (pg.gapDays) h.risa[id] = t; }   // the Lt's own session is instant (no timer)
+  if (lead === "lt") { const d = localDate(), u = h.lt && dOf(h.lt.d) === d ? h.lt : { d, n: 0 }; u.n++; h.lt = u; }
   const bl = blurbFor(pid, lead);
   if (paid && lead !== "lt") {   // gift-like: +1 opinion, max 1 per person per ship's day
     if (h.paid[lead] !== P().day) { h.paid[lead] = P().day; nudge(lead, HOLO.opinion, "holodeck"); }
@@ -191,6 +208,8 @@ export function hardenHolo(p) {
   const ok = id => id === "lt" || !!(p.crew && p.crew.occ && p.crew.occ[id]);
   const map = (src, fn) => { const o = {}; if (src && typeof src === "object") for (const [id, v] of Object.entries(src)) if (ok(id)) { const x = fn(v); if (x !== undefined) o[id] = x; } return o; };
   out.busy = map(s.busy, v => v && PROGS[v.prog] && f(v.endT) ? { prog: v.prog, endT: Math.min(v.endT, t + 120 * 60), self: !!v.self } : undefined);
+  delete out.busy.lt;   // pre-fix saves: the Lt's stuck booking timer goes (his sessions are instant now)
+  { const today = localDate(), d = s.lt && dOf(s.lt.d); out.lt = d ? { d: d > today ? today : d, n: clamp(Math.floor(+s.lt.n || 0), 0, 99) } : { d: "", n: 0 }; }   // a future date (wrong clock) is pulled back to today
   out.buffs = map(s.buffs, v => v && ["drilled", "sharp"].includes(v.k) && f(v.t1) ? { k: v.k, t1: Math.min(v.t1, t + HOLO.buffS) } : undefined);
   for (const k of ["risa", "over", "lock"]) out[k] = map(s[k], v => f(v) ? Math.min(v, t + (k === "risa" ? 0 : k === "lock" ? PROG.dayLength : HOLO.overuse.days * PROG.dayLength)) : undefined);
   out.paid = map(s.paid, v => Number.isInteger(v) ? v : undefined);

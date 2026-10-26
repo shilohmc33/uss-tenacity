@@ -96,7 +96,7 @@ const modalFits = (p, sel) => p.evaluate(sel => { const c = document.querySelect
     Object.assign(G.prog.opinions, { tren: 58, okafor: 81, diallo: 66, hale: 40, thelev: 77, tull: 52 });
     G.prog.perf.q = 0.9; G.prog.perf.resp = 0.9; G.prog.service = 5; G.prog.repLifetime = 12000; G.prog.rankSince.rep = 0; G.prog.playDays = 20;
     G.prog.spec = { warp: 1 }; G.prog.specPicks = 2;
-    G.savedAt = Date.now() - 3 * 3600 * 1000; G.prog.lastSeen = G.savedAt; localStorage.setItem(St.SAVE_KEY, JSON.stringify(G));
+    G.savedAt = Date.now() - 3 * 3600 * 1000; G.prog.lastSeen = G.savedAt; G.prog.maxSeen = G.prog.lastSeen; localStorage.setItem(St.SAVE_KEY, JSON.stringify(G));
   });
   await p.goto(BASE + '?debug=1'); await ready(p); await sleep(1200);
   R.queued = await p.evaluate(() => ({ board: __T.G.prog.board, report: !!document.querySelector('#wbCard.bow:not([hidden])'), boardModal: !document.querySelector('#boardPanel').hidden, reportLine: null,   /* v18: no Shift Report */ rank: __T.G.prog.rank }));

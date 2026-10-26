@@ -209,6 +209,7 @@ export const HOLO = {
     risa_beach: { name: "Risa Beach", sub: "premium", fr: 120, min: 120, kind: "premium", fit: ["homesick"], gapDays: 5 },
   },
   buffS: 4 * 3600, drilled: 0.05, sharp: 0.08, drilledSys: ["phasers", "loader"],
+  ltPerDay: 1,   // the Lt's own sessions per real (local) day; resets at local midnight (holodeck.js ltLeft)
   groupMax: 4, opinion: 1, groupOpinion: 2, crewCheapFr: 20, crewPerHour: 0.5,
   overuse: { perDay: 2, days: 2 }, nightOwl: 1.25, addict: 1.5, recent: 3,
 };

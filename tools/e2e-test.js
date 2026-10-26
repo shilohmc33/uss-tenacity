@@ -1,5 +1,5 @@
 const { chromium } = require('playwright-core');
-const SH = '/workspace/tenacity/shots/';
+const SH = require('path').resolve(__dirname, '..', 'shots') + '/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const browser = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox','--use-gl=swiftshader','--enable-unsafe-swiftshader'] });
@@ -118,7 +118,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const after = await ev(p, () => ({ deck: __T.G.lt.deck, torps: __T.G.ship.torps, sd: __T.G.ship.stardate, log: __T.G.log.length }));
   res.save = { before, after, ok: before.deck === after.deck && Math.abs(before.sd - after.sd) < 1 };
   // offline catch-up: rewind savedAt
-  await ev(p, () => { __T.saveGame(); const d = JSON.parse(localStorage.getItem('tenacity.save.v1')); d.savedAt -= 40 * 60 * 1000; d.prog.lastSeen = d.savedAt; localStorage.setItem('tenacity.save.v1', JSON.stringify(d)); window.__noSave = true; __T.app.paused = true; });
+  await ev(p, () => { __T.saveGame(); const d = JSON.parse(localStorage.getItem('tenacity.save.v1')); d.savedAt -= 40 * 60 * 1000; d.prog.lastSeen = d.savedAt; d.prog.maxSeen = d.prog.lastSeen; localStorage.setItem('tenacity.save.v1', JSON.stringify(d)); window.__noSave = true; __T.app.paused = true; });
   await p.goto('http://localhost:8765/');
   await waitFor(p, () => !!window.__T && document.querySelector('#loading').classList.contains('done'));
   await sleep(500);

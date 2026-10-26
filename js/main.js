@@ -151,7 +151,7 @@ function frame(now) {
   tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
   let simDt = dt * app.timeScale;
   while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); simDt -= s; }
-  seenT -= dt; if (seenT <= 0 && isPresent()) { seenT = 1; G.prog.lastSeen = Date.now(); }   // v18: the last moment on watch (BACK ON WATCH)
+  seenT -= dt; if (seenT <= 0 && isPresent()) { seenT = 1; G.prog.lastSeen = Date.now(); G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, G.prog.lastSeen); }   // v18: the last moment on watch (BACK ON WATCH)
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }
   saveT += dt; if (saveT > 5) { saveT = 0; saveGame(); }
@@ -160,11 +160,11 @@ function frame(now) {
 let hiddenAt = 0;
 document.addEventListener("visibilitychange", () => {
   PACE_RT.hidden = document.hidden;   // pass 06: never 'present' while hidden
-  if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (!window.__noSave) saveGame(); }
+  if (document.hidden) { app.paused = true; hiddenAt = Date.now(); if (G.prog) G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, hiddenAt); if (!window.__noSave) saveGame(); }
   else {
     tabCheck();   // P32 #1: yield first if another tab took over while this one was hidden
     if (TAB_RT.ro) return;
-    const gap = (Date.now() - hiddenAt) / 1000;
+    const gap = Math.max(0, (Date.now() - Math.max(hiddenAt, (G.prog && +G.prog.maxSeen) || 0)) / 1000);   // never a negative gap; measured from the latest time seen
     if (hiddenAt && gap >= PACE.backAfter) { showBackOnWatch(gap); G.prog.restT = 0; }   // same rule as a reload: rested only after a real absence
     if (hiddenAt && gap > 600) { PACE_RT.sessionT = 0; markPlayDay(); }   // back after a real break = a new session (calm opening again)
     playerInput();
@@ -215,7 +215,7 @@ function bootGame(params, masks) {
   // v18 (no offline quests): no catch-up. A pre-v18 save gets one 'held station' line; any absence of PACE.backAfter s or
   // more opens the BACK ON WATCH card. The only reward for time away is the rested XP bonus of the new session.
   if (had && (G.prog.lastSeen || G.savedAt)) {
-    const gap = Math.max(0, (Date.now() - Math.max(G.prog.lastSeen || 0, G.savedAt || 0)) / 1000);
+    const gap = Math.max(0, (Date.now() - Math.max(G.prog.lastSeen || 0, G.savedAt || 0, +G.prog.maxSeen || 0)) / 1000);   // from the latest time ever seen: a clock set back then forward adds no absence
     if (MIG_RT.from != null && MIG_RT.from < 18 && gap > 30) log("The ship held station while you were away.", "comm");
     if (gap >= PACE.backAfter) { showBackOnWatch(gap); G.prog.restT = 0; }   // a real absence: a fresh rested window (a quick reload keeps the old one as it was)
   }

@@ -12,7 +12,7 @@ const BASE = process.env.BASE || 'http://127.0.0.1:8765/';
 const TAG = process.env.TAG || 'before';
 const ONLY = process.env.ONLY || '';   // comma list of sections to run (lying,aside,overlap,tren,turns); empty = all
 const want = k => !ONLY || ONLY.split(',').includes(k);
-const SH = '/workspace/tenacity/shots/';
+const SH = require('path').resolve(__dirname, '..', 'shots') + '/';
 const TMP = `/workspace/pt09-frames/${TAG}/`;
 const VPS = { phone: { width: 390, height: 844, dsf: 2, mobile: true }, desk: { width: 1280, height: 800, dsf: 1, mobile: false } };
 const SEED = +(process.env.SEED || 1234567);   // Math.random seed (aside / overlap probes vary with it: average a few)

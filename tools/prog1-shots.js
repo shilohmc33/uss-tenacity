@@ -71,7 +71,7 @@ const tile = p => p.evaluate(() => { const el = document.querySelector('.stat[da
   await shot(p, 'excellent-floater');
   R.excellent = await p.evaluate(() => { Object.assign(__T.PROG.quality.excellent, window.__q); return { quality: __T.G.prog.quality, log: __T.G.log.slice(-6).map(e => e.msg) }; });
   // offline report with XP: back-date the save by 3 h and reload
-  await p.evaluate(async () => { const St = await import('/js/state.js'); __T.G.ship.nextFault = 120; __T.G.sp.cap.decideT = 3; __T.G.sp.ev.nextT = -1; __T.G.savedAt = Date.now() - 3 * 3600e3; __T.G.prog.lastSeen = __T.G.savedAt; localStorage.setItem(St.SAVE_KEY, JSON.stringify(__T.G)); window.__noSave = true; });
+  await p.evaluate(async () => { const St = await import('/js/state.js'); __T.G.ship.nextFault = 120; __T.G.sp.cap.decideT = 3; __T.G.sp.ev.nextT = -1; __T.G.savedAt = Date.now() - 3 * 3600e3; __T.G.prog.lastSeen = __T.G.savedAt; __T.G.prog.maxSeen = __T.G.prog.lastSeen; localStorage.setItem(St.SAVE_KEY, JSON.stringify(__T.G)); window.__noSave = true; });
   R.beforeOffline = await p.evaluate(() => ({ level: __T.G.prog.level, totalXp: __T.G.prog.totalXp, day: __T.G.prog.day }));
   await p.goto(BASE + '?debug=1');
   await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });

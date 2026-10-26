@@ -414,6 +414,7 @@ export function freshProg() {
     sinks: { overhaulAt: -1e9, spent: { rep: 0, parts: 0 }, n: {} },   // phase 3: sink bookkeeping (sim + report)
     upkeep: { order: null, n: 0 },   // v18 D: the Lt's ordered UPKEEP round (upkeep.js); never automatic
     restT: 0,                        // rested window used (s of play, saved): only a real absence (PACE.backAfter) resets it, so a reload never restarts the bonus
+    maxSeen: 0,                      // the latest Date.now() ever seen on watch (main.js): absences are measured from it
     lastSeen: 0,                     // v18: real time (ms) the player was last on watch (main.js; the BACK ON WATCH card)
     rations: PROG.rations.start, rationsLife: PROG.rations.start, rationsBy: {}, chatRR: { day: 0, n: 0 },   // phase 4: currency
     cabin: { tier: "ltjg", owned: [], placed: {}, log: [] },   // phase 4: quarters (owned decor ids, slot id -> item id)

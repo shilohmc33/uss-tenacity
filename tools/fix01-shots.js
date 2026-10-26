@@ -117,7 +117,7 @@ const measure = p => p.evaluate(() => {
   report.buttonsDesk = await measure(p);
   await p.click('#btnFull'); await sleep(600); await p.screenshot({ path: `${OUT}fix01_desk_full_buttons.png` });
   report.buttonsDeskFull = await measure(p);
-  await p.evaluate(() => { __T.G.savedAt = Date.now() - 3 * 3600 * 1000; __T.G.prog.lastSeen = __T.G.savedAt; localStorage.setItem('tenacity.save.v1', JSON.stringify(__T.G)); window.__noSave = true; });
+  await p.evaluate(() => { __T.G.savedAt = Date.now() - 3 * 3600 * 1000; __T.G.prog.lastSeen = __T.G.savedAt; __T.G.prog.maxSeen = __T.G.prog.lastSeen; localStorage.setItem('tenacity.save.v1', JSON.stringify(__T.G)); window.__noSave = true; });
   await p.reload(); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 30000 }); await sleep(800);
   report.offlineReport = await p.evaluate(() => { const e = document.querySelector('#wbCard'); return e && !e.hidden && e.classList.contains('bow') ? e.innerText : null; });   // v18: the BACK ON WATCH card (the Shift Report is gone)
   await p.screenshot({ path: `${OUT}fix01_desk_offline_3h_report.png` });

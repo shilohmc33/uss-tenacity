@@ -127,7 +127,7 @@ const ltFig = p => p.evaluate(async () => {
   // ===== offline report (real boot after 3 h away), phone =====
   p = await mk(b, 390, 844, true);
   await boot(p); await calm(p);
-  await p.evaluate(() => { const G = __T.G; G.sp.cap.decideT = 3; G.ship.nextFault = 120; G.sp.ev.nextT = -1; G.ship.power = 7; G.ship.hull = 40; window.__noSave = false; __T.saveGame(); const s = JSON.parse(localStorage.getItem('tenacity.save.v1')); s.savedAt = Date.now() - 3 * 3600e3; s.prog.lastSeen = s.savedAt; localStorage.setItem('tenacity.save.v1', JSON.stringify(s)); window.__noSave = true; });
+  await p.evaluate(() => { const G = __T.G; G.sp.cap.decideT = 3; G.ship.nextFault = 120; G.sp.ev.nextT = -1; G.ship.power = 7; G.ship.hull = 40; window.__noSave = false; __T.saveGame(); const s = JSON.parse(localStorage.getItem('tenacity.save.v1')); s.savedAt = Date.now() - 3 * 3600e3; s.prog.lastSeen = s.savedAt; s.prog.maxSeen = s.prog.lastSeen; localStorage.setItem('tenacity.save.v1', JSON.stringify(s)); window.__noSave = true; });
   await p.goto(BASE + '?debug=1');
   await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done') && !!document.querySelector('#wbCard.bow:not([hidden])'), null, { timeout: 60000 });
   await sleep(500);

@@ -42,16 +42,17 @@ function modal(id) {
   if (!m) { m = document.createElement("div"); m.id = id; m.className = "modal"; m.hidden = true; document.body.appendChild(m); }
   return m;
 }
-function renderPanel() {
+function renderPanel(note = "") {   // note: the reason a tapped row can't book (shown at the top of the panel, over which toasts can't be seen)
   const m = modal("holoPanel"), lvl = insightLvl();
   const crew = Object.values(G.prog.crew.slots).filter(id => id && occ(id));
   if (target !== "lt" && !occ(target)) target = "lt";
   const opts = [`<option value="lt"${target === "lt" ? " selected" : ""}>You</option>`].concat(crew.map(id => `<option value="${id}"${id === target ? " selected" : ""}>${esc(occ(id).short)}</option>`)).join("");
   const rows = HD.PROG_IDS.map(pid => {
     const pg = HD.PROGS[pid], st = HD.bookState(pid, target, true), fit = target !== "lt" && lvl >= CARE.insightQuirk1 && HD.fits(target, pid);
-    return `<div class="req holorow${st.ok ? "" : " off"}"><img class="holothumb" src="assets/holodeck/holo_${pid}.webp" alt=""><div>${esc(pg.name)}${fit ? ` <b class="holofit" title="suits their quirks">♥</b>` : ""}<small>${pg.min} min · ${DESC[pid]}${st.ok ? "" : ` · ${esc(st.why)}`}</small></div><button data-holo-book="${pid}" ${st.ok ? "" : "disabled"}>${pg.fr} ${FR()}</button></div>`;
+    return `<div class="req holorow${st.ok ? "" : " off"}"><img class="holothumb" src="assets/holodeck/holo_${pid}.webp" alt=""><div>${esc(pg.name)}${fit ? ` <b class="holofit" title="suits their quirks">♥</b>` : ""}<small>${pg.min} min · ${DESC[pid]}${st.ok ? "" : ` · ${esc(st.why)}`}</small></div><button data-holo-book="${pid}"${st.ok ? "" : ' aria-disabled="true"'}>${pg.fr} ${FR()}</button></div>`;
   }).join("");
-  m.innerHTML = `<div class="card holocard"><h3>HOLODECK</h3><p class="cnote">${G.prog.rations} ${FR()} on hand. Booking for <select id="holoFor">${opts}</select>${lvl < CARE.insightQuirk1 ? " · Insight 2 shows which programs suit someone" : ""}</p>${rows}<button class="close" data-holo-close="1">CLOSE</button></div>`;
+  const used = target === "lt" && HD.ltLeft() <= 0, lim = used ? `<p class="hololimit${note ? " flash" : ""}" role="${note ? "alert" : "status"}"><b>UNAVAILABLE TODAY</b> You've had your holodeck time today. ${esc(HD.ltNextText())}.</p>` : target === "lt" ? `<p class="cnote hololeft">Your holodeck time: ${HD.ltLeft()} session${HD.ltLeft() === 1 ? "" : "s"} left today (resets at midnight). Bookings for crewmates don't count.</p>` : "", why = note && !used ? `<p class="hololimit flash" role="alert"><b>CAN'T BOOK THAT</b> ${esc(note)}</p>` : "";
+  m.innerHTML = `<div class="card holocard"><h3>HOLODECK</h3>${lim}${why}<p class="cnote">${G.prog.rations} ${FR()} on hand. Booking for <select id="holoFor">${opts}</select>${lvl < CARE.insightQuirk1 ? " · Insight 2 shows which programs suit someone" : ""}</p>${rows}<button class="close" data-holo-close="1">CLOSE</button></div>`;
 }
 export function openHolo(forId = "lt") { target = forId || "lt"; renderPanel(); modal("holoPanel").hidden = false; }
 function showScene(pid, res) {
@@ -71,7 +72,7 @@ function act(e) {
   if (D.holoSceneClose) { modal("holoScene").hidden = true; return; }
   if (D.holoBook) {
     const r = HD.book(D.holoBook, target, true);
-    if (!r.ok) { toast(r.why, "warn"); renderPanel(); return; }
+    if (!r.ok) { toast(r.used ? `Holodeck unavailable — ${HD.ltNextText()}` : r.why, "warn"); renderPanel(r.why); const c = modal("holoPanel").querySelector(".card"); if (c) c.scrollTop = 0; return; }   // a greyed row still answers a tap with the reason
     modal("holoPanel").hidden = true; showScene(D.holoBook, r); refreshPlog(); return;
   }
   if (D.shore) { const r = CC.shoreLeave(); if (!r.ok) toast(r.why, "warn"); return; }

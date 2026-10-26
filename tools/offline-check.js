@@ -43,8 +43,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHO
       return { el: S.elapsed, sd: S.stardate, travel: G.sp.travel && G.sp.travel.t, paused: G.sp.travelPaused, alert: a ? Math.round(a.t * 10) / 10 : null, alertEn: a ? a.enemies.join() : null, fault: S.faults.eps ? S.faults.eps.t : null, nf: Object.keys(S.faults).length,
         job: j ? j.t : null, inj: m ? { id: m.id, heal: m.healAt, state: m.state } : null, hull: S.hull, parts: S.parts, torps: S.torps, xp: G.prog.totalXp, rep: G.sp.rep, day: G.prog.day, pd: G.prog.playDays, energy: Math.round(S.energy), op: JSON.stringify(G.prog.opinion), battle: !!G.sp.battle, v: G.version }; };
     const close = (sp, ver) => p.evaluate(([k, sp, ver]) => { window.__noSave = true; __T.saveGame && (window.__noSave = false); __T.saveGame(); window.__noSave = true;
-      const d = JSON.parse(localStorage.getItem(k)), back = Date.now() - 8 * 3600e3; d.savedAt = back; d.prog.lastSeen = back;
-      if (ver === 17) { d.version = 17; d.night = { sys: 'eps', t: 50, fixes: 3, battleTimes: [1, 2], avoided: 1 }; d.sp.awayDefer = 500; if (d.sp.alert) d.sp.alert.away = 120; d.prog.sinks.maintainOn = true; d.prog.sinks.maintT = 30; d.prog.welcome = { due: true, away: 99999 }; delete d.prog.upkeep; delete d.prog.lastSeen; }
+      const d = JSON.parse(localStorage.getItem(k)), back = Date.now() - 8 * 3600e3; d.savedAt = back; d.prog.lastSeen = back; d.prog.maxSeen = d.prog.lastSeen;
+      if (ver === 17) { d.version = 17; d.night = { sys: 'eps', t: 50, fixes: 3, battleTimes: [1, 2], avoided: 1 }; d.sp.awayDefer = 500; if (d.sp.alert) d.sp.alert.away = 120; d.prog.sinks.maintainOn = true; d.prog.sinks.maintT = 30; d.prog.welcome = { due: true, away: 99999 }; delete d.prog.upkeep; delete d.prog.lastSeen; delete d.prog.maxSeen; delete d.prog.restT; }
       localStorage.setItem(k, JSON.stringify(d)); localStorage.setItem(k + '.bak', JSON.stringify(d)); return true; }, [KEY, sp, ver]);
     const reopen = async () => { await p.reload(); await ready(); await sleep(300); };
     const card = () => p.evaluate(() => { const e = document.querySelector('#wbCard'); const r = e.getBoundingClientRect(), im = e.querySelector('.rpic img');
@@ -77,13 +77,21 @@ const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHO
     //      fresh one, on reload and on a hidden-tab return alike; a negative gap (clock set back) grants nothing ----
     const XPG = () => p.evaluate(() => { const T = __T, a = T.G.prog.totalXp; T.awardXP(100, 'manual', 'test'); return { g: T.G.prog.totalXp - a, restT: Math.round(T.G.prog.restT) }; });
     const reload = async (restT, gapMin) => { await p.evaluate(([k, restT, gapMin]) => { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); __T.G.prog.restT = restT; window.__noSave = false; __T.saveGame(); window.__noSave = true;
-      const d = JSON.parse(localStorage.getItem(k)), t = Date.now() - gapMin * 60e3; d.savedAt = t; d.prog.lastSeen = t; localStorage.setItem(k, JSON.stringify(d)); localStorage.setItem(k + '.bak', JSON.stringify(d)); return true; }, [KEY, restT, gapMin]); await reopen(); return XPG(); };
+      const d = JSON.parse(localStorage.getItem(k)), t = Date.now() - gapMin * 60e3; d.savedAt = t; d.prog.lastSeen = t; d.prog.maxSeen = d.prog.lastSeen; localStorage.setItem(k, JSON.stringify(d)); localStorage.setItem(k + '.bak', JSON.stringify(d)); return true; }, [KEY, restT, gapMin]); await reopen(); return XPG(); };
     R.rest = { in0: await reload(300, 0), out0: await reload(1000, 0), in15: await reload(300, 15), out15: await reload(1000, 15), back31: await reload(1000, 31), neg: await reload(1000, -60) };
-    const hideFor = min => p.evaluate(async min => { const T = __T, G = T.G; document.querySelector('#wbCard').hidden = true; G.prog.restT = 1000; T.PACE_RT.sessionT = 1e6;
+    const hideFor = min => p.evaluate(async min => { const T = __T, G = T.G; document.querySelector('#wbCard').hidden = true; G.prog.restT = 1000; T.PACE_RT.sessionT = 1e6; G.prog.maxSeen = G.prog.lastSeen = Date.now();   // section 3's mocked +2 h clock is behind us (maxSeen never moves back by itself)
       const real = Date.now, setHidden = v => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => v }); Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => v ? 'hidden' : 'visible' }); document.dispatchEvent(new Event('visibilitychange')); };
       window.__noSave = true; setHidden(true); await new Promise(z => setTimeout(z, 300)); Date.now = () => real.call(Date) + min * 60e3; setHidden(false); await new Promise(z => setTimeout(z, 300));
       const a = G.prog.totalXp; T.awardXP(100, 'manual', 'test'); const o = { g: G.prog.totalXp - a, restT: Math.round(G.prog.restT) }; Date.now = real; delete document.hidden; delete document.visibilityState; document.querySelector('#wbCard').hidden = true; return o; }, min);
     R.rest.hid31 = await hideFor(31); R.rest.hid20 = await hideFor(20);
+    // (a) a save from before restT gets one full rested window on its first load (then it is saved like any other)
+    // (b) clock set back 2 days, played, then put right: the gap counts from the latest time ever seen (maxSeen): no card, no window
+    const reloadMut = async mut => { await p.evaluate(([k, mut]) => { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); document.querySelector('#wbCard').hidden = true; window.__noSave = false; __T.saveGame(); window.__noSave = true;
+      const d = JSON.parse(localStorage.getItem(k)); (new Function('d', mut))(d); localStorage.setItem(k, JSON.stringify(d)); localStorage.setItem(k + '.bak', JSON.stringify(d)); return true; }, [KEY, mut]); await reopen();
+      return { ...(await XPG()), card: await p.evaluate(() => { const e = document.querySelector('#wbCard'); return !e.hidden && e.classList.contains('bow') ? (e.querySelector('.bowAway') || {}).textContent : null; }) }; };
+    R.rest.oldSave = await reloadMut("delete d.prog.restT; d.savedAt = d.prog.lastSeen = d.prog.maxSeen = Date.now();");
+    R.rest.oldSave2 = await reloadMut("d.prog.restT = 1000; d.savedAt = d.prog.lastSeen = d.prog.maxSeen = Date.now();");
+    R.rest.clockBack = await reloadMut("d.prog.restT = 1000; d.savedAt = d.prog.lastSeen = Date.now() - 2 * 86400e3; d.prog.maxSeen = Date.now() - 5 * 60e3;");
     // ---- 4. idle-tab pause + tap to resume ----
     R.idle = await p.evaluate(async () => { const T = __T, G = T.G, PC = await import('/js/pacing.js'), wait = ms => new Promise(z => setTimeout(z, ms)); document.querySelector('#wbCard').hidden = true;
       if (!G.sp.alert) { const BT = await import('/js/battle.js'); G.sp.lastBattleT = -1e9; BT.startBattle('enroute'); }
@@ -153,7 +161,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHO
       ok(X.back31.g === 125 && X.back31.restT <= 5, `${tag} reload after 31 min grants a fresh window ` + J(X.back31));
       ok(X.neg.g === 100 && near(X.neg, 1000), `${tag} negative gap (clock back) grants nothing ` + J(X.neg));
       ok(X.hid31.g === 125 && X.hid31.restT <= 1, `${tag} hidden tab 31 min grants it ` + J(X.hid31));
-      ok(X.hid20.g === 100 && X.hid20.restT >= 1000, `${tag} hidden tab 20 min does not ` + J(X.hid20)); }
+      ok(X.hid20.g === 100 && X.hid20.restT >= 1000, `${tag} hidden tab 20 min does not ` + J(X.hid20));
+      ok(X.oldSave.g === 125 && X.oldSave.restT <= 5 && X.oldSave2.g === 100, `${tag} (a) a save without restT gets one rested window, once ` + J([X.oldSave, X.oldSave2]));
+      ok(X.clockBack.g === 100 && X.clockBack.restT >= 1000 && X.clockBack.card === null, `${tag} (b) clock back then forward: gap from maxSeen, no window, no 'Away 2d' card ` + J(X.clockBack)); }
     ok(R.hidden.frozen && R.hidden.travelHeld && R.hidden.card && /^Away 2h 0m\./.test(R.hidden.away || ''), `${tag} hidden tab frozen, card on return ` + J(R.hidden));
     ok(R.idle.up && R.idle.frozen && R.idle.alertHeld === true && R.idle.cover, `${tag} idle pause: overlay, sim + alert frozen ` + J(R.idle));
     ok(R.resume.hidden && !R.resume.up && R.resume.runs && R.resume.noWalk, `${tag} tap to resume (the tap never reaches the deck) ` + J(R.resume));
@@ -169,6 +179,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms)), SHOTS = process.env.SHO
     ok(U.inRound.cleared && U.inRound.line && U.inRound.active && !U.inRoundDone.active && U.inRoundDone.n >= 2, `${tag} a fault at his console is fixed inside the round ` + J([U.inRound, U.inRoundDone]));
     ok(U.selfFix.mode === 'use' && U.selfFix.node === 'core' && U.selfFix.warpcore && U.selfFix.transporter && U.selfFix.nightFixes === 0, `${tag} no crew self-repair ` + J(U.selfFix));
     console.log(tag, J({ setup: R.setup, card: R.card1.line.slice(0, 60) }));
+    // (d) tab lock: a tab that died without pagehide, then the clock moved back -> its lock is stamped in the future; the
+    //     reopened game must not start read-only behind 'Open in another tab'
+    await p.close(); const p2 = await c.newPage(); p2.on('console', m => { if (m.type() === 'error') errs.push(`${tag}: ${m.text()}`); }); p2.on('pageerror', e => errs.push(`${tag}: ${e.message}`));
+    p2.on('response', r => { if (r.status() >= 400) net.push(`${tag}: ${r.status()} ${r.url()}`); });
+    await p2.addInitScript(() => { if (!sessionStorage.getItem('__lk')) { sessionStorage.setItem('__lk', '1'); localStorage.setItem('tenacity.tablock', JSON.stringify({ id: '0dead', ep: 9, t: Date.now() + 3600e3 })); } });
+    await p2.goto(BASE); await p2.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 }); await sleep(1500);
+    R.lock = await p2.evaluate(() => ({ ro: !!__T.TAB_RT.ro, overlay: !!document.querySelector('#tabLock:not([hidden])') }));
+    ok(!R.lock.ro, `${tag} (d) a future-stamped dead tab lock (clock moved back) doesn't lock the game ` + J(R.lock));
     await c.close();
   }
   ok(!errs.length, 'console errors ' + J(errs)); ok(!net.length, 'failed / 4xx requests ' + J(net));

@@ -1,5 +1,6 @@
 // Crew needs N4 check: holodeck (booking, scene, blurbs/no-repeat, diminishing returns, buffs, Risa gap, addict, crew self-use,
 // off-deck act), crew-care tools (rest, counsel, swap, shore leave), quirk-fit gifts, Insight gating, Lately, P29b lows, harden.
+// (Oct 25: free('lt') also clears the Lt's daily holodeck slot, HOLO.ltPerDay)
 // Usage: node tools/n4-check.js
 const { chromium } = require('playwright-core'); const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = __dirname + '/../shots/';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -28,7 +29,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     if (tag !== '1280x800') { await c.close(); continue; }
     R.logic = await p.evaluate(async () => { const N = await import('/js/needs.js'), M = await import('/js/mood.js'), HD = await import('/js/holodeck.js'), CC = await import('/js/crewcare.js'), PG = await import('/js/progression.js'), PC = await import('/js/pacing.js'), GF = await import('/js/gifts.js'), GD = await import('/js/gift-data.js'), I = await import('/js/incidents.js'), O = await import('/js/oddjobs.js');
       const G = __T.G, C = G.prog.crew, out = { sameMod: (await import('/js/state.js')).G === __T.G }, H = HD.H(), t0 = () => G.ship.elapsed, rnd = Math.random, withR = (v, f) => { Math.random = typeof v === 'function' ? v : () => v; try { return f(); } finally { Math.random = rnd; } };
-      const off = i => { const q = N.needsOf(i); q.shift = (N.shiftNow() + 1) % 3; q.act = 'fun'; }, free = i => { delete H.busy[i]; off(i); }, id = C.slots['engineer-2'], r = N.needsOf(id), xp = (i, k) => G.prog.skills[i] ? G.prog.skills[i][k] : 0;
+      const off = i => { const q = N.needsOf(i); q.shift = (N.shiftNow() + 1) % 3; q.act = 'fun'; }, free = i => { delete H.busy[i]; if (i === 'lt') H.lt = { d: '', n: 0 }; else off(i); }, id = C.slots['engineer-2'], r = N.needsOf(id), xp = (i, k) => G.prog.skills[i] ? G.prog.skills[i][k] : 0;
       G.prog.rations = 5000; PC.PACE_RT.idleT = 0; G.prog.jobs.active = null; for (const sl of ['engineer-2', 'ops', 'science-tech', 'crewman']) off(C.slots[sl]);
       // diminishing XP + buffs replace + one booking at a time
       let x0 = xp(id, 'tactical'); HD.book('tactical_sim', id); const g1 = xp(id, 'tactical') - x0; out.busyBlock = HD.book('vics_lounge', id).ok === false; free(id);
