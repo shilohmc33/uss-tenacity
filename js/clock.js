@@ -46,4 +46,7 @@ export function noteBadClock() { if (!badClock() || Date.now() - RT.told < 600e3
   log("Re-syncing ship's chronometer… Holodeck, counselor and away reports resume once it settles.", "comm"); }
 // C1: a short BACK ON WATCH card on return while re-syncing (the full report follows within the hour, once accepted)
 export function resyncAwayS(now = Date.now()) { const ms = +(G.prog && G.prog.maxSeen) || 0; return ms > 0 ? Math.max(0, (now - ms) / 1000) : 0; }
+// D1: show the short card once per re-sync candidate (not on every tab return / reload during the wait hour)
+export function resyncCardDue() { const c = cand(); return !!c && !c.cardShown; }
+export function markResyncCard() { const c = cand(); if (c) c.cardShown = true; }
 

@@ -5,6 +5,7 @@
 // the main loop with the sim, so it freezes with it. About 1 in 4 offers a small tap bonus (+5 XP or +1 rep, never items).
 // Saved (G.prog.vig): present-play clock, the hour's start times, the wait and the last bonus, so a reload cannot reset
 // the 4-per-hour cap or farm the bonus. Bubbles / the running vignette itself are not saved.
+import { ltNamed } from "./ltname.js";
 import { G } from "./state.js";
 import { cheerful, cheerLog } from "./bus.js";   // the ONE quiet-period gate (cheer-scan)
 import { awardXP, addHardener } from "./progression.js";
@@ -42,8 +43,21 @@ export const VIGS = [
   { id: "bajoran_limp", actors: [{ s: "art:bajoran_transport_damaged", y: 0.17, sz: 0.4, ...R2L, bob: 1 }], lines: [["Diallo", "Bajoran transport, scorched hull. A Cardassian patrol took a shot at them near Bajor."], ["CDR Okafor", "Their impulse coils are tired, not dead. I've sent them a patch over subspace."], ["Hale", "They'll make DS9. The pilgrims are singing again."]] },
   { id: "ferengi_hail", actors: [{ s: "art:ferengi_marauder", y: 0.14, sz: 0.45, ...R2L }], lines: [["Diallo", "A Ferengi trader is hailing. He has 'a once-in-a-lifetime deal' on self-sealing stem bolts."], ["Capt T'Ren", "Decline. Politely, and with no counter-offer."], ["Hale", "He says the offer stands. Forever, apparently."]] },
   { id: "comet", actors: [{ s: "art:comet", y: 0.12, sz: 0.28, ...R2L }], lines: [["Diallo", "A comet! Look at that ion tail. Logging it for the science council."], ["CDR Okafor", "She's happier than I've seen her all week."]] },
-  { id: "runabout_mail", actors: [{ s: "art:runabout", y: 0.18, sz: 0.32, ...L2R }], lines: [["Hale", "Runabout from DS9, the mail run."], ["Diallo", "Letters for the crew. Someone has a parcel that's ticking. Gently."], ["CDR Okafor", "That'll be my tea. Don't drop it."]] },
+  { id: "runabout_mail", actors: [{ s: "art:runabout", y: 0.18, sz: 0.22, ...L2R }], lines: [["Hale", "Runabout from DS9, the mail run."], ["Diallo", "Letters for the crew. Someone has a parcel that's ticking. Gently."], ["CDR Okafor", "That'll be my tea. Don't drop it."]] },
   { id: "jh_far", actors: [{ s: "jh_fighter", y: 0.07, sz: 0.1, x0: 0.9, x1: 0.62, fx: "dim" }, { s: "jh_fighter", y: 0.11, sz: 0.1, x0: 0.95, x1: 0.67, fx: "dim", lag: 0.04 }], lines: [["Hale", "Two Jem'Hadar fighters, extreme range. Not closing."], ["Capt T'Ren", "No red alert. They are not interested in us. Today."]] },
+  // ---- Oct 27: ~12 new text vignettes (existing art only; Shiloh) ----
+  { id: "ferengi_auction", actors: [{ s: "art:ferengi_marauder", y: 0.15, sz: 0.45, ...L2R }], lines: [["Grevv", "Ferengi marauder broadcasting an auction. Opening bid on our spare EPS relays."], ["Diallo", "They have our serial numbers. That is not reassuring."], ["Grevv", "I told them the opening bid is a boot to the airlock. Channel closed."]] },
+  { id: "saber_spares", actors: [{ s: "fed_saber", y: 0.14, sz: 0.38, ...L2R }], lines: [["Kovac", "USS Yeager again. They're dumping a crate of isolinear chips our way."], ["CDR Okafor", "Bless that quartermaster. Log it and get them a thank-you on subspace."]] },
+  { id: "bop_bloodwine", actors: [{ s: "klingon_bop", y: 0.12, sz: 0.4, x0: 0.7, x1: 0.25, fx: "decloak" }], lines: [["Hale", "Bird-of-Prey decloaking. They're inviting the senior staff for bloodwine."], ["Capt T'Ren", "Convey our respects. And that we are on duty."], ["Hale", "They say next time, then. Loudly."]] },
+  { id: "galor_quiet", actors: [{ s: "galor", y: 0.09, sz: 0.22, x0: 0.85, x1: 0.5, fx: "dim" }], lines: [["Diallo", "Galor on a long arc. No transponder, no hail."], ["Hale", "Weapons cold. Whatever they're hunting, it isn't us."], ["Diallo", "Still logging the contact. Quiet ships make me nervous."]] },
+  { id: "jh_shadow", actors: [{ s: "jh_fighter", y: 0.08, sz: 0.12, x0: 0.92, x1: 0.6, fx: "dim" }, { s: "jh_fighter", y: 0.14, sz: 0.12, x0: 0.96, x1: 0.64, fx: "dim", lag: 0.05 }], lines: [["Hale", "Jem'Hadar pair at the limb of the sensor envelope."], ["Rhovan", "I can't feel anything from them. Empty, the way they always are."], ["Capt T'Ren", "Hold course. Curiosity is not a virtue today."]] },
+  { id: "runabout_samples", actors: [{ s: "art:runabout", y: 0.2, sz: 0.22, ...R2L }], lines: [["Orvin", "Runabout from the Pasteur. Tissue samples for my lab."], ["Tull", "And a crate of something that smells like lemon. Don't ask me."], ["Orvin", "That will be the culture medium. Leave it sealed, Brennik."]] },
+  { id: "bajoran_vedek", actors: [{ s: "art:bajoran_transport", y: 0.16, sz: 0.4, ...R2L }], lines: [["Doru", "That transport — the vedek who blessed my earring is aboard."], ["Diallo", "Want me to open a channel?"], ["Doru", "Already did. He says the Prophets walk with {named} too. I said we'd take it."]] },
+  { id: "comet_wish", actors: [{ s: "art:comet", y: 0.11, sz: 0.28, ...L2R }], lines: [["R'Mira", "A comet! Do we get a wish, or is that only for planets?"], ["Diallo", "Science says no. I won't tell if you wish anyway."], ["R'Mira", "Too late. I already did."]] },
+  { id: "freighter_soup", actors: [{ s: "freighter", y: 0.18, sz: 0.5, ...R2L, bob: 1 }], lines: [["Delgado", "Freighter cook just traded me a plomeek broth recipe over open channel."], ["CDR Okafor", "Sorvan will pretend not to care. Put a pot on anyway."], ["Delgado", "Already simmering. Mess deck smells like Vulcan tonight."]] },
+  { id: "cloak_echo", actors: [{ s: "klingon_bop", y: 0.16, sz: 0.32, x0: 0.8, x1: 0.2, fx: "cloak" }], lines: [["Rhovan", "Something brushed the edge of my sense. Cloaked, angry, then gone."], ["Hale", "Tachyon scatter matches a Bird-of-Prey wake. They're not hailing."], ["Rhovan", "Whoever it was, they didn't want to be seen. Least of all by us."]] },
+  { id: "debris_nameplate", actors: [{ s: "img:ss-galor-wreck-1", nat: 1, y: 0.14, sz: 0.45, ...L2R, spin: 0.04 }, { s: "img:ss-galor-debris-0", nat: 1, y: 0.3, sz: 0.45, ...L2R, lag: 0.1, spin: -0.3 }], lines: [["Mollo", "Debris. I can read a Cardassian nameplate on that section."], ["Orvin", "Mark the coordinates. Someone will want the name, even years late."], ["Mollo", "Logged. The transporter buffer remembers more than we do."]] },
+  { id: "convoy_thanks", actors: [{ s: "freighter", y: 0.12, sz: 0.32, ...L2R, lag: 0 }, { s: "freighter", y: 0.24, sz: 0.32, ...L2R, lag: 0.12 }, { s: "fed_saber", y: 0.06, sz: 0.28, ...L2R, lag: -0.06 }], lines: [["Natarajan", "Convoy on the DS9 run. Their escort asked for {named} by name."], ["Hale", "Yeager's cousin-ship. They remember the plasma leak we walked them through."], ["Natarajan", "I told them the Lieutenant was on watch below. They flashed running lights anyway."]] },
 ];
 const R = { cur: null, recent: [], n: 0, toSpace: null, el: null, lastFor: "" };
 const freshVig = () => ({ pt: 0, st: [], w: null, bt: -1e9 });
@@ -97,7 +111,7 @@ export function tickVig(dt) {
   if (c) {
     const b = vigBlock(); if (b && !["idle", "hidden", "panel", "card"].includes(b)) { endVig("abort:" + b); return; }   /* a panel or the card only holds the start */
     c.t += dt;
-    while (c.shown < c.def.lines.length && c.t >= c.at[c.shown]) { const [who, tx] = c.def.lines[c.shown++]; cheerLog(`${who}: "${tx}"`, "comm"); render(); }
+    while (c.shown < c.def.lines.length && c.t >= c.at[c.shown]) { const [who, tx] = c.def.lines[c.shown++]; cheerLog(`${who}: "${fillLine(tx)}"`, "comm"); render(); }
     if (c.t >= c.D) endVig("done");
     return;
   }
@@ -118,6 +132,7 @@ export function takeBonus() {
 export const vigChip = () => R.cur ? `<button class="chip vigc" data-vig="1" aria-label="Sensors: switch to the space view">📡 Sensors</button>` : "";
 // ---- bubbles: a DOM overlay at the bottom of the space window (shown only in the space view, body.view-space) ----
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const fillLine = tx => String(tx).replace(/\{named\}/g, () => ltNamed());   // a couple of lines name the Lt (escaped at render)
 function render() {
   if (typeof document === "undefined") return;
   let el = R.el; const st = document.getElementById("stage");
@@ -127,7 +142,7 @@ function render() {
   if (!c) { el.hidden = true; el.innerHTML = ""; el.dataset.id = ""; return; }
   const lines = c.def.lines.slice(0, c.shown).slice(-3);
   const bn = c.bonus && !c.took && c.shown ? `<button class="vbBonus" data-vigbonus="1">📡 Log the contact (${c.bonus === "xp" ? `+${VIG.bonus.xp} XP` : `+${VIG.bonus.rep} rep`})</button>` : "";
-  el.innerHTML = lines.map(([who, tx], i) => `<div class="vb${i === lines.length - 1 ? " now" : ""}"><b>${esc(who)}</b> ${esc(tx)}</div>`).join("") + bn;
+  el.innerHTML = lines.map(([who, tx], i) => `<div class="vb${i === lines.length - 1 ? " now" : ""}"><b>${esc(who)}</b> ${esc(fillLine(tx))}</div>`).join("") + bn;
   el.dataset.id = c.id; el.hidden = !lines.length;
 }
 // ---- the actors (render/space.js, outside battle, behind the Tenacity). w/h = window size, L = the Tenacity's width ----

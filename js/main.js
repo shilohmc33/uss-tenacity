@@ -29,7 +29,7 @@ if (typeof window !== "undefined" && typeof window.__TENACITY_TEST_DEATHS === "b
 import { setupDebug } from "./debug.js";
 import * as ST from "./story.js";
 import { rollAway } from "./away.js";
-import { badClock, clockCheck, clockHooks, resyncAwayS } from "./clock.js";   // R2 / B1: bad-clock (re-sync) mode and its acceptance
+import { badClock, clockCheck, clockHooks, resyncAwayS, resyncCardDue, markResyncCard } from "./clock.js";   // R2 / B1: bad-clock (re-sync) mode and its acceptance
 import * as VG from "./vignettes.js";   // Oct 26 D: the ambient vignette lane   // Oct 26 B: away happenings (small XP on return)   // E1 story events; the overlay (ui/story.js) registers on import
 import "./ui/story.js";
 import { settleInflightTorps } from "./battle.js";
@@ -168,7 +168,7 @@ document.addEventListener("visibilitychange", () => {
     tabCheck();   // P32 #1: yield first if another tab took over while this one was hidden
     if (TAB_RT.ro) return;
     const st = badClock() ? clockCheck() : "ok", bad = st === "wait";   /* R2: nothing granted, nothing stored (B1: unless the new time is accepted now; the hook paid the one absence) */
-    if (bad && hiddenAt && resyncAwayS() >= PACE.backAfter) showBackOnWatch(resyncAwayS(), [], { resync: true });   /* C1 */
+    if (bad && hiddenAt && resyncAwayS() >= PACE.backAfter && resyncCardDue()) { showBackOnWatch(resyncAwayS(), [], { resync: true }); markResyncCard(); }   /* C1 / D1: once per re-sync */
     const gap = bad ? 0 : Math.max(0, (Date.now() - Math.max(hiddenAt, (G.prog && +G.prog.maxSeen) || 0)) / 1000);   // never a negative gap; measured from the latest time seen
     if (hiddenAt && gap >= PACE.backAfter) { const haps = rollAway(gap); showBackOnWatch(gap, haps); G.prog.restT = 0; }
     if (hiddenAt && G.prog && !bad) G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, Date.now());   /* Oct 26 B: the absence is spent: a reload cannot claim it again */   // same rule as a reload: rested only after a real absence
@@ -225,7 +225,7 @@ function bootGame(params, masks) {
   // more opens the BACK ON WATCH card. The only reward for time away is the rested XP bonus of the new session.
   if (had && (G.prog.lastSeen || G.savedAt)) {
     const st = badClock() ? clockCheck() : "ok", bad = st === "wait";   /* R2: a bad clock: no card, no happenings, no rested window; maxSeen not advanced (B1: accepted -> the hook paid one absence) */
-    if (bad && resyncAwayS() >= PACE.backAfter) showBackOnWatch(resyncAwayS(), [], { resync: true });   /* C1: short card; the full report follows within the hour */
+    if (bad && resyncAwayS() >= PACE.backAfter && resyncCardDue()) { showBackOnWatch(resyncAwayS(), [], { resync: true }); markResyncCard(); }   /* C1 / D1: once per re-sync */
     const gap = bad ? 0 : Math.max(0, (Date.now() - Math.max(G.prog.lastSeen || 0, G.savedAt || 0, +G.prog.maxSeen || 0)) / 1000);   // from the latest time ever seen: a clock set back then forward adds no absence
     if (MIG_RT.from != null && MIG_RT.from < 18 && gap > 30) log("The ship held station while you were away.", "comm");
     if (gap >= PACE.backAfter) { const haps = rollAway(gap); showBackOnWatch(gap, haps); G.prog.restT = 0; }

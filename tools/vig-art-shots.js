@@ -28,7 +28,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     });
     console.log(tag, 'art', JSON.stringify(loaded));
     if (!['bajoran_transport','bajoran_transport_damaged','ferengi_marauder','runabout','comet'].every(k => loaded[k] && loaded[k].ready && loaded[k].img) || !loaded.comet.tail) fails.push(`${tag} art not loaded ` + JSON.stringify(loaded));
-    for (const id of ['bajoran_transport', 'bajoran_limp', 'ferengi_hail', 'runabout_mail', 'comet']) {
+    for (const id of ['bajoran_transport', 'bajoran_limp', 'ferengi_hail', 'runabout_mail', 'comet', 'ferengi_auction', 'bajoran_vedek', 'comet_wish', 'convoy_thanks']) {
       await p.evaluate(id => {
         const VG = __T.VG; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; });
         const w = document.querySelector('#wbCard'); if (w) w.hidden = true;

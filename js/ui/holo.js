@@ -73,7 +73,7 @@ function act(e) {
   if (D.holoSceneClose) { modal("holoScene").hidden = true; return; }
   if (D.holoBook) {
     const r = HD.book(D.holoBook, target, true);
-    if (!r.ok) { const msg = badClock() ? "Re-syncing ship's chronometer… Holodeck bookings resume once it settles." : r.used ? `Holodeck unavailable — ${HD.ltNextText()}` : r.why; toast(msg, "warn"); renderPanel(badClock() ? "re-syncing" : r.why); const c = modal("holoPanel").querySelector(".card"); if (c) c.scrollTop = 0; return; }   // C3: a re-sync toast (never a stale ship-news line) on a greyed row
+    if (!r.ok) { const msg = badClock() ? "Re-syncing ship's chronometer… Holodeck bookings resume once it settles." : r.used ? `Holodeck unavailable — ${HD.ltNextText()}` : r.why; toast(msg, "warn"); if (!badClock()) renderPanel(r.why); const c = modal("holoPanel").querySelector(".card"); if (c) c.scrollTop = 0; return; }   // C3 / D2: toast above the panel (z-index); no flash duplicate under the RE-SYNCING header
     modal("holoPanel").hidden = true; showScene(D.holoBook, r); refreshPlog(); return;
   }
   if (D.shore) { const r = CC.shoreLeave(); if (!r.ok) toast(r.why, "warn"); return; }

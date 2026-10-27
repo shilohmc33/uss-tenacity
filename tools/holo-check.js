@@ -43,10 +43,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     R.panel = await p.evaluate(() => { const m = document.getElementById('holoPanel'), l = m.querySelector('.hololimit'), r = l && l.getBoundingClientRect();
       return { open: !m.hidden, text: l ? l.textContent : null, inView: !!r && r.top >= 0 && r.bottom <= innerHeight, greyed: [...m.querySelectorAll('[data-holo-book]')].every(b => b.getAttribute('aria-disabled') === 'true') }; });
     const row = p.locator('#holoPanel [data-holo-book]').first(); await row.scrollIntoViewIfNeeded(); await row.click({ force: true });   /* aria-disabled: Playwright calls it 'not enabled', a finger still taps it */ await sleep(350);
-    R.toast = await p.evaluate(() => { const f = document.querySelector('#holoPanel .hololimit.flash'), r = f && f.getBoundingClientRect(); return { toast: [...document.querySelectorAll('#toasts .toast')].map(t => t.textContent).find(t => /unavailable/i.test(t)) || null, flash: f ? f.textContent : null, flashInView: !!r && r.top >= 0 && r.bottom <= innerHeight }; });   // the toast sits under the modal: the panel's own banner answers the tap
+    R.toast = await p.evaluate(() => { const f = document.querySelector('#holoPanel .hololimit.flash'), r = f && f.getBoundingClientRect();
+      const tEl = [...document.querySelectorAll('#toasts .toast')].find(t => /unavailable/i.test(t.textContent));
+      const tb = document.getElementById('toasts'), mp = document.getElementById('holoPanel');
+      const tz = +getComputedStyle(tb).zIndex || 0, mz = +getComputedStyle(mp).zIndex || 0;
+      // #toasts is pointer-events:none (clicks pass through), so elementFromPoint is the wrong test; z-index + body parent is the paint order
+      const onTop = !!(tEl && tb.parentElement === document.body && tz > mz);
+      return { toast: tEl ? tEl.textContent : null, flash: f ? f.textContent : null, flashInView: !!r && r.top >= 0 && r.bottom <= innerHeight, onTop, tz, mz }; });   // D2: toast above the holodeck panel
     if (SHOTS) await p.screenshot({ path: OUT + `holo-limit-${tag}.png` });
     ok(R.lim.first && R.lim.left === 0 && R.lim.all && /Next available: tomorrow 12:00\sAM/.test(R.lim.why), `${tag} one session a day, then the reason + next time ` + J(R.lim));
-    ok(R.panel.open && /UNAVAILABLE TODAY/.test(R.panel.text || '') && /Next available: tomorrow 12:00\sAM/.test(R.panel.text || '') && R.panel.inView && R.panel.greyed && /Holodeck unavailable — Next available: tomorrow 12:00\sAM/.test(R.toast.toast || '') && /Next available: tomorrow 12:00\sAM/.test(R.toast.flash || '') && R.toast.flashInView, `${tag} panel says unavailable + next time; a tap on a row explains ` + J([R.panel, R.toast]));
+    ok(R.panel.open && /UNAVAILABLE TODAY/.test(R.panel.text || '') && /Next available: tomorrow 12:00\sAM/.test(R.panel.text || '') && R.panel.inView && R.panel.greyed && /Holodeck unavailable — Next available: tomorrow 12:00\sAM/.test(R.toast.toast || '') && /Next available: tomorrow 12:00\sAM/.test(R.toast.flash || '') && R.toast.flashInView && R.toast.onTop, `${tag} panel says unavailable + next time; a tap on a row explains ` + J([R.panel, R.toast]));
     await p.evaluate(() => { document.getElementById('holoPanel').hidden = true; });
     // ---- 3. crew never block it ----
     R.crew = await p.evaluate(async () => { const HD = await import('/js/holodeck.js'), G = __T.G, h = HD.H(); h.lt = { d: '', n: 0 };

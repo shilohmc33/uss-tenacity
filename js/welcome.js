@@ -22,6 +22,6 @@ export function welcomeLine() {
 }
 addHardener(p => { delete p.welcome; const rt = Number(p.restT); p.restT = Number.isFinite(rt) && rt >= 0 ? rt : 0;   // a save from before restT: one full rested window on its first load (the field is saved from then on)
   const t = Number(p.lastSeen), now = Date.now(); p.lastSeen = Number.isFinite(t) && t > 0 ? Math.min(t, now) : 0;
-  { const c = p.clockCand; if (!(c && typeof c === "object" && Number.isFinite(c.wall) && Number.isFinite(c.off))) delete p.clockCand; else p.clockCand = { wall: c.wall, off: c.off }; }   /* B1: the re-sync candidate (clock.js) */
+  { const c = p.clockCand; if (!(c && typeof c === "object" && Number.isFinite(c.wall) && Number.isFinite(c.off))) delete p.clockCand; else p.clockCand = { wall: c.wall, off: c.off, cardShown: c.cardShown === true }; }   /* B1 / D1: re-sync candidate + once-per-wait card flag */
   const ms = Number(p.maxSeen); p.maxSeen = Math.max(Number.isFinite(ms) && ms > 0 ? ms : 0, p.lastSeen, Number.isFinite(G.savedAt) ? G.savedAt : 0);   // the latest real time ever seen (never pulled back: a clock moved back then forward measures the true gap)
 });

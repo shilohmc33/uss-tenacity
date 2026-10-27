@@ -110,11 +110,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     R.hon = {};
     await hop(29 * 864e5); R.hon.nov24 = await look();
     await hop(61 * 864e5); R.hon.dec26 = await look();
+    // D1: a second load in the same re-sync wait must NOT show the short card again
+    await hop(61 * 864e5); R.hon.dec26r = await look();
     await hop(61 * 864e5 + 2 * 3600e3); R.hon.dec26b = await look();
     await hop(62 * 864e5); R.hon.dec27 = await look();
     const Hn = R.hon;
     ok(!Hn.nov24.bad && Hn.nov24.haps === 3 && Hn.nov24.restT < 500 && Hn.nov24.canBook, `${tag} B1 honest: Nov 24 (+29 d) is a normal return ` + J(Hn.nov24));
     ok(Hn.dec26.bad && Hn.dec26.haps === 0 && Hn.dec26.restT >= 500 && !Hn.dec26.canBook && /RE-SYNCING/.test(Hn.dec26.head) && !/session.? left/.test(Hn.dec26.head) && !Hn.dec26.rowWhy && Hn.dec26.resync && !Hn.dec26.wrong && Hn.dec26.card && /away report follows within the hour/i.test(Hn.dec26.cardTxt), `${tag} B1/B2/C1 honest: Dec 26 re-syncs with a short card ('full report within the hour'), neutral text, nothing granted yet ` + J(Hn.dec26));
+    ok(Hn.dec26.card && !Hn.dec26r.card && Hn.dec26r.bad, `${tag} D1: re-sync card once per wait (second Dec 26 load has no card) ` + J({ first: !!Hn.dec26.card, second: !!Hn.dec26r.card, bad: Hn.dec26r.bad }));
     ok(!Hn.dec26b.bad && Hn.dec26b.haps >= 1 && Hn.dec26b.haps <= 3 && Hn.dec26b.awayXp - Hn.nov24.awayXp <= 24 && Hn.dec26b.restT < 500 && Hn.dec26b.canBook && Hn.dec26b.synced && !Hn.dec26b.wrong && Hn.dec26b.card && /Away\s+32d\b/i.test(Hn.dec26b.cardTxt) && !/32d 2h|32d 1h/i.test(Hn.dec26b.cardTxt), `${tag} B1/C2 honest: a load 2 h later accepts, pays ONE absence, and the card does not count the re-sync hour as time away ` + J({ t: Hn.dec26b.cardTxt && Hn.dec26b.cardTxt.slice(0, 120), haps: Hn.dec26b.haps, xp: Hn.dec26b.awayXp }));
     ok(!Hn.dec27.bad && Hn.dec27.canBook && Hn.dec27.haps >= 1, `${tag} B1 honest: Dec 27 plays normally ` + J(Hn.dec27));
     // ---- 8. B1 within one session: >= 1 h on the monotonic clock with the wall clock moving the same (+-5 min) accepts;

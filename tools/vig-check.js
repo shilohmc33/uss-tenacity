@@ -1,6 +1,6 @@
 // Ambient vignette check (Oct 26 batch H). Per size: lane frequency (none on play day 1; ~12 / 9 / 6 min on days 2-4 / 5-9 /
 // 10+; max 4 per hour of present play), gating (battle, held alert, deck task, quiet period, idle, away, story, DC), a running
-// vignette ends on red alert and freezes with the sim, the real vignettes_v1 art (all 13 playable, planned files loaded, no 404s), bubbles + log lines, the Sensors chip, the tap
+// vignette ends on red alert and freezes with the sim, the real vignettes_v1 art (all 25 playable, planned files loaded, no 404s), bubbles + log lines, the Sensors chip, the tap
 // bonus and its ~1 in 4 rate.
 // Shot: shots/vig-bubbles-<size>.png. Usage: node tools/vig-check.js (SHOTS=0 skips the shots)
 const { chromium } = require('playwright-core'); const path = require('path');
@@ -50,10 +50,25 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     ok(R.abort.a && !R.abort.b, `${tag} a running vignette ends when red alert starts ` + J(R.abort));
     R.freeze = await p.evaluate(async () => { const VG = __T.VG; VG.endVig('x'); VG.startVig(VG.VIGS[2], { dur: 30, bonus: null }); VG.tickVig(3); const t0 = VG.vigRT.cur.t; __T.app.paused = true; await new Promise(r => setTimeout(r, 1200)); const t1 = VG.vigRT.cur.t; VG.endVig('x'); return { t0, t1 }; });
     ok(R.freeze.t0 === R.freeze.t1, `${tag} the lane freezes with the sim ` + J(R.freeze));
-    // ---- 3. real art (vignettes_v1, Shiloh approved): all 13 playable; every VIG_ART ready; the planned files loaded with no 404 ----
-    R.art = await p.evaluate(() => { const VG = __T.VG, picks = {}; for (let i = 0; i < 600; i++) { const v = VG.pickVig(); picks[v.id] = 1; VG.vigRT.recent = []; }
+    // ---- 3. real art (vignettes_v1, Shiloh approved): all 25 playable; every VIG_ART ready; the planned files loaded with no 404 ----
+    R.art = await p.evaluate(() => { const VG = __T.VG, picks = {}; for (let i = 0; i < 2000; i++) { const v = VG.pickVig(); picks[v.id] = 1; VG.vigRT.recent = []; }
       const A = VG.VIG_ART; return { picks: Object.keys(picks).sort(), n: Object.keys(picks).length, ready: Object.values(A).every(a => a.ready), comet: VG.playable(VG.VIGS.find(v => v.id === 'comet')), keys: Object.values(A).map(a => a.key).filter(Boolean) }; });
-    ok(R.art.ready && R.art.comet && R.art.n === 13 && R.art.picks.includes('comet') && ['bajoran_transport', 'bajoran_limp', 'ferengi_hail', 'runabout_mail', 'comet'].every(x => R.art.picks.includes(x)), `${tag} real art: all 13 playable (comet + Bajoran, damaged Bajoran, Ferengi, runabout on their own sprites) ` + J(R.art));
+    ok(R.art.ready && R.art.comet && R.art.n === 25 && R.art.picks.includes('comet') && ['bajoran_transport', 'bajoran_limp', 'ferengi_hail', 'runabout_mail', 'comet'].every(x => R.art.picks.includes(x)), `${tag} real art: all 25 playable (12 new Oct 27 + prior) ` + J(R.art));
+    // ---- 3b. line lengths fit bubbles; US spelling; every actor sprite resolves; runabout ~0.22 ----
+    R.txt = await p.evaluate(() => {
+      const VG = __T.VG, BRIT = /\b(colour|favour|honour|centre|defence|travelling|organised|recognised|licence|aluminium)\b/i;
+      const long = [], brit = [], miss = [];
+      for (const v of VG.VIGS) {
+        for (const [who, tx] of v.lines) {
+          if (String(tx).length > 110) long.push([v.id, who, String(tx).length]);
+          if (BRIT.test(tx) || BRIT.test(who)) brit.push([v.id, who, tx]);
+        }
+        for (const a of v.actors) { if (!VG.playable({ actors: [a], lines: [['x', 'x']] })) miss.push([v.id, a.s]); }
+        if (!VG.playable(v)) miss.push([v.id, 'UNPLAYABLE']);
+      }
+      return { long, brit, miss, n: VG.VIGS.length, runSz: VG.VIGS.find(v => v.id === 'runabout_mail').actors[0].sz };
+    });
+    ok(R.txt.n === 25 && !R.txt.long.length && !R.txt.brit.length && !R.txt.miss.length && R.txt.runSz >= 0.2 && R.txt.runSz <= 0.24, `${tag} lines fit, US spelling, sprites exist, runabout ~0.22 ` + J(R.txt));
     // ---- 4. bubbles + chip + tap bonus + shot ----
     R.ui = await p.evaluate(async () => { const VG = __T.VG, G = __T.G, PG = G.prog; __T.app.paused = true; VG.endVig('x'); __T.setView('deck');
       VG.startVig(VG.VIGS.find(v => v.id === 'convoy'), { dur: 32, bonus: 'xp' }); for (let i = 0; i < 18; i++) VG.tickVig(1);

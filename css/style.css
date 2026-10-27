@@ -35,7 +35,7 @@ body.view-deck #sceneTag,body.view-space #deckTag{display:none}
 #battleHud{position:absolute;left:8px;right:8px;bottom:8px;background:rgba(5,8,16,.75);border-radius:8px;padding:6px 8px;font-size:12px}
 #battleHud .row{display:flex;justify-content:space-between;color:#ffb3ab}#battleHud .bar{height:5px;background:#331;border-radius:3px;margin:3px 0}#battleHud .bar i{display:block;height:100%;background:#c46cff}
 #bridgeOrders{color:var(--muted);font-size:11px}
-#toasts{position:absolute;left:8px;right:8px;bottom:44px;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
+#toasts{position:fixed;left:8px;right:8px;bottom:44px;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;z-index:55}
 .toast{background:rgba(13,20,36,.94);border-left:4px solid var(--lc3);padding:6px 10px;border-radius:6px;font-size:13px;max-width:96%;animation:tin .25s ease-out}
 .toast.crit,.toast.warn{border-color:var(--bad)}.toast.med{border-color:var(--warn)}.toast.good{border-color:var(--good)}.toast.task{border-color:var(--lc1)}.toast.info{border-color:var(--lc2)}
 @keyframes tin{from{transform:translateY(8px);opacity:0}}
@@ -126,7 +126,7 @@ body.mode-info #p-chips .chips{gap:6px}
 }
 /* ---- BUG-08: toasts flip to the top of the stage when the Lt is in its lower half (and always in the space view) ---- */
 #toasts.top{bottom:auto;top:36px}
-#redBanner:not([hidden]) ~ #toasts.top{top:84px}
+body:has(#redBanner:not([hidden])) #toasts.top{top:84px}
 /* ---- NEW-04 / BUG-09: real landscape-phone layout (e.g. 844x390) ----
    FULL: stats column | deck stage | side column (alert, mode buttons, stations, sheet buttons); one merged LT/SHIP
    line under the deck; sheets open as a right-hand drawer so the deck stays in view. WINDOW: deck + panel column. */
