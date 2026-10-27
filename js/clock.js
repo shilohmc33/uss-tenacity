@@ -34,7 +34,8 @@ export function clockCheck(now = Date.now(), perf = (typeof performance !== "und
   if (!cand()) p.clockCand = { wall: now, off: now - (+p.maxSeen || 0) };
   if (RT.perf0 == null) { RT.perf0 = perf; RT.wall0 = now; }
   if (!ok) { noteBadClock(); return "wait"; }
-  const gap = Math.max(0, (now - (+p.maxSeen || 0)) / 1000);
+  const end = (c && Number.isFinite(c.wall)) ? c.wall : now;   /* C2: the re-sync hour of play is not counted as time away */
+  const gap = Math.max(0, (end - (+p.maxSeen || 0)) / 1000);
   p.maxSeen = now; delete p.clockCand; RT.perf0 = RT.wall0 = null;
   log("Ship's chronometer re-synced. Welcome back.", "comm");
   if (clockHooks.accept) clockHooks.accept(gap);
@@ -43,3 +44,6 @@ export function clockCheck(now = Date.now(), perf = (typeof performance !== "und
 export const clockRT = RT;
 export function noteBadClock() { if (!badClock() || Date.now() - RT.told < 600e3) return; RT.told = Date.now();
   log("Re-syncing ship's chronometer… Holodeck, counselor and away reports resume once it settles.", "comm"); }
+// C1: a short BACK ON WATCH card on return while re-syncing (the full report follows within the hour, once accepted)
+export function resyncAwayS(now = Date.now()) { const ms = +(G.prog && G.prog.maxSeen) || 0; return ms > 0 ? Math.max(0, (now - ms) / 1000) : 0; }
+

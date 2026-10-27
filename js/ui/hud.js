@@ -411,15 +411,19 @@ function upkeepChip(u) { return `<button class="chip upk${u.active ? " on" : ""}
 // v18 B (no offline quests): the BACK ON WATCH card after an absence of PACE.backAfter s or more (main.js). Non-modal, docked
 // at the top of the stage: the time away, "everything held as you left it" (nothing ran while he was gone), the best moment
 // of the last session (moments.js, with its painted picture) and one crewmate's line by name (welcome.js; no opinion reward).
-export function showBackOnWatch(away, haps = []) {   // Oct 26 C: haps = away.js rollAway() [{line, xp}]
+export function showBackOnWatch(away, haps = [], opt = {}) {   // Oct 26 C: haps = away.js rollAway() [{line, xp}]; opt.resync = C1 short card while re-syncing
   const el = $("#wbCard"); if (!el) return null;
   { const st = $("#stage"); if (st && el.parentNode !== st) st.appendChild(el); }
   const fmt = s => s >= 86400 ? `${Math.floor(s / 86400)}d ${Math.floor(s % 86400 / 3600)}h` : s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m` : `${Math.max(1, Math.floor(s / 60))}m`;
-  const bm = bestMoment(), mk = bm ? bm.k : "quiet"; markReported();
-  const pic = (bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]);
-  const w = welcomeLine();
+  const bm = opt.resync ? null : bestMoment(), mk = bm ? bm.k : "quiet"; if (!opt.resync) markReported();
+  const pic = opt.resync ? null : ((bm && bm.k === "story" && bm.art && artKey(bm.art)) || artKey(MOMENT_ART[mk]));
+  const w = opt.resync ? null : welcomeLine();
   const rhead = `<div class="rhead m-${mk}" data-mk="${mk}"><span class="rpic"></span><div class="rtx"><small>${bm ? "LAST WATCH · " + MOMENT_TAG[mk] : MOMENT_TAG[mk]}</small><b>${esc(bm ? bm.txt : "A quiet watch")}</b></div></div>`;
-  el.innerHTML = `<div class="k">BACK ON WATCH</div>${rhead}<p class="bowAway">Away <b>${fmt(away)}</b>. Everything held as you left it.</p>${haps.length ? `<div class="bowHaps"><small>While you were away:</small><ul>${haps.map(h => `<li>${esc(h.line)}${h.xp ? ` <b class="bowXp">+${h.xp} XP</b>` : ""}</li>`).join("")}</ul></div>` : ""}${w ? `<p class="bowLine">${esc(w.line)}</p>` : ""}<div class="tap">TAP TO CLOSE</div>`;
+  if (opt.resync) {
+    el.innerHTML = `<div class="k">BACK ON WATCH</div><p class="bowAway">Away <b>${fmt(away)}</b>. Re-syncing ship's chronometer… your away report follows within the hour.</p><div class="tap">TAP TO CLOSE</div>`;
+  } else {
+    el.innerHTML = `<div class="k">BACK ON WATCH</div>${rhead}<p class="bowAway">Away <b>${fmt(away)}</b>. Everything held as you left it.</p>${haps.length ? `<div class="bowHaps"><small>While you were away:</small><ul>${haps.map(h => `<li>${esc(h.line)}${h.xp ? ` <b class="bowXp">+${h.xp} XP</b>` : ""}</li>`).join("")}</ul></div>` : ""}${w ? `<p class="bowLine">${esc(w.line)}</p>` : ""}<div class="tap">TAP TO CLOSE</div>`;
+  }
   el.classList.add("bow"); el.dataset.away = String(Math.round(away));
   const sp = el.querySelector(".rpic");
   const fillPic = () => { if (!sp || !sp.isConnected) return; if (pic && !sp.firstChild && !sp.dataset.err) { const im = picImg(pic); im.addEventListener("error", () => { if (!im.isConnected) sp.dataset.err = "1"; }); sp.appendChild(im); } sp.classList.toggle("none", !sp.firstChild); };   // never a broken image: manifest art; a failed load falls back (guardImg)

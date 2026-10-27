@@ -20,10 +20,12 @@ export const VIG = { minDay: 2, gap: [[10, 360], [5, 540], [2, 720]], jitter: 0.
 // New art (batch F/G, not drawn yet): the planned files. ready: false = never requested (no 404); fb = the existing ship
 // drawn in its place (null = the vignette is skipped). Flip ready to true when the file lands in assets/.
 export const VIG_ART = {
-  bajoran_transport: { file: "assets/ship-bajoran_transport.webp", aspect: 2.6, ready: false, fb: "freighter" },
-  ferengi_marauder: { file: "assets/ship-ferengi_marauder.webp", aspect: 2.2, ready: false, fb: "freighter" },
-  runabout: { file: "assets/ship-runabout.webp", aspect: 2.4, ready: false, fb: "fed_saber", fbSize: 0.6 },
-  comet: { file: "assets/ship-comet.webp", tail: "assets/ship-comet-tail.webp", aspect: 3, ready: false, fb: null },
+  bajoran_transport: { file: "assets/ship-bajoran_transport.webp", key: "ship-bajoran_transport", aspect: 1400 / 538, ready: true },
+  bajoran_transport_damaged: { file: "assets/ship-bajoran_transport-damaged.webp", key: "ship-bajoran_transport-damaged", aspect: 1400 / 538, ready: true },
+  ferengi_marauder: { file: "assets/ship-ferengi_marauder.webp", key: "ship-ferengi_marauder", aspect: 1400 / 636, ready: true },
+  runabout: { file: "assets/ship-runabout.webp", key: "ship-runabout", aspect: 1400 / 583, ready: true },
+  // nucleus is square 512x512; the ion tail (2048x292) is drawn separately, additive, bright end on the RIGHT at the nucleus
+  comet: { file: "assets/ship-comet.webp", key: "ship-comet", tail: "assets/ship-comet-tail.webp", tailKey: "ship-comet-tail", aspect: 1, ready: true },
 };
 // actors: s = SHIPS id | "art:<VIG_ART key>" | "img:<IMG key>"; y = top as a fraction of the window; sz = width as a
 // fraction of the Tenacity's width; x0/x1 = start/end x (fractions of the window width, left edge); fx = "cloak" | "decloak" | "dim"
@@ -37,9 +39,10 @@ export const VIGS = [
   { id: "debris_field", actors: [{ s: "img:ss-galor-wreck-0", nat: 1, y: 0.12, sz: 0.5, ...R2L, spin: 0.05 }, { s: "img:ss-galor-wreck-2", nat: 1, y: 0.28, sz: 0.5, ...R2L, lag: 0.12, spin: -0.08 }, { s: "img:ss-jh_fighter-wreck-1", nat: 1, y: 0.06, sz: 0.5, ...R2L, lag: 0.22, spin: 0.06 }, { s: "img:ss-galor-debris-3", nat: 1, y: 0.22, sz: 0.5, ...R2L, lag: 0.05, spin: 0.4 }, { s: "img:ss-jh_fighter-debris-1", nat: 1, y: 0.34, sz: 0.5, ...R2L, lag: 0.3, spin: -0.5 }], lines: [["Diallo", "Debris field. Cardassian and Jem'Hadar hulls, months old."], ["Capt T'Ren", "Reduce speed. We will pass them with care."], ["CDR Okafor", "Somebody's crew. Somebody's ship. Moment of quiet, everyone."]] },
   { id: "galor_far", actors: [{ s: "galor", y: 0.08, sz: 0.2, x0: 0.8, x1: 0.55, fx: "dim" }], lines: [["Hale", "Galor-class at the edge of sensor range. Shields down, weapons cold."], ["Diallo", "She's turning away. Just a patrol, keeping an eye on us."]] },
   { id: "bajoran_transport", actors: [{ s: "art:bajoran_transport", y: 0.16, sz: 0.4, ...L2R }], lines: [["Diallo", "Bajoran transport, pilgrims bound for DS9."], ["Hale", "They asked the Prophets to walk with us. I said we'd take all the help we can get."]] },
+  { id: "bajoran_limp", actors: [{ s: "art:bajoran_transport_damaged", y: 0.17, sz: 0.4, ...R2L, bob: 1 }], lines: [["Diallo", "Bajoran transport, scorched hull. A Cardassian patrol took a shot at them near Bajor."], ["CDR Okafor", "Their impulse coils are tired, not dead. I've sent them a patch over subspace."], ["Hale", "They'll make DS9. The pilgrims are singing again."]] },
   { id: "ferengi_hail", actors: [{ s: "art:ferengi_marauder", y: 0.14, sz: 0.45, ...R2L }], lines: [["Diallo", "A Ferengi trader is hailing. He has 'a once-in-a-lifetime deal' on self-sealing stem bolts."], ["Capt T'Ren", "Decline. Politely, and with no counter-offer."], ["Hale", "He says the offer stands. Forever, apparently."]] },
-  { id: "comet", actors: [{ s: "art:comet", y: 0.1, sz: 0.5, ...R2L }], lines: [["Diallo", "A comet! Look at that ion tail. Logging it for the science council."], ["CDR Okafor", "She's happier than I've seen her all week."]] },
-  { id: "runabout_mail", actors: [{ s: "art:runabout", y: 0.18, sz: 0.4, ...L2R }], lines: [["Hale", "Runabout from DS9, the mail run."], ["Diallo", "Letters for the crew. Someone has a parcel that's ticking. Gently."], ["CDR Okafor", "That'll be my tea. Don't drop it."]] },
+  { id: "comet", actors: [{ s: "art:comet", y: 0.12, sz: 0.28, ...R2L }], lines: [["Diallo", "A comet! Look at that ion tail. Logging it for the science council."], ["CDR Okafor", "She's happier than I've seen her all week."]] },
+  { id: "runabout_mail", actors: [{ s: "art:runabout", y: 0.18, sz: 0.32, ...L2R }], lines: [["Hale", "Runabout from DS9, the mail run."], ["Diallo", "Letters for the crew. Someone has a parcel that's ticking. Gently."], ["CDR Okafor", "That'll be my tea. Don't drop it."]] },
   { id: "jh_far", actors: [{ s: "jh_fighter", y: 0.07, sz: 0.1, x0: 0.9, x1: 0.62, fx: "dim" }, { s: "jh_fighter", y: 0.11, sz: 0.1, x0: 0.95, x1: 0.67, fx: "dim", lag: 0.04 }], lines: [["Hale", "Two Jem'Hadar fighters, extreme range. Not closing."], ["Capt T'Ren", "No red alert. They are not interested in us. Today."]] },
 ];
 const R = { cur: null, recent: [], n: 0, toSpace: null, el: null, lastFor: "" };
@@ -66,9 +69,9 @@ export function vigBlock() {
 // art for an actor: [kind, key, aspect, sizeK] or null (skip). A new-art key draws its file once ready, else its fallback ship.
 function artOf(a) {
   if (a.s.startsWith("art:")) {
-    const m = VIG_ART[a.s.slice(4)]; if (!m) return null;
-    if (m.ready) { if (!m.im) { m.im = new Image(); m.im.src = m.file; } return ["file", m, m.aspect, 1]; }
-    return m.fb && SHIPS[m.fb] ? ["ship", m.fb, SHIPS[m.fb].aspect, m.fbSize || 1] : null;
+    const m = VIG_ART[a.s.slice(4)]; if (!m || !m.ready) return null;
+    const im = (m.key && IMG[m.key]) || m.im; if (!im) { if (!m.im) { m.im = new Image(); m.im.src = m.file; } return null; }
+    return ["file", m, m.aspect || (im.naturalWidth / (im.naturalHeight || 1)), 1];
   }
   if (a.s.startsWith("img:")) { const im = IMG[a.s.slice(4)]; return im && im.naturalWidth ? ["img", im, im.naturalWidth / im.naturalHeight, 1] : null; }
   return SHIPS[a.s] ? ["ship", a.s, SHIPS[a.s].aspect, 1] : null;
@@ -141,11 +144,23 @@ export function drawVig(ctx, w, h, L, t) {
     if (a.fx === "decloak") { const f = c.t < 3 ? c.t / 3 : c.t > c.D - 3 ? (c.D - c.t) / 3 : 1; al = Math.max(0, f) * (f < 1 ? 0.5 + 0.5 * Math.sin(t * 22) : 1); }
     const mirror = a.x1 < a.x0;
     if (art[0] === "ship") { drawShip(ctx, art[1], x, y, bw, bh, { mirror, alpha: al, t, key: "vig-" + c.id }); continue; }
-    const im = art[0] === "file" ? art[1].im : art[1]; if (!im || !im.complete || !im.naturalWidth) continue;
-    ctx.save(); ctx.globalAlpha = al; ctx.translate(x + bw / 2, y + bh / 2);
+    const m = art[0] === "file" ? art[1] : null, im = m ? (m.key && IMG[m.key]) || m.im : art[1]; if (!im || !im.complete || !im.naturalWidth) continue;
+    const nw = a.nat ? Math.min(bw, im.naturalWidth * (L / 900)) : bw, nh = nw * im.naturalHeight / im.naturalWidth;
+    const cx = x + bw / 2, cy = y + bh / 2;
+    // comet ion tail: additive, bright end on the RIGHT of the sprite joins the nucleus. Moving left (mirror) flips so the
+    // bright end still meets the nucleus and the faint trail trails behind.
+    if (m && m.tailKey) {
+      const tim = IMG[m.tailKey] || m.tim; if (tim && tim.complete && tim.naturalWidth) {
+        const th = nh * 0.55, tw = th * (tim.naturalWidth / tim.naturalHeight);
+        ctx.save(); ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = al * 0.95;
+        ctx.translate(cx, cy); if (a.spin) ctx.rotate(a.spin * c.t); if (mirror) ctx.scale(-1, 1);
+        // bright (right) end at the nucleus centre; the body of the trail extends to the left of the sprite = behind when mirrored for R2L
+        ctx.drawImage(tim, -tw + nw * 0.15, -th / 2, tw, th); ctx.restore();
+      } else if (m.tail && !m.tim) { m.tim = new Image(); m.tim.src = m.tail; }
+    }
+    ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
     if (a.spin) ctx.rotate(a.spin * c.t);
     if (mirror) ctx.scale(-1, 1);
-    const nw = a.nat ? Math.min(bw, im.naturalWidth * (L / 900)) : bw, nh = nw * im.naturalHeight / im.naturalWidth;
     ctx.drawImage(im, -nw / 2, -nh / 2, nw, nh); ctx.restore();
   }
 }

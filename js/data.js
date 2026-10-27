@@ -666,7 +666,9 @@ export const SHIP_PAINTED = {
 };
 import { DOOR_IMAGES } from "./doors-data.js";
 import { SHIP_STATE_IMAGES } from "./ship-states.js";
-export const IMAGES = [...new Set([...DOOR_IMAGES, ...SHIP_STATE_IMAGES, "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
+export const IMAGES = [...new Set([...DOOR_IMAGES, ...SHIP_STATE_IMAGES,
+  "ship-bajoran_transport", "ship-bajoran_transport-damaged", "ship-ferengi_marauder", "ship-runabout", "ship-comet", "ship-comet-tail",   // Oct 27: vignettes_v1 (Shiloh approved)
+  "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security", "lt-walk-v2", "tren-walk-v2", "crew-gold-walk-v2", "crew-blue-walk-v2",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
   ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(SHIP_PAINTED).map(a => a.img), ...Object.values(FX_SHEET.sheets).map(x => x.img), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),

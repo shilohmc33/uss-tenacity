@@ -1,7 +1,7 @@
 // Ambient vignette check (Oct 26 batch H). Per size: lane frequency (none on play day 1; ~12 / 9 / 6 min on days 2-4 / 5-9 /
 // 10+; max 4 per hour of present play), gating (battle, held alert, deck task, quiet period, idle, away, story, DC), a running
-// vignette ends on red alert and freezes with the sim, the new-art fallback (comet skipped, the others on existing ships, no
-// request for the planned files), bubbles + log lines, the Sensors chip, the tap bonus and its ~1 in 4 rate.
+// vignette ends on red alert and freezes with the sim, the real vignettes_v1 art (all 13 playable, planned files loaded, no 404s), bubbles + log lines, the Sensors chip, the tap
+// bonus and its ~1 in 4 rate.
 // Shot: shots/vig-bubbles-<size>.png. Usage: node tools/vig-check.js (SHOTS=0 skips the shots)
 const { chromium } = require('playwright-core'); const path = require('path');
 const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = path.resolve(__dirname, '..', 'shots') + '/', SHOTS = process.env.SHOTS !== '0';
@@ -50,10 +50,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     ok(R.abort.a && !R.abort.b, `${tag} a running vignette ends when red alert starts ` + J(R.abort));
     R.freeze = await p.evaluate(async () => { const VG = __T.VG; VG.endVig('x'); VG.startVig(VG.VIGS[2], { dur: 30, bonus: null }); VG.tickVig(3); const t0 = VG.vigRT.cur.t; __T.app.paused = true; await new Promise(r => setTimeout(r, 1200)); const t1 = VG.vigRT.cur.t; VG.endVig('x'); return { t0, t1 }; });
     ok(R.freeze.t0 === R.freeze.t1, `${tag} the lane freezes with the sim ` + J(R.freeze));
-    // ---- 3. fallback: new-art vignettes draw an existing ship (comet skipped); none of the planned files is ever requested ----
-    R.fb = await p.evaluate(() => { const VG = __T.VG, picks = {}; for (let i = 0; i < 600; i++) { const v = VG.pickVig(); picks[v.id] = 1; VG.vigRT.recent = []; }
-      return { picks: Object.keys(picks).sort(), comet: VG.playable(VG.VIGS.find(v => v.id === 'comet')), files: Object.values(VG.VIG_ART).map(a => a.file), ready: Object.values(VG.VIG_ART).some(a => a.ready) }; });
-    ok(!R.fb.ready && !R.fb.comet && !R.fb.picks.includes('comet') && R.fb.picks.length === 11 && ['bajoran_transport', 'ferengi_hail', 'runabout_mail'].every(x => R.fb.picks.includes(x)), `${tag} fallback: 11 playable (comet skipped; Bajoran / Ferengi / runabout on existing ships) ` + J(R.fb));
+    // ---- 3. real art (vignettes_v1, Shiloh approved): all 13 playable; every VIG_ART ready; the planned files loaded with no 404 ----
+    R.art = await p.evaluate(() => { const VG = __T.VG, picks = {}; for (let i = 0; i < 600; i++) { const v = VG.pickVig(); picks[v.id] = 1; VG.vigRT.recent = []; }
+      const A = VG.VIG_ART; return { picks: Object.keys(picks).sort(), n: Object.keys(picks).length, ready: Object.values(A).every(a => a.ready), comet: VG.playable(VG.VIGS.find(v => v.id === 'comet')), keys: Object.values(A).map(a => a.key).filter(Boolean) }; });
+    ok(R.art.ready && R.art.comet && R.art.n === 13 && R.art.picks.includes('comet') && ['bajoran_transport', 'bajoran_limp', 'ferengi_hail', 'runabout_mail', 'comet'].every(x => R.art.picks.includes(x)), `${tag} real art: all 13 playable (comet + Bajoran, damaged Bajoran, Ferengi, runabout on their own sprites) ` + J(R.art));
     // ---- 4. bubbles + chip + tap bonus + shot ----
     R.ui = await p.evaluate(async () => { const VG = __T.VG, G = __T.G, PG = G.prog; __T.app.paused = true; VG.endVig('x'); __T.setView('deck');
       VG.startVig(VG.VIGS.find(v => v.id === 'convoy'), { dur: 32, bonus: 'xp' }); for (let i = 0; i < 18; i++) VG.tickVig(1);
@@ -77,8 +77,13 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await c.close();
   }
   await br.close();
+  const want = ['ship-bajoran_transport', 'ship-bajoran_transport-damaged', 'ship-ferengi_marauder', 'ship-runabout', 'ship-comet', 'ship-comet-tail'];
   const art = reqs.filter(u => /ship-(bajoran_transport|ferengi_marauder|runabout|comet)/.test(u));
-  ok(art.length === 0, 'no request for the planned new-art files ' + J(art));
+  const got = [...new Set(art.map(u => (u.match(/ship-[\w-]+/) || [])[0]).filter(Boolean))];
+  const miss = want.filter(k => !got.includes(k)), bad = art.filter(u => /\s(404|failed)/.test(u) || false);
+  // requests are URL strings from the request listener; 404s land in `net`
+  const netArt = net.filter(n => /ship-(bajoran_transport|ferengi_marauder|runabout|comet)/.test(n));
+  ok(miss.length === 0 && netArt.length === 0, 'planned vignette art requested with no 404s ' + J({ got, miss, netArt }));
   console.log('ERRORS', errs.length, J(errs.slice(0, 5))); console.log('NET', net.length, J(net.slice(0, 5)));
   if (fails.length || errs.length || net.length) { console.log('FAILS ' + fails.length); fails.forEach(f => console.log('FAIL ' + f)); process.exit(1); }
   console.log('PASS · vig-check · 3 sizes · 0 console errors · 0 failed requests');
