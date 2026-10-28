@@ -9,6 +9,7 @@ import { GIFT, CAT_LABEL, CREW_TASTES } from "./gift-data.js";
 import { knowOf, tastesFor } from "./gifts.js";
 import { addEntry } from "./plog.js";
 import { pr, Pr } from "./roster.js";
+import { BEAT_EXTRA, beginSpeaker, tickApproach, endApproach, fillTalk, startChatSession, chatView, answerChat, dismissChat, pickChat, tickTalk, T as talkState } from "./crew-talk.js";
 
 const P = () => G.prog, K = () => PROG.insight;
 export const I = () => P().insight || (P().insight = freshInsight());
@@ -94,28 +95,80 @@ export const BEATS = {
   delgado: { q: "Delgado slides a bowl across the counter. 'Real tomatoes. Hydroponics finally came through.'", good: ["Taste it properly and tell him why it's good.", "Ask for the recipe."], bad: "'The replicator does it better.'" },
   sorvan: { q: "Sorvan reports the experiment failed. Their voice is very even.", good: ["'What did the failure teach you?'", "'Walk me through the data.'"], bad: "'How do you feel about it?'" },
 };
-export const pending = () => { const b = I().beat.pending; return b && P().crew.occ[b.id] ? b : null; };
+export const pending = () => {
+  const tp = talkState().pending; if (tp && P().crew.occ[tp.who]) return { id: tp.who, chat: true, mode: tp.mode, reason: tp.reason || null };
+  const b = I().beat.pending; return b && P().crew.occ[b.id] ? b : null;
+};
 function maybeBeat(id) {
   const i = I(), B = K().beat, day = P().day;
-  if (!BEATS[id] || !P().crew.occ[id] || i.beat.pending) return false;
+  if (!BEATS[id] || !P().crew.occ[id] || i.beat.pending || talkState().pending) return false;
   if (i.beat.day !== day) i.beat = { day, n: 0, pending: null };
   if (i.beat.n >= B.perDay || rnd() >= B.chance) return false;
   const order = [0, 1, 2].sort(() => rnd() - 0.5);
-  i.beat.pending = { id, at: day, warn: rnd() < warnChance(), order }; i.beat.n++;
-  toast(`💬 ${P().crew.occ[id].short} has something on ${pr(P().crew.occ[id], "pos")} mind`, "info");
+  // ~35% of beats become a multi-exchange chat when one exists for this crewmate (presence gated inside startChatSession)
+  if (pickChat(id) && rnd() < 0.35) {
+    const sess = startChatSession(id);
+    if (sess) {
+      i.beat.n++;
+      if (sess.mode === "comm") toast(`📶 ${P().crew.occ[id].short} on comm — something on ${pr(P().crew.occ[id], "pos")} mind`, "info");
+      else if (sess.mode === "near") toast(`💬 ${P().crew.occ[id].short} has something on ${pr(P().crew.occ[id], "pos")} mind`, "info");
+      // approaching: beginSpeaker already toasted "coming over"
+      return true;
+    }
+  }
+  const gate = beginSpeaker(id);
+  if (gate.mode === "skip") return false;
+  const variant = Math.floor(rnd() * (1 + (BEAT_EXTRA[id] || []).length));
+  i.beat.pending = { id, at: day, warn: rnd() < warnChance(), order, mode: gate.mode, reason: gate.reason || null, wait: gate.wait || 0, variant }; i.beat.n++;
+  if (gate.mode === "comm") toast(`📶 ${P().crew.occ[id].short} on comm — something on ${pr(P().crew.occ[id], "pos")} mind`, "info");
+  else if (gate.mode === "near") toast(`💬 ${P().crew.occ[id].short} has something on ${pr(P().crew.occ[id], "pos")} mind`, "info");
   return true;
 }
-export function startBeat(id) { const i = I(); i.beat.pending = null; i.beat.n = 0; i.beat.day = P().day; return maybeBeatForced(id); }   // tests / debug
-function maybeBeatForced(id) { const i = I(); if (!BEATS[id] || !P().crew.occ[id]) return false; i.beat.pending = { id, at: P().day, warn: rnd() < warnChance(), order: [0, 1, 2].sort(() => rnd() - 0.5) }; i.beat.n++; return true; }
+export function startBeat(id) {
+  const i = I();
+  const oldB = i.beat.pending; if (oldB) endApproach(oldB.id, "replaced");
+  const oldT = talkState().pending; if (oldT) endApproach(oldT.who, "replaced");
+  i.beat.pending = null; talkState().pending = null; i.beat.n = 0; i.beat.day = P().day;
+  return maybeBeatForced(id);
+}   // tests / debug
+function maybeBeatForced(id) {
+  const i = I(); if (!BEATS[id] || !P().crew.occ[id]) return false;
+  const gate = beginSpeaker(id);
+  if (gate.mode === "skip") return false;
+  const variant = Math.floor(rnd() * (1 + (BEAT_EXTRA[id] || []).length));
+  i.beat.pending = { id, at: P().day, warn: rnd() < warnChance(), order: [0, 1, 2].sort(() => rnd() - 0.5), mode: gate.mode, reason: gate.reason || null, wait: gate.wait || 0, variant };
+  i.beat.n++; return true;
+}
+/** Advance approaching beats (chats tick via tickTalk). */
+export function tickBeats(dt) {
+  tickTalk(dt);
+  const b = I().beat.pending;
+  if (b && b.mode === "approaching") {
+    const m = tickApproach(b, dt);
+    if (m === "skip") { endApproach(b.id, "skip"); iClearBeat(); }
+  }
+}
+function iClearBeat() { I().beat.pending = null; }
 // the modal: q + 3 replies (index 2 in BEATS terms is the avoid reply). warn: the ⚠ shows on the risky one
+function beatDef(id, variant) {
+  const base = BEATS[id]; if (!base) return null;
+  const extra = (BEAT_EXTRA[id] || []);
+  const all = [base, ...extra];
+  return all[((variant % all.length) + all.length) % all.length];
+}
 export function beatView() {
-  const b = pending(); if (!b) return null; const o = P().crew.occ[b.id], B = BEATS[b.id];
-  const opts = [B.good[0], B.good[1], B.bad];
-  return { id: b.id, who: o, q: B.q, warn: b.warn, replies: b.order.map(j => ({ j, text: opts[j], risky: j === 2, flag: j === 2 && b.warn })) };
+  const b = I().beat.pending; if (!b || !P().crew.occ[b.id]) return null;
+  const o = P().crew.occ[b.id];
+  if (b.mode === "approaching") return { id: b.id, who: o, mode: "approaching", reason: b.reason || null, warn: false, q: null, replies: [], wait: b.wait || 0 };
+  const B = beatDef(b.id, b.variant || 0) || BEATS[b.id];
+  const opts = [B.good[0], B.good[1], B.bad].map(t => fillTalk(t, o));
+  const mode = b.mode || "near";
+  return { id: b.id, who: o, q: fillTalk(B.q, o), warn: b.warn, mode, reason: b.reason || null,
+    replies: b.order.map(j => ({ j, text: opts[j], risky: j === 2, flag: j === 2 && b.warn })) };
 }
 export function answerBeat(j) {
   const b = pending(); if (!b) return null; const i = I(), B = K().beat, o = P().crew.occ[b.id], k = knowOf(b.id), t = tastesFor(o);
-  i.beat.pending = null; i.n.beats++; if (b.warn) { i.n.warned++; k.avoid = 2; }
+  endApproach(b.id, "finished"); i.beat.pending = null; i.n.beats++; if (b.warn) { i.n.warned++; k.avoid = 2; }
   if (j !== 2) {
     nudge(b.id, B.good, "beat|good");
     addEntry(b.id, "beat", "", 0);
@@ -130,7 +183,7 @@ export function answerBeat(j) {
   log(`Wrong thing to say. ${o.short} goes quiet. (Tomorrow, you could apologise: Personal Log.)`, "fault");
   return { ok: true, good: false };
 }
-export function dismissBeat() { I().beat.pending = null; }
+export function dismissBeat() { const b = I().beat.pending; if (b) endApproach(b.id, "dismiss"); I().beat.pending = null; }
 // apology: available from the next ship's day for PROG.insight.beat.apologyDays days
 export function apologyState(id) {
   const a = I().apol[id]; if (!a || !P().crew.occ[id]) return null; const day = P().day, d = a.d;
@@ -164,8 +217,10 @@ hooks.gift.push(({ id, r, care }) => {
 hooks.levelUp.push(L => { if (P() && P().insight && K().enabled && L % 5 === 0) addXP(K().xp.per5Levels, "level"); });
 hooks.newDay.push(() => {
   if (!P() || !P().insight) return;
-  const i = I(); if (i.beat.pending && i.beat.pending.at < P().day) i.beat.pending = null;   // a beat lapses with the ship's day
+  const i = I(); if (i.beat.pending && i.beat.pending.at < P().day) { endApproach(i.beat.pending.id, "day-lapse"); i.beat.pending = null; }   // a beat lapses with the ship's day
   for (const [id, a] of Object.entries(i.apol)) if (P().day - a.d > K().beat.apologyDays || !P().crew.occ[id]) delete i.apol[id];
   const placed = Object.values((P().cabin || {}).placed || {});
   if (K().enabled) for (const d of K().decor) if (placed.includes(d)) addXP(K().xp.decorDay, "decor");
 });
+
+export { chatView, answerChat, dismissChat, startChatSession, tickTalk, endApproach, scrubSavedApproach, NEAR_PX, APPROACH_TIMEOUT } from "./crew-talk.js";

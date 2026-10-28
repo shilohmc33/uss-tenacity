@@ -46,9 +46,37 @@ function chatSpot(n, node) {
   return cands.find(c => c.snap <= (so.maxSnap ?? 28)) || cands.sort((a, b) => a.snap - b.snap)[0];
 }
 // a spot beside wherever the Lt stands (newcomer intros)
-function besideLt(n) {
+export function besideLt(n) {
   const L = G.lt, c = NEAR.map(o => resolve(n.deck, { x: L.x + o.dx, y: L.y + o.dy })).filter(c => c.snap <= 28);
   return (c.length ? c : NEAR.map(o => resolve(n.deck, { x: L.x + o.dx, y: L.y + o.dy }))).sort((a, b) => dDist(a.x, a.y, n.x, n.y) - dDist(b.x, b.y, n.x, n.y))[0];
+}
+// Closer beside offsets for Insight / crew-talk approaches (NEAR's 0.075×960 ≈ 72 px sits just past soft-near).
+const TALK_NEAR = [{ dx: 0.045, dy: 0 }, { dx: -0.045, dy: 0 }, { dx: 0, dy: 0.07 }, { dx: 0, dy: -0.07 },
+  { dx: 0.06, dy: 0.04 }, { dx: -0.06, dy: 0.04 }, { dx: 0.06, dy: -0.04 }, { dx: -0.06, dy: -0.04 },
+  ...NEAR];
+export function talkBesideLt(n) {
+  const L = G.lt;
+  const cands = TALK_NEAR.map(o => resolve(n.deck, { x: L.x + o.dx, y: L.y + o.dy }));
+  const tight = cands.filter(c => c.snap <= 28 && dDist(c.x, c.y, L.x, L.y) <= 64);
+  const pool = tight.length ? tight : cands.filter(c => c.snap <= 28);
+  const use = pool.length ? pool : cands;
+  // Prefer walkable spots close to the Lt; among equals, closest walk for the NPC.
+  return use.slice().sort((a, b) => {
+    const da = dDist(a.x, a.y, L.x, L.y), db = dDist(b.x, b.y, L.x, L.y);
+    if (Math.abs(da - db) > 4) return da - db;
+    return dDist(a.x, a.y, n.x, n.y) - dDist(b.x, b.y, n.x, n.y);
+  })[0];
+}
+/** Clear a talk-approach walk and send the crewmate to their duty post (spots[0]), or battle station on red alert. */
+export function returnToDuty(id) {
+  const n = npcOf(id); if (!n) return false;
+  n.path = null; n.pathI = 0; n.next = null; n.target = null; n.chatNode = null; n.chatWith = null;
+  if (n._talkApproach) delete n._talkApproach;
+  if (n.x == null) return false;
+  if (n.mode === "chat") { n.mode = "dwell"; n.t = 1; n.action = null; }
+  const post = n.cfg && n.cfg.spots && n.cfg.spots[0];
+  if (post && n.deck === n.cfg.deck) { goTo(n, resolve(n.deck, post), "dwell", post); return true; }
+  n.mode = "dwell"; n.t = 1; n.action = null; return true;
 }
 // where everyone else on n's deck stands, or is about to stand (a walker's destination): the Lt, T'Ren, other crew
 function claims(n) {
@@ -104,15 +132,26 @@ export function sheetFor(o, sl) {
   return "crew-" + ((DEPTS[sl.dept] && DEPTS[sl.dept].tint) || "red");
 }
 function linesFor(o) {
+  // Oct 27: named START_CREW get opinion-gated lines from crew-talk.js; tag lines remain as fallback / generated crew
+  try { const CT = linesForCrewCache(o); if (CT && CT.length) return CT; } catch (e) {}
   const L = []; for (const t of o.tags || []) L.push(...(TAGS[t] || []));
   return L.length ? L : TAGS.warm;
 }
+let _crewTalk = null;
+function linesForCrewCache(o) {
+  if (!_crewTalk) return null;
+  return _crewTalk.linesForCrew(o);
+}
+export function bindCrewTalk(mod) { _crewTalk = mod; }   // main.js binds after both modules load (avoid cycles)
+
 // per-occupant config: the slot's spots / chat nodes, the occupant's lines; Thelev's slot keeps her hand-made config
 function cfgFor(sl, o) {
   const R = PROG.roster;
   if (sl.ambient && CUSTOM[sl.ambient]) {
     const c = CUSTOM[sl.ambient], mine = o.id === c.id;
-    return { ...c, id: o.id, rank: "", name: fullName(o), short: o.short, pronoun: o.pronoun, custom: true, social: { ...c.social, lines: mine ? c.social.lines : linesFor(o) } };
+    // Oct 27: even named ambient NPCs (Thelev) get opinion-gated CREW_LINES when available; keep handmade as fallback
+    const gated = linesFor(o), lines = (gated && gated.length ? gated : (mine ? c.social.lines : linesFor(o)));
+    return { ...c, id: o.id, rank: "", name: fullName(o), short: o.short, pronoun: o.pronoun, custom: true, social: { ...c.social, lines } };
   }
   const nodes = {}; for (const nd of sl.chat || []) nodes[nd] = NEAR;
   return { id: o.id, deck: sl.deck, speed: R.speed, spots: sl.spots, name: fullName(o), short: o.short, pronoun: o.pronoun,

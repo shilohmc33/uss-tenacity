@@ -310,7 +310,7 @@ export function updateHud() {
   if (ck !== lastChips) {
     lastChips = ck;
     // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
-    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + VG.vigChip() + upkeepChip(uk) + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">💬 ${esc(G.prog.crew.occ[bp.id].short)}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + VG.vigChip() + upkeepChip(uk) + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">${bp.mode === "comm" ? "📶" : bp.mode === "approaching" ? "🚶" : "💬"} ${esc(G.prog.crew.occ[bp.id].short)}${bp.mode === "approaching" ? "…" : ""}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
      
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;
@@ -789,19 +789,41 @@ function renderInsight(body) {
     <p class="plnote">Hints ${I.n.hints} (${I.n.full} exact) · conversations ${I.n.beats} · missteps ${I.n.missteps} · apologies ${I.n.apologies}</p>`;
 }
 let beatRes = null;
-export function openBeat() { if (!IN.pending()) return; beatRes = null; renderBeat(); $("#beatPanel").hidden = false; }
+export function openBeat() {
+  const pend = IN.pending(); if (!pend) return;
+  // Hold the modal until the speaker has arrived (or fallen back to COMM). Approaching = non-blocking cue only.
+  if (pend.mode === "approaching") { beatRes = null; $("#beatPanel").hidden = true; return; }
+  beatRes = null; renderBeat(); $("#beatPanel").hidden = false;
+}
 function renderBeat() {
-  const v = IN.beatView(), el = $("#beatBody");
+  const el = $("#beatBody"), pend = IN.pending();
   if (beatRes) { el.innerHTML = `<div class="bres ${beatRes.good ? "good" : "bad"}">${beatRes.good ? "WELL READ" : "WRONG THING TO SAY"}</div><p class="mline">${esc(beatRes.line)}</p><button class="close" data-beat="close">BACK TO DUTY</button>`; return; }
-  if (!v) { $("#beatPanel").hidden = true; return; }
+  if (pend && pend.mode === "approaching") { $("#beatPanel").hidden = true; return; }   // never show dialogue pre-arrival
+  // multi-exchange chat session
+  if (pend && pend.chat) {
+    const v = IN.chatView(); if (!v || v.mode === "approaching" || !v.q) { $("#beatPanel").hidden = true; return; }
+    const o = v.who, face = o.img ? `<img src="assets/${o.img}.webp" alt="">` : `<span class="badge" style="background:${(SPECIES[o.species] || SPECIES.human).color}">${esc(o.short.slice(0, 2))}</span>`;
+    const via = v.mode === "comm" ? `<small class="commtag">📶 COMM</small>` : `<small>in person · ${esc(v.title || "a quiet word")}</small>`;
+    el.innerHTML = `<div class="bhd ${v.mode === "comm" ? "comm" : ""}">${face}<div><h3>${esc(o.short.toUpperCase())}</h3>${via}</div></div><p class="mline">${esc(v.q)}</p>
+      <div class="breps">${(v.replies || []).map(r => `<button class="brep" data-beat="chat-${r.j}">${esc(r.text)}</button>`).join("")}</div>
+      <button class="close" data-beat="later">NOT NOW</button>`;
+    return;
+  }
+  const v = IN.beatView(); if (!v || v.mode === "approaching" || !v.q) { $("#beatPanel").hidden = true; return; }
   const o = v.who, face = o.img ? `<img src="assets/${o.img}.webp" alt="">` : `<span class="badge" style="background:${(SPECIES[o.species] || SPECIES.human).color}">${esc(o.short.slice(0, 2))}</span>`;
-  el.innerHTML = `<div class="bhd">${face}<div><h3>${esc(o.short.toUpperCase())}</h3><small>a moment between shifts</small></div></div><p class="mline">${esc(v.q)}</p>
+  const via = v.mode === "comm" ? `<small class="commtag">📶 COMM BADGE</small>` : `<small>a moment between shifts</small>`;
+  el.innerHTML = `<div class="bhd ${v.mode === "comm" ? "comm" : ""}">${face}<div><h3>${esc(o.short.toUpperCase())}</h3>${via}</div></div><p class="mline">${esc(v.q)}</p>
     <div class="breps">${v.replies.map(r => `<button class="brep${r.flag ? " warn" : ""}" data-beat="${r.j}">${r.flag ? `<b class="wf">⚠</b>` : ""}${esc(r.text)}${r.flag ? `<small>Your Insight: this would land badly</small>` : ""}</button>`).join("")}</div>
     <button class="close" data-beat="later">NOT NOW</button>`;
 }
 function beatClick(e) {
   const b = e.target.closest("[data-beat]"); if (!b) return; const k = b.dataset.beat;
-  if (k === "close" || k === "later") { $("#beatPanel").hidden = true; beatRes = null; return; }
+  if (k === "close" || k === "later") { $("#beatPanel").hidden = true; beatRes = null; IN.dismissBeat(); IN.dismissChat && IN.dismissChat(); return; }
+  if (String(k).startsWith("chat-")) {
+    const r = IN.answerChat(+k.slice(5)); if (!r) return;
+    if (r.done) { beatRes = { good: r.good, line: r.line }; renderBeat(); renderCareer(true); lastChips = ""; return; }
+    renderBeat(); return;
+  }
   const v = IN.beatView(); if (!v) return; const o = v.who, r = IN.answerBeat(+k); if (!r) return;
   beatRes = { good: r.good, line: r.good ? `${o.short} relaxes. 'Thank you, ${ltAddr()}.' (+opinion)` : `${o.short} goes quiet. (−opinion) Tomorrow you can apologise from the Personal Log.` };
   renderBeat(); renderCareer(true); lastChips = "";
