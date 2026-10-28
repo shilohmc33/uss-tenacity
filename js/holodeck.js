@@ -9,12 +9,15 @@
 import { G } from "./state.js";
 import { HOLO, MOOD } from "./pacing.js";
 import { PROG, addHardener, nudge, opinionOf, spend, canAfford, addr, localDate } from "./progression.js";
-import { SLOTMAP } from "./roster.js";
+import { SLOTMAP, PRONOUNS } from "./roster.js";
 import { log, toast } from "./bus.js";
 import { needsOf, NEED_KEYS, shiftNow } from "./needs.js";
 import { dayKey, addDays, laterDay, dayActive, daysUntil, isDay, shipToDay } from "./util.js";
 import { badClock, BAD_CLOCK_WHY } from "./clock.js";   // R2: no booking (and no dates stored) on a bad clock   // Oct 26 A(b): real-day cooldowns
 import { quirksOf, moodlet, addSkillXp } from "./mood.js";
+import { ltNamed } from "./ltname.js";
+import { STORIES } from "./holo-stories.js";
+export { STORIES } from "./holo-stories.js";
 
 const now = () => (G.ship && G.ship.elapsed) || 0;
 const P = () => G.prog;
@@ -24,7 +27,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 export const PROGS = HOLO.progs, PROG_IDS = Object.keys(HOLO.progs);
 export const H = () => { const p = P(); if (!p.holo || typeof p.holo !== "object") p.holo = freshHolo(); return p.holo; };
-export const freshHolo = () => ({ lt: { d: "", n: 0 }, busy: {}, uses: {}, buffs: {}, recent: {}, risa: {}, over: {}, lock: {}, paid: {}, day: {}, n: { sessions: 0, spent: 0, crew: 0, self: 0 } });
+export const freshHolo = () => ({ lt: { d: "", n: 0 }, busy: {}, uses: {}, buffs: {}, recent: {}, risa: {}, over: {}, lock: {}, paid: {}, day: {}, n: { sessions: 0, spent: 0, crew: 0, self: 0 }, invite: null });
 const aboard = () => Object.values(P().crew.slots).filter(id => id && occ(id));
 const injured = () => new Set(((P().med && P().med.inj) || []).map(x => x.id));
 export const busyUntil = id => { const b = H().busy[id]; return b && b.endT > now() ? b.endT : 0; };
@@ -47,6 +50,79 @@ export function ltNextText(at = new Date()) {
 }
 export const ltUsedWhy = (at = new Date()) => `Your holodeck time today is used · ${ltNextText(at)}`;
 export const fits = (id, pid) => id !== "lt" && PROGS[pid].fit.some(q => quirksOf(id).includes(q));
+// ---- Invite (Shiloh): Lt picks a co-star with a yes/no roll before the session starts ----
+// Chance: clamp(0.40 + opinion/150, 0.10, 0.95); romance partner (romance ON) = 0.95. Words: Likely >= 0.65, Maybe >= 0.35, else Long shot.
+export const INVITE_YES = { hi: 4, lo: 6, loBelow: 20 };   // stored opinion after gainMult (raw nudge inverted)
+export const INVITE_NO = -1;
+export const inviteChance = id => {
+  const R = P().romance; if (R && R.opt === true && R.partner === id) return 0.95;
+  return clamp(0.40 + opinionOf(id) / 150, 0.10, 0.95);
+};
+export const inviteWord = p => p >= 0.65 ? "Likely" : p >= 0.35 ? "Maybe" : "Long shot";
+export const inviteEligible = () => aboard().filter(id => id && occ(id) && !injured().has(id));
+const DECLINES = [
+  "{S}: 'Not tonight. The week already took its cut.'",
+  "{S}: 'Ask me when I'm less tired and less armed.'",
+  "{S}: 'Tempting. Still a no.'",
+  "{S}: 'I've got a date with my bunk and a bottle that isn't synthehol.'",
+  "{S}: 'Pass. Last time nearly killed me — in the fun way. I'm out of fun.'",
+  "{S}: 'The captain would notice. So would my better judgment.'",
+  "{S}: 'Maybe after the war. Don't hold your breath.'",
+  "{S}: 'I like you. I'm still not putting on a costume tonight.'",
+  "{S}: 'Hard pass. My shift starts too soon and my dignity ends too fast.'",
+  "{S}: 'Not with you. Not today. Don't make it a thing.'",
+  "{S}: 'I'll take a rain check that never clears. No hard feelings.'",
+  "{S}: 'Find another victim. I'm off the market until further notice.'",
+  "{S}: 'No. And if you ask again with that face, I'm logging it.'",
+  "{S}: 'Save the holodeck for someone who hasn't seen enough of you this week.'",
+];
+export const DECLINE_N = DECLINES.length;
+function declineLine(id) { return DECLINES[Math.floor(Math.random() * DECLINES.length)].replace(/\{S\}/g, nm(id) === "you" ? "Someone" : occ(id).short); }
+export function inviteState(at = new Date()) {
+  const h = H(), d = localDate(at);
+  if (!h.invite || typeof h.invite !== "object" || h.invite.d !== d) h.invite = { d, rolls: {}, nos: 0, guest: null };
+  return h.invite;
+}
+export function inviteStatus() {
+  const st = inviteState(), g = st.guest;
+  return { guest: g, nos: st.nos | 0, canInvite: !g && (st.nos | 0) < 2, forcedSolo: g === "solo" && (st.nos | 0) >= 2, rolls: { ...st.rolls } };
+}
+export function inviteList() {
+  const st = inviteState();
+  return inviteEligible().map(id => {
+    const p = inviteChance(id), rolled = Object.prototype.hasOwnProperty.call(st.rolls, id);
+    return { id, short: occ(id).short, p, word: inviteWord(p), rolled, yes: rolled ? st.rolls[id] === true : null };
+  });
+}
+export function pickSolo() {
+  const st = inviteState(); st.guest = "solo"; return { ok: true, guest: "solo" };
+}
+function yesNudge(id) {
+  const cur = opinionOf(id), want = cur < INVITE_YES.loBelow ? INVITE_YES.lo : INVITE_YES.hi;
+  const O = PROG.opinion, soft = Math.max(0.1, 1 - Math.max(0, cur) / O.soft), raw = want / ((O.gainMult ?? 1) * soft);
+  return nudge(id, raw, "holo-invite", true);
+}
+export function invite(id, rnd = Math.random) {
+  if (badClock()) return { ok: false, why: BAD_CLOCK_WHY };
+  const st = inviteState();
+  if (st.guest) return { ok: false, why: st.guest === "solo" ? "going solo" : `${nm(st.guest)} already said yes`, guest: st.guest };
+  if ((st.nos | 0) >= 2) { st.guest = "solo"; return { ok: true, yes: false, forced: true, guest: "solo", line: null }; }
+  if (!inviteEligible().includes(id)) return { ok: false, why: "not available" };
+  if (Object.prototype.hasOwnProperty.call(st.rolls, id)) return { ok: false, why: "already asked", prior: st.rolls[id], guest: st.guest };
+  const p = inviteChance(id), yes = rnd() < p;
+  st.rolls[id] = yes;
+  if (yes) {
+    st.guest = id; const gain = yesNudge(id);
+    return { ok: true, yes: true, guest: id, p, word: inviteWord(p), gain, line: null };
+  }
+  st.nos = (st.nos | 0) + 1; nudge(id, INVITE_NO, "holo-invite-no");
+  const line = declineLine(id), forced = st.nos >= 2; if (forced) st.guest = "solo";
+  return { ok: true, yes: false, guest: st.guest, nos: st.nos, p, word: inviteWord(p), line, forced };
+}
+function catForGuest(id) {
+  const R = P().romance; if (R && R.opt === true && R.partner === id) return "partner";
+  const o = opinionOf(id); if (o <= -20) return "rival"; if (o < 20) return "acquaintance"; return "friend";
+}
 // can `id` (crew id or "lt") be booked into program `pid`; paid = the Lt pays
 export function bookState(pid, id = "lt", paid = true) {
   const pg = PROGS[pid]; if (!pg) return { ok: false, why: "unknown program" };
@@ -67,49 +143,7 @@ export function bookState(pid, id = "lt", paid = true) {
   if (paid && !canAfford({ rations: pg.fr })) return { ok: false, why: `${pg.fr} ${PROG.currency.hud} needed` };
   return { ok: true };
 }
-// ---- blurbs: {lead} the session's lead as an object ("you" / "Seo"), {leads} possessive, {co} the co-star (always third person) ----
-const B = {
-  tactical_sim: {
-    partner: ["The Kobayashi Maru again. {Co} takes the helm beside {lead} and refuses, flatly, to accept a no-win scenario.", "Three Klingon cruisers decloak. {Co} squeezes {leads} hand once under the console, then calls the evasive pattern."],
-    friend: ["{Co} plays the freighter captain begging for rescue, badly enough that the whole bridge crew is laughing by the second volley.", "{Co} takes tactical and calls targets before the sensors do. The sim ends in a draw, which almost never happens."],
-    rival: ["The computer casts {co} as the Klingon commander. The gloating is a little too convincing.", "{Co} is the evaluator. Every order gets a note on a padd, and the notes are not kind."],
-    solo: ["The Kobayashi Maru, variant 12. The bridge shakes, the console sparks, and nobody gets out alive. Good practice anyway.", "Red alert on a simulated Excelsior. The odds are hopeless; the drill is in losing well.", "A Cardassian ambush in the Badlands, run three times. The third time is almost clean."] },
-  warp_core_breach: {
-    partner: ["Breach in ninety seconds. {Co} reads the intermix ratios aloud in a calm voice meant only for {lead}.", "The core goes critical and {co} is the one who makes the ejection call. Afterwards, nobody lets go of anybody for a moment."],
-    friend: ["{Co} plays the panicking ensign and then quietly fixes the plasma leak while {lead} is busy with the simulated chief.", "Okafor's own scenario, with {co} on the other side of the core. The sim reports 4 seconds to spare."],
-    rival: ["{Co} is cast as the inspector from Utopia Planitia, sighing at every coolant valve.", "The scenario has {co} as the ensign who caused the breach. It is very satisfying to watch the sim agree."],
-    solo: ["Antimatter containment at 12 percent and falling. Klaxons, steam, a stuck valve. The core holds, barely.", "The Utopia Planitia drill: three cascading faults and one right answer.", "A coolant rupture on a simulated Ambassador-class. The hands remember what the mind forgets."] },
-  klingon_calisthenics: {
-    partner: ["{Co} turns up in the training hall with a bat'leth and a grin, and the forms become a duel. Nobody keeps score.", "Bat'leth forms with {co}, slow and close. The holographic Klingons look politely away."],
-    friend: ["{Co} joins the forms and loses three bouts in a row with tremendous dignity.", "The holo-instructor singles out {co} for praise. {Co} will be insufferable about it for days."],
-    rival: ["The computer hands {co} a d'k tahg and the role of the challenger. It ends with both of them on the mat.", "{Co} watches from the edge of the hall, arms folded, unimpressed. The forms get done twice as hard."],
-    solo: ["Mok'bara at dawn in a stone hall, the instructor shouting in Klingon. Every muscle complains; the mind goes quiet.", "Bat'leth forms until the arms burn. The holo-warriors bang their mugs at the end.", "The Klingon calisthenics program, level 3. The safeties are on, which is the only reason anyone walks out."] },
-  vulcan_garden: {
-    partner: ["Sand, stone and silence. {Co} sits beside {lead} on the warm rock and says nothing for an hour, which is exactly right.", "The garden at dusk. {Co} arranges the stones wrong on purpose, just to make {lead} smile."],
-    friend: ["{Co} tries meditation for the first time and falls asleep in eleven minutes. It still counts.", "{Co} rakes the sand in long patient lines beside {lead}. The red sky does the talking."],
-    rival: ["The computer has cast {co} as a disapproving Vulcan master who corrects {leads} posture. Repeatedly.", "{Co} turns up mid-meditation to complain about the duty roster. Even the garden can't fix that."],
-    solo: ["Red sands under a white sun, a gong somewhere far off. The breath slows; the week falls away.", "A Vulcan garden on a ridge above ShiKahr. Stones, sand, and the long silence after.", "The meditation program counts breaths in a quiet voice. By two hundred the shoulders have dropped."] },
-  dixon_hill: {
-    partner: ["Dixon Hill's office, 1941. The door opens and {co} walks in as the mysterious client, all trouble and good shoes.", "Rain on the window, a jazz record, and {co} as the stranger who knows more than anyone should. The case is solved; the evening isn't over."],
-    friend: ["{Co} plays the hapless police lieutenant who arrests the wrong man twice. The case still gets solved.", "{Co} is the bartender at the Little Sparrow, and has opinions about every suspect."],
-    rival: ["The villain is Cyrus Redblock, played by {co}, with a cigar and a terrible accent.", "{Co} plays the crooked city councilman. The handcuffs at the end feel well earned."],
-    solo: ["San Francisco, 1941. A missing necklace, a fat man with a gun, and a fedora that fits just right.", "Dixon Hill and the case of the green sedan. The fog rolls in off the Bay right on cue.", "A holonovel night: trench coat, rain, and a client who lies in the first sentence."] },
-  captain_proton: {
-    partner: ["Chapter 7. {Co} plays Captain Proton's co-pilot, and absolutely refuses to need rescuing.", "{Co} plays the ruler of the Spider People, and steals every scene from Captain Proton."],
-    friend: ["{Co} plays Buster Kincaid with enormous enthusiasm and a tinfoil helmet.", "{Co} is the narrator, reading the chapter cards in a booming voice. The crew in the Mess can hear it."],
-    rival: ["Doctor Chaotica is played by {co}, who has clearly been waiting for this role all year.", "{Co} plays Lonzak, the cackling henchman. The death ray misfires on schedule."],
-    solo: ["Black and white, rocket ships on strings, and Doctor Chaotica's death ray aimed at Earth. Again.", "Captain Proton, chapter 7: the Fortress of Doom. The satan robot walks very slowly.", "A grayscale serial with cardboard rockets and real laughter."] },
-  vics_lounge: {
-    partner: ["Vic sees {co} arrive and drops the tempo for a slow number. 'For the lovebirds,' he says.", "A corner booth at Vic's, a martini, and {co} humming along to 'The Best Is Yet To Come'."],
-    friend: ["{Co} gets talked onto the stage by Vic for one song. It goes better than anyone expected.", "Vic deals blackjack and {co} wins four hands in a row. The house is very gracious about it."],
-    rival: ["{Co} heckles the band and Vic handles it smoothly: 'Pal, every room's got one.'", "Vic seats {co} at the next table, which is either a joke or a lesson."],
-    solo: ["Las Vegas, 1962. The band swings, the lights are low, and Vic asks about {leads} week like he means it.", "Vic's lounge on a quiet night, one song after another. Nobody is in a hurry.", "Fly Me to the Moon, a good chair, and a hologram who always knows what to say."] },
-  risa_beach: {
-    partner: ["Warm sand, blue water, and {co} with a horga'hn and a straight face. Two hours that feel like a week.", "Sunset on Risa. {Co} reads aloud under the umbrella until the light goes."],
-    friend: ["{Co} builds an outrageous sandcastle in the shape of the Tenacity. The computer is asked to keep it.", "{Co} challenges {lead} to a swim to the buoy and loses gracefully."],
-    rival: ["{Co} has claimed the best lounger and won't budge. Even on Risa.", "The computer puts {co} at the next umbrella with a loud tricorder. Paradise has a flaw."],
-    solo: ["Risa: white sand, warm water and absolutely no alarms. The kind of quiet that resets a person.", "Two hours of sun on Risa. The shoulders unknot; the war is a rumor.", "A hammock between palms, the surf, and nothing to fix."] },
-};
+// ---- stories: multi-beat variants in holo-stories.js (tokens {lead}/{leads}/{co}/{Co}/{named}) ----
 const Cap = t => t.replace(/^./, c => c.toUpperCase());
 function relations(lead) {   // who co-stars, by the Lt's relationships at booking time (for a crew lead the co-star is the Lt)
   const R = P().romance, partner = R && R.opt === true ? R.partner : null, out = [];   // P30: no partner blurbs unless romance is on
@@ -125,16 +159,49 @@ function relations(lead) {   // who co-stars, by the Lt's relationships at booki
   out.push(["solo", null, 1]);
   return out;
 }
-export function blurbFor(pid, lead) {
-  const rec = H().recent[pid] = Array.isArray(H().recent[pid]) ? H().recent[pid] : [], rel = relations(lead);
-  const avail = rel.reduce((n, [cat]) => n + B[pid][cat].length, 0), block = rec.slice(-Math.min(HOLO.recent, avail - 1));   // never repeat the last 3 (fewer if fewer exist)
-  const pool = []; for (const [cat, co, w] of rel) B[pid][cat].forEach((t, i) => { const key = cat + i; if (!block.includes(key)) for (let k = 0; k < w; k++) pool.push([key, t, co]); });
-  const [key, t, co] = pool.length ? pick(pool) : ["solo0", B[pid].solo[0], null];
+export function blurbFor(pid, lead, forcedCo = null) {   // forcedCo: invite guest id (Lt lead); null/"solo" = existing auto relations
+  const S = STORIES[pid], rec = H().recent[pid] = Array.isArray(H().recent[pid]) ? H().recent[pid] : [];
+  let rel = relations(lead);
+  if (lead === "lt" && forcedCo && forcedCo !== "solo" && occ(forcedCo)) {
+    const cat = catForGuest(forcedCo);
+    // partner stories only when romance is on (catForGuest already gates); never leak partner text with romance off
+    rel = [[cat, forcedCo, 3]];   // invited co-star: never fall through to a solo variant
+  }
+  const avail = rel.reduce((n, [cat]) => n + ((S[cat] || []).length), 0), block = rec.slice(-Math.min(HOLO.recent, Math.max(0, avail - 1)));
+  const pool = [];
+  for (const [cat, co, w] of rel) (S[cat] || []).forEach((v, i) => { const key = cat + i; if (!block.includes(key)) for (let k = 0; k < w; k++) pool.push([key, v, co, cat]); });
+  const fallback = S.solo[0], pick1 = pool.length ? pick(pool) : ["solo0", fallback, null, "solo"];
+  const [key, v, co, cat] = pick1;
   rec.push(key); while (rec.length > HOLO.recent) rec.shift();
   const coName = co === "lt" ? `the ${addr()}` : co ? occ(co).short : "";
-  const lt = lead === "lt";
-  let s = t.replace(/\{Co\}/g, Cap(coName)).replace(/\{co\}/g, coName).replace(/\{leads\}/g, lt ? "your" : `${occ(lead).short}'s`).replace(/\{lead\}/g, lt ? "you" : occ(lead).short);
-  return { text: s, cat: key.replace(/\d+$/, ""), co };
+  const lt = lead === "lt", named = ltNamed();
+  // pronoun packs for co-star / lead (crewmate only; Lt falls back to they). Tokens: {coThey}/{CoThey}/{coIs}/… and {leadThey}/…
+  const pack = o => {
+    const P = (o && o.pronoun && PRONOUNS[o.pronoun]) ? PRONOUNS[o.pronoun] : PRONOUNS.they;
+    const c = w => w.charAt(0).toUpperCase() + w.slice(1);
+    const plural = P.sub === "they";
+    return { They: c(P.sub), they: P.sub, Them: c(P.obj), them: P.obj, Their: c(P.pos), their: P.pos,
+      Theirs: c(P.poss), theirs: P.poss, Themself: c(P.ref), themself: P.ref,
+      Is: c(P.is), is: P.is, Has: c(P.has), has: P.has, S: P.s,
+      Do: plural ? "Do" : "Does", do: plural ? "do" : "does",
+      Dont: plural ? "Don't" : "Doesn't", dont: plural ? "don't" : "doesn't" };
+  };
+  const coO = (co && co !== "lt" && occ(co)) ? occ(co) : null;
+  const leadO = (!lt && occ(lead)) ? occ(lead) : null;
+  const coP = pack(coO), leadP = pack(leadO);
+  const fill = t => String(t).replace(/\{named\}/g, named).replace(/\{Co\}/g, Cap(coName)).replace(/\{co\}/g, coName)
+    .replace(/\{leads\}/g, lt ? "your" : `${occ(lead).short}'s`).replace(/\{lead\}/g, lt ? "you" : occ(lead).short)
+    .replace(/\{(co|Co|lead|Lead)(They|Them|Their|Theirs|Themself|Is|Has|S|Do|Dont)\}/g, (_, who, form) => {
+      const pack_ = who.toLowerCase() === "co" ? coP : leadP;
+      const key = (who[0] === who[0].toUpperCase()) ? form : (form === "S" ? "S" : form.charAt(0).toLowerCase() + form.slice(1));
+      return pack_[key] != null ? pack_[key] : "";
+    });
+  const beats = (v.beats || []).map(fill);
+  const talk = (v.talk || []).map(([who, line]) => {
+    const w = who === "you" ? (lt ? "You" : occ(lead).short) : fill(who);
+    return [w, fill(line)];
+  });
+  return { text: beats.join(" "), beats, talk, cat: cat || key.replace(/\d+$/, ""), co, key };
 }
 // ---- effects ----
 function applyTo(id, pid, ctx) {
@@ -179,10 +246,13 @@ export function book(pid, lead = "lt", paid = true) {
   const st = bookState(pid, lead, paid); if (!st.ok) return st;
   const pg = PROGS[pid], h = H(), t = now();
   if (paid) { spend({ rations: pg.fr }, "holodeck"); h.n.spent += pg.fr; }
-  const who = [lead, ...(pg.kind === "group" ? groupFor(lead) : [])];
+  const inv = lead === "lt" ? inviteState() : null, guest = inv && inv.guest && inv.guest !== "solo" && occ(inv.guest) ? inv.guest : null;
+  let extra = pg.kind === "group" ? groupFor(lead) : [];
+  if (guest && !extra.includes(guest)) extra = [guest, ...extra.filter(x => x !== guest)].slice(0, HOLO.groupMax - 1);
+  const who = [lead, ...extra];
   for (const id of who) { applyTo(id, pid, { paid }); if (id !== "lt") h.busy[id] = { prog: pid, endT: t + pg.min * 60, self: !paid }; if (pg.gapDays) h.risa[id] = laterDay(h.risa[id], addDays(dayKey(), pg.gapDays)); }   // the Lt's own session is instant (no timer)
-  if (lead === "lt") { const d = laterDay(localDate(), dOf(h.lt && h.lt.d)), u = h.lt && dOf(h.lt.d) === d ? h.lt : { d, n: 0 }; u.n++; h.lt = u; }   // A(a): the stored date never moves back
-  const bl = blurbFor(pid, lead);
+  if (lead === "lt") { const d = laterDay(localDate(), dOf(h.lt && h.lt.d)), u = h.lt && dOf(h.lt.d) === d ? h.lt : { d, n: 0 }; u.n++; h.lt = u; }   // A(a): the stored date never moves back; refusals never touch this
+  const bl = blurbFor(pid, lead, guest);
   if (paid && lead !== "lt") {   // gift-like: +1 opinion, max 1 per person per ship's day
     if (h.paid[lead] !== P().day) { h.paid[lead] = P().day; nudge(lead, HOLO.opinion, "holodeck"); }
     h.n.crew++;
@@ -191,7 +261,7 @@ export function book(pid, lead = "lt", paid = true) {
   h.n.sessions++; if (!paid) h.n.self++;
   const names = who.filter(id => id !== "lt").map(nm);
   if (paid) log(lead === "lt" ? `Holodeck: ${pg.name}${names.length ? ` with ${names.join(", ")}` : ""}. ${bl.text}` : `You book the holodeck for ${nm(lead)}: ${pg.name}${names.length > 1 ? ` with ${names.slice(1).join(", ")}` : ""}.${fits(lead, pid) ? ` ${nm(lead)} loves it.` : ""}`, "good");
-  return { ok: true, pid, who, blurb: bl.text, cat: bl.cat, loved: lead !== "lt" && fits(lead, pid) };
+  return { ok: true, pid, who, blurb: bl.text, beats: bl.beats, talk: bl.talk, cat: bl.cat, loved: lead !== "lt" && fits(lead, pid) };
 }
 // crew on their own: once in a while an off-shift crewmember with low Fun or real stress signs out a cheap program (free)
 export function tickHolo(h) {
@@ -221,6 +291,11 @@ export function hardenHolo(p) {
   out.uses = map(s.uses, v => { if (!v || typeof v !== "object") return undefined; const o = {}; for (const [pid, u] of Object.entries(v)) if (PROGS[pid] && u && Number.isInteger(u.d) && f(u.n)) o[pid] = { d: u.d, n: clamp(Math.floor(u.n), 0, 99) }; return o; });
   if (s.recent && typeof s.recent === "object") for (const pid of PROG_IDS) if (Array.isArray(s.recent[pid])) out.recent[pid] = s.recent[pid].filter(k => typeof k === "string").slice(-HOLO.recent);
   if (s.n && typeof s.n === "object") for (const k of Object.keys(out.n)) if (f(s.n[k])) out.n[k] = clamp(Math.floor(s.n[k]), 0, 1e7);
+  { const inv = s.invite; if (inv && typeof inv === "object" && dOf(inv.d)) {
+      const rolls = {}; if (inv.rolls && typeof inv.rolls === "object") for (const [id, v] of Object.entries(inv.rolls)) if (ok(id) && (v === true || v === false)) rolls[id] = v;
+      const guest = inv.guest === "solo" || (typeof inv.guest === "string" && ok(inv.guest)) ? inv.guest : null;
+      out.invite = { d: inv.d, rolls, nos: clamp(Math.floor(+inv.nos || 0), 0, 2), guest };
+    } else out.invite = null; }
   p.holo = out;
 }
 addHardener(hardenHolo);

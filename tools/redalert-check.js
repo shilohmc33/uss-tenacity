@@ -142,15 +142,26 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
     }
     // ======== RA(b): damage-control calls ========
     await p.evaluate(PREP);
-    // ---- RA-a #5: the toasts never sit under the Red Alert button (all 3 sizes) ----
+    // ---- RA-a #5: the toasts never sit under the Red Alert button or battle HUD (all 3 sizes); tray is pe-none ----
     R.toast = await p.evaluate(async () => { const BT = await import('/js/battle.js'), BUS = await import('/js/bus.js'), G = __T.G; G.sp.lastBattleT = -1e9; BT.startBattle('enroute', { enemies: ['galor'] });
       for (let i = 0; i < 5; i++) BUS.toast('⚠ Test toast number ' + i + ' — long enough to wrap the line', i % 2 ? 'crit' : 'warn');
-      await new Promise(r => setTimeout(r, 400)); const b = document.querySelector('#raBtn').getBoundingClientRect(), hit = [];
-      for (const box of [[], ['top'], ['side']]) { const tb = document.querySelector('#toasts'); tb.classList.remove('top', 'side'); box.forEach(c => tb.classList.add(c)); await new Promise(r => setTimeout(r, 60));
-        for (const t of document.querySelectorAll('#toasts .toast')) { const r = t.getBoundingClientRect(), tr = tb.getBoundingClientRect(), vis = Math.min(r.bottom, tr.bottom) - Math.max(r.top, tr.top) > 1; if (vis && r.left < b.right && r.right > b.left && Math.min(r.bottom, tr.bottom) > b.top && Math.max(r.top, tr.top) < b.bottom) hit.push(box.join('') || 'bottom'); } }
-      document.querySelector('#toasts').classList.remove('top', 'side'); return { n: document.querySelectorAll('#toasts .toast').length, hit, shown: !document.querySelector('#raBtn').hidden }; });
-    if (tag === '844x390') await p.screenshot({ path: OUT + `ra-b-button-toast-${tag}.png` });
-    ok(R.toast.shown && R.toast.n >= 3 && R.toast.hit.length === 0, `toasts clear of the Red Alert button ${tag} ` + J(R.toast));
+      await new Promise(r => setTimeout(r, 400));
+      const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.bottom > b.top && a.top < b.bottom;
+      const hit = [], pe = getComputedStyle(document.querySelector('#toasts')).pointerEvents;
+      const targets = () => {
+        const out = []; const ra = document.querySelector('#raBtn'); if (ra && !ra.hidden) out.push({ id: 'raBtn', r: ra.getBoundingClientRect() });
+        const bh = document.querySelector('#battleHud'); if (bh && !bh.hidden) out.push({ id: 'battleHud', r: bh.getBoundingClientRect() });
+        return out;
+      };
+      for (const box of [[], ['top'], ['side']]) { const tb = document.querySelector('#toasts'); tb.classList.remove('top', 'side'); box.forEach(c => tb.classList.add(c)); await new Promise(r => setTimeout(r, 80));
+        const tg = targets();
+        for (const t of document.querySelectorAll('#toasts .toast')) { const r = t.getBoundingClientRect(), tr = tb.getBoundingClientRect(), vis = Math.min(r.bottom, tr.bottom) - Math.max(r.top, tr.top) > 1;
+          if (!vis) continue; const clipped = { left: r.left, right: r.right, top: Math.max(r.top, tr.top), bottom: Math.min(r.bottom, tr.bottom) };
+          for (const tg1 of tg) if (overlaps(clipped, tg1.r)) hit.push((box.join('') || 'bottom') + '>' + tg1.id); } }
+      document.querySelector('#toasts').classList.remove('top', 'side');
+      return { n: document.querySelectorAll('#toasts .toast').length, hit, shown: !document.querySelector('#raBtn').hidden, pe, z: getComputedStyle(document.querySelector('#toasts')).zIndex }; });
+    if (tag === '844x390' || tag === '390x844') await p.screenshot({ path: OUT + `ra-b-button-toast-${tag}.png` });
+    ok(R.toast.shown && R.toast.n >= 3 && R.toast.hit.length === 0 && R.toast.pe === 'none' && +R.toast.z >= 55, `toasts clear of RA/battle + pe-none ${tag} ` + J(R.toast));
     // ---- the call card in a live fight the Lt engaged (all 3 sizes): opens at the threshold, holds the fight, fits ----
     await p.evaluate(async () => { const BT = await import('/js/battle.js'), G = __T.G; document.querySelectorAll('#toasts .toast').forEach(t => t.remove()); __T.PACE_RT.idleT = 0; BT.engageAlert('lt');
       const B = G.sp.battle; B.enemies.forEach(e => { e.hull = e.max = 1e5; }); B.startedAt = G.ship.elapsed - 20; G.ship.shields = 50; G.ship.hull = 80; });

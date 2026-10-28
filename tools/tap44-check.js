@@ -86,6 +86,9 @@ async function mode(p, m) { await p.evaluate(m => document.querySelector(m === '
     await opened(p, tag, 'vignette bonus', '#vigBox .vbBonus'); n += await measure(p, tag, 'vignette bonus');
     await p.evaluate(() => { __T.VG.endVig('x'); __T.setView('deck'); }); await sleep(300);
     await p.evaluate(async () => { const H = await import('/js/ui/hud.js'); H.openLiftPanel(); }); await sleep(800); await opened(p, tag, 'turbolift', '#liftPanel'); n += await measure(p, tag, 'turbolift'); await closeAll(p);
+    // Oct 27: holodeck invite picker (Lt booking screen)
+    await p.evaluate(async () => { const HD = await import('/js/holodeck.js'), H = await import('/js/ui/holo.js'); HD.H().lt = { d: '', n: 0 }; HD.H().invite = null; document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); H.openHolo('lt'); }); await sleep(600);
+    await opened(p, tag, 'holodeck invite', '#holoPanel .holoinv'); n += await measure(p, tag, 'holodeck invite'); await p.evaluate(() => { const m = document.getElementById('holoPanel'); if (m) m.hidden = true; });
     await p.evaluate(() => document.querySelector('#btnView').click()); await sleep(600); n += await measure(p, tag, 'space view');
     await p.evaluate(async () => { const B = await import('/js/battle.js'); B.startBattle(); }); await sleep(1500); n += await measure(p, tag, 'battle'); 
     report.sizes[tag] = { controls: n, small: report.fails.filter(f => f.size === tag).length };

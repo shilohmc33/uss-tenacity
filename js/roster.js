@@ -189,7 +189,7 @@ export const PRONOUNS = {
 // pr(o, "sub") -> "she"; Pr(o, "sub") -> "She". o: an occupant, alumnus, roster entry or crew-list row (falls back to they)
 export const pr = (o, form = "sub") => (PRONOUNS[o && o.pronoun] || PRONOUNS.they)[form];
 // fill {sub} {obj} {pos} {ref} (and {Sub} etc. capitalised) in a crew line for crewmate o
-export const prFill = (str, o) => str.replace(/\{(sub|obj|pos|poss|ref|Sub|Obj|Pos|Poss|Ref)\}/g, (_, f) => f[0] === f[0].toUpperCase() ? Pr(o, f.toLowerCase()) : pr(o, f));
+export const prFill = (str, o) => str.replace(/\{(sub|obj|pos|poss|ref|is|has|s|Sub|Obj|Pos|Poss|Ref|Is|Has)\}/g, (_, f) => f === 's' ? pr(o, 's') : (f[0] === f[0].toUpperCase() ? Pr(o, f.toLowerCase()) : pr(o, f)));
 export const Pr = (o, form = "sub") => { const w = pr(o, form); return w.charAt(0).toUpperCase() + w.slice(1); };
 // ---- crew needs N2: quirks (notes/2026-10-22-crew-needs-plan.md §4). Effects live in needs.js / mood.js. ----
 export const QUIRKS = {

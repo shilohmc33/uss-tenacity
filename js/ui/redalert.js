@@ -73,6 +73,6 @@ export function updateRedAlert() {
     const t = `<b>⚠ RED ALERT</b><span>${esc(tr ? tr.label : shipOf({ ship: A.enemies[0] }).name)}</span><small>${ok ? `RESPOND ▸ · T'Ren in ${left} s` : "hold"}</small>`;
     if (btn.dataset.t !== t) { btn.innerHTML = t; btn.dataset.t = t; }
   } else btn.hidden = true;
-  document.body.classList.toggle("ra-held", !btn.hidden); if (!btn.hidden) { const h = btn.offsetHeight + 24 + "px"; if (document.body.style.getPropertyValue("--ra-h") !== h) document.body.style.setProperty("--ra-h", h); }   // RA-a #5: the toasts stack above the button
+  document.body.classList.toggle("ra-held", !btn.hidden); if (!btn.hidden) { const br = btn.getBoundingClientRect(), clear = Math.max(btn.offsetHeight + 24, Math.ceil(innerHeight - br.top + 10)); const h = clear + "px"; if (document.body.style.getPropertyValue("--ra-h") !== h) document.body.style.setProperty("--ra-h", h); }   // RA-a #5: viewport clearance above #raBtn (fixed #toasts after D2)
   if (open) { if ((!G.sp.alert && !G.sp.battle) || uiBlocked("dcCard")) closeView(); else render(); }   // a sheet or panel opening over it closes the view
 }
