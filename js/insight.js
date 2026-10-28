@@ -223,4 +223,4 @@ hooks.newDay.push(() => {
   if (K().enabled) for (const d of K().decor) if (placed.includes(d)) addXP(K().xp.decorDay, "decor");
 });
 
-export { chatView, answerChat, dismissChat, startChatSession, tickTalk, endApproach, scrubSavedApproach, NEAR_PX, APPROACH_TIMEOUT } from "./crew-talk.js";
+export { chatView, answerChat, dismissChat, startChatSession, tickTalk, endApproach, endApproachesOnAlert, scrubSavedApproach, NEAR_PX, APPROACH_TIMEOUT } from "./crew-talk.js";

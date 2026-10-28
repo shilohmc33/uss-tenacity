@@ -337,6 +337,34 @@ const ok = (c, m) => { if (!c) { fails++; console.error('FAIL', m); } else conso
     ok(K.pend === 'comm' && K.reason === 'injured', `${tag} K injured → COMM ` + J(K));
     ok(K.clean && K.headingPost, `${tag} K injured clears walk; to post ` + J(K));
 
+    // ---- L: red alert raised (G.sp.alert) clears approach immediately → battle station ----
+    const L = await p.evaluate(async () => {
+      const CT = await import('/js/crew-talk.js'), IN = await import('/js/insight.js'), NA = await import('/js/npc-ambient.js'), G = __T.G;
+      IN.dismissBeat(); IN.dismissChat();
+      G.lt.deck = 'lounge'; G.lt.x = 0.55; G.lt.y = 0.42; G.lt.mode = 'use'; G.lt.node = 'mess'; G.lt.lift = false;
+      G.sp.battle = null; G.sp.alert = null;
+      const th = NA.ambient.find(a => a.occId === 'thelev');
+      th.deck = 'lounge'; th.x = 0.70; th.y = 0.55; th.mode = 'dwell'; th.path = null; th.next = null; delete th._talkApproach;
+      IN.startBeat('thelev');
+      let pend = IN.pending();
+      if (pend.mode !== 'approaching') { pend.mode = 'approaching'; pend.wait = 0; CT.approachSpeaker('thelev'); }
+      // Simulate raiseAlert setting G.sp.alert (enemies shape minimal for presence)
+      G.sp.alert = { kind: 'enroute', enemies: ['galor'], wing: true, allies: [], t: 0, at: G.ship.elapsed };
+      CT.endApproachesOnAlert();
+      pend = IN.pending();
+      const post = th.cfg.spots[0];
+      const out = {
+        pend: pend && pend.mode, reason: pend && pend.reason,
+        clean: !th._talkApproach && th.next !== 'chat' && th.next !== 'crewTalk' && (th.mode === 'dwell' || (th.mode === 'walk' && th.next === 'dwell')),
+        station: th.mode === 'walk' && th.next === 'dwell' && th.spot && post && th.spot.id === post.id,
+        next: th.next, mode: th.mode,
+      };
+      G.sp.alert = null;
+      return out;
+    });
+    ok(L.pend === 'comm' && L.reason === 'alert', `${tag} L red alert → COMM ` + J(L));
+    ok(L.clean && L.station, `${tag} L alert clears walk; to battle station ` + J(L));
+
     await ctx.close();
   }
   console.log(fails ? `FAILS ${fails}` : `PASS · speaker-check · 3 sizes`);

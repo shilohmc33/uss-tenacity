@@ -132,7 +132,7 @@ document.querySelectorAll("[data-sheet]").forEach(b => b.onclick = () => {
 $("#sheetClose").onclick = closeSheet;
 window.addEventListener("resize", resize);
 document.addEventListener("gesturestart", e => e.preventDefault());
-document.addEventListener("touchmove", e => { if (!e.target.closest("#panels,.chips,.card,.storypanel")) e.preventDefault(); }, { passive: false });
+document.addEventListener("touchmove", e => { if (!e.target.closest("#panels,.chips,.card,.storypanel,#holoPanel,#holoScene,.holocard,.holobody,.holoblurb,.holostory,.holodecline,.holoscene,.holoframe")) e.preventDefault(); }, { passive: false });
 on("fx", (k, d) => { if (k === "openLift") openLiftPanel(); else if (k === "closeLift") closeLiftPanel(); else { if (k === "levelUp" || k === "promotion") flashLevel(); deckFx(k, d); } });
 
 // ---------- loop ----------

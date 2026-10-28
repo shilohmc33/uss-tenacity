@@ -3,7 +3,7 @@
 //  2. yes/no opinion effects; 2-try limit; no reroll on reload; daily slot spent only when a session starts
 //  3. romance-off: no partner odds boost / no partner stories; injured + not-aboard hidden from picker
 //  4. stories: >=3 variants per program x category; last-3 no-repeat; co-star talk by relationship; tokens resolve
-//  5. scene text fits; proof shot shots/holo-invite-<size>.png (picker) and shots/holo-invite-story-<size>.png (co-star)
+//  5. scene text fits (in-frame + scrollable story + sticky foot); proof shot shots/holo-invite-<size>.png (picker) and shots/holo-invite-story-<size>.png (co-star)
 // Usage: node tools/invite-check.js (SHOTS=0 skips shots)
 const { chromium } = require('playwright-core'); const path = require('path');
 const BASE = process.env.BASE || 'http://127.0.0.1:8765/', OUT = path.resolve(__dirname, '..', 'shots') + '/', SHOTS = process.env.SHOTS !== '0';
@@ -180,34 +180,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     });
     ok(R5.n >= 2 && R5.all44, `${tag} invite picker taps >= 44px ` + J(R5));
 
-    // force yes + book + story shot (direct book so the invited co-star is guaranteed)
+    // force yes + book + story shot via real showScene (scrollable blurb; sticky foot)
     await p.evaluate(async () => {
       const HD = await import('/js/holodeck.js'), H = await import('/js/ui/holo.js'), G = __T.G;
       const id = G.prog.crew.slots.science; G.prog.opinions[id] = 70;
       HD.H().lt = { d: '', n: 0 }; HD.H().invite = null; HD.invite(id, () => 0);
       const r = HD.book('dixon_hill', 'lt', true);
       document.getElementById('holoPanel').hidden = true;
-      // mirror showScene
-      const m = document.getElementById('holoScene') || (() => { const d = document.createElement('div'); d.id = 'holoScene'; d.className = 'modal holoscene'; document.body.appendChild(d); return d; })();
-      const who = r.who.filter(x => x !== 'lt').map(x => G.prog.crew.occ[x].short);
-      const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
-      const beats = (r.beats || [r.blurb]).map(t => `<p class="holobeat">${esc(t)}</p>`).join('');
-      const talk = (r.talk || []).map(([w, line]) => `<div class="holotalk"><b>${esc(w)}</b> ${esc(line)}</div>`).join('');
-      m.className = 'modal holoscene'; m.hidden = false;
-      m.innerHTML = `<div class="holoframe"><img src="assets/holodeck/holo_dixon_hill.webp" alt=""><div class="holoblurb"><b>DIXON HILL${who.length ? ' · ' + esc(who.join(', ')) : ''}</b><div class="holostory">${beats}${talk ? `<div class="holotalks">${talk}</div>` : ''}</div><small>Tap to close</small></div></div>`;
+      H._holoTestShowScene('dixon_hill', r);
       window.__inviteStory = { beats: (r.beats || []).length, talk: (r.talk || []).length, cat: r.cat };
     });
     await sleep(500);
     const R6 = await p.evaluate(() => {
       const bl = document.querySelector('#holoScene .holoblurb'), st = document.querySelector('#holoScene .holostory');
-      const fr = document.querySelector('#holoScene .holoframe');
+      const fr = document.querySelector('#holoScene .holoframe'), foot = document.querySelector('#holoScene .holofoot');
       if (!bl || !fr) return { open: false };
-      const br = bl.getBoundingClientRect(), rr = fr.getBoundingClientRect();
+      const br = bl.getBoundingClientRect(), rr = fr.getBoundingClientRect(), frt = foot && foot.getBoundingClientRect();
       const band = br.height / rr.height;
       const beats = [...document.querySelectorAll('#holoScene .holobeat')].map(e => e.textContent);
       const talks = [...document.querySelectorAll('#holoScene .holotalk')].map(e => e.textContent);
       const overflow = st && st.scrollHeight > st.clientHeight + 2;
-      return { open: true, band, beats: beats.length, talks: talks.length, overflow, fit: br.bottom <= rr.bottom + 1 && br.top >= rr.top - 1 && band <= 0.35 };
+      const oy = st && getComputedStyle(st).overflowY;
+      const scrollOk = !overflow || oy === 'auto' || oy === 'scroll';
+      const inFrame = br.bottom <= rr.bottom + 2 && br.top >= rr.top - 2;
+      const footIn = !!(frt && frt.bottom <= innerHeight + 2 && frt.top >= 0);
+      // Oct 28: blurb may use up to ~52dvh (scroll inside); old 0.35 band cap replaced by in-frame + scrollable + foot reachable
+      return { open: true, band, beats: beats.length, talks: talks.length, overflow, scrollOk, footIn, fit: inFrame && scrollOk && footIn && band <= 0.6 };
     });
     if (SHOTS) await p.screenshot({ path: `${OUT}holo-invite-story-${tag}.png` });
     const meta = await p.evaluate(() => window.__inviteStory || {}); ok(R6.open && R6.beats >= 3 && (R6.talks >= 2 || meta.talk >= 2) && R6.fit && meta.cat === 'friend', `${tag} co-star story scene fits ` + J({ R6, meta }));

@@ -271,7 +271,7 @@ function tickOne(n, dt) {
   const L = G.lt, so = n.cfg.social, node = ltSocialNode(n), now = G.ship.elapsed, R = PROG.roster;
   if (n.doneNode && node !== n.doneNode) n.doneNode = null;   // he left: may chat again next time
   n.moving = false; n.action = null; n.chatWith = null;
-  const busyChat = n.mode === "chat" || (n.mode === "walk" && (n.next === "chat" || n.next === "intro"));
+  const busyChat = n.mode === "chat" || (n.mode === "walk" && (n.next === "chat" || n.next === "intro" || n.next === "crewTalk"));
   // a newcomer introduces themself: walk over to wherever he is on this deck
   if (introPending(n) && !busyChat && L.deck === n.deck && !L.lift && !lockedBy(n) && dDist(n.x, n.y, L.x, L.y) <= R.introRange) {
     const sp = besideLt(n);

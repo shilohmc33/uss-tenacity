@@ -16,6 +16,7 @@ import { suspendPrompt } from "./background.js";
 import { pushMoment } from "./moments.js";   // Bigger wins #11   // Q1b #1: the Academy prompt steps aside for a red alert / battle
 import { fxTimeScale, deathTotal, clearShipFx } from "./render/shipfx.js";
 import { SHIPS, makeAlly, makeEnemy, foe, liveOf, shipOf, gunOf, gunGap, hullPct, SLOTS } from "./ships.js";
+import { endApproachesOnAlert } from "./crew-talk.js";
 
 // Battle groundwork: G.sp.battle = { ctx, enterT, dying, cd, startedAt, inflight, injN, allies: [combatant], enemies: [combatant],
 // target } (js/ships.js). Still one-on-one: the officers fight foe(B) (enemies[target]) with the Tenacity, whose live
@@ -131,6 +132,7 @@ function raiseAlert(Rl, opts) {
   suspendPrompt();
   const SP = G.sp; if (SP.travel) SP.travelPaused = true;
   const { away: _aw, ...R0 } = Rl; SP.alert = { ...R0, soft: !!opts.soft, t: 0, at: G.ship.elapsed };
+  endApproachesOnAlert();   // E1: approaching crew go to battle stations as soon as the alert is raised
   const tr = threatRead(alertBattle(SP.alert)), d = SHIPS[Rl.enemies[0]];
   log(`Hale: 'Contact — ${d.a}${Rl.enemies.length > 1 ? ` and ${Rl.enemies.length - 1} more` : ""}, holding at range. All stop, shields up.' Red alert: your call, Lieutenant.`, "fault");
   toast(`⚠ RED ALERT — ${d.name}${tr ? ` · T'Ren: ${tr.word}` : ""} · tap to respond`, "crit");

@@ -59,6 +59,7 @@ function inviteHtml() {   // Lt booking only: invite picker (odds as words; refu
   const soloDis = st.guest ? " disabled" : "";
   return `<div class="plsec">INVITE</div><p class="cnote holoinvstat">${status}</p><div class="holoinvs">${btns}<button type="button" class="holoinv solo" data-holo-solo="1"${soloDis}>Go solo</button></div>`;
 }
+let lastDecline = "";   // last invite decline line (shown in-panel so it can scroll; toast alone truncates on small phones)
 function renderPanel(note = "") {   // note: the reason a tapped row can't book (shown at the top of the panel, over which toasts can't be seen)
   const m = modal("holoPanel"), lvl = insightLvl();
   const crew = Object.values(G.prog.crew.slots).filter(id => id && occ(id));
@@ -69,19 +70,25 @@ function renderPanel(note = "") {   // note: the reason a tapped row can't book 
     return `<div class="req holorow${st.ok ? "" : " off"}"><img class="holothumb" src="assets/holodeck/holo_${pid}.webp" alt=""><div>${esc(pg.name)}${fit ? ` <b class="holofit" title="suits their quirks">♥</b>` : ""}<small>${pg.min} min · ${DESC[pid]}${st.ok || rs ? "" : ` · ${esc(st.why)}`}</small></div><button data-holo-book="${pid}"${st.ok ? "" : ' aria-disabled="true"'}>${pg.fr} ${FR()}</button></div>`;
   }).join("");
   const used = target === "lt" && HD.ltLeft() <= 0, lim = badClock() ? `<p class="hololimit" role="status"><b>RE-SYNCING</b> Re-syncing ship's chronometer… Holodeck bookings resume once it settles (about an hour).</p>` : used ? `<p class="hololimit${note ? " flash" : ""}" role="${note ? "alert" : "status"}"><b>UNAVAILABLE TODAY</b> You've had your holodeck time today. ${esc(HD.ltNextText())}.</p>` : target === "lt" ? `<p class="cnote hololeft">Your holodeck time: ${HD.ltLeft()} session${HD.ltLeft() === 1 ? "" : "s"} left today (resets at midnight). Bookings for crewmates don't count.</p>` : "", why = note && !used ? `<p class="hololimit flash" role="alert"><b>CAN'T BOOK THAT</b> ${esc(note)}</p>` : "";
-  m.innerHTML = `<div class="card holocard"><h3>HOLODECK</h3>${lim}${why}<p class="cnote">${G.prog.rations} ${FR()} on hand. Booking for <select id="holoFor">${opts}</select>${lvl < CARE.insightQuirk1 ? " · Insight 2 shows which programs suit someone" : ""}</p>${inviteHtml()}${rows}<button class="close" data-holo-close="1">CLOSE</button></div>`;
+  const dec = lastDecline ? `<p class="holodecline" role="status">${esc(lastDecline)}</p>` : "";
+  m.innerHTML = `<div class="card holocard"><div class="holobody"><h3>HOLODECK</h3>${lim}${why}${dec}<p class="cnote">${G.prog.rations} ${FR()} on hand. Booking for <select id="holoFor">${opts}</select>${lvl < CARE.insightQuirk1 ? " · Insight 2 shows which programs suit someone" : ""}</p>${inviteHtml()}${rows}</div><div class="holofoot"><button class="close" data-holo-close="1">CLOSE</button></div></div>`;
 }
 export function openHolo(forId = "lt") { target = forId || "lt"; renderPanel(); modal("holoPanel").hidden = false; }
+export function _holoTestSetDecline(t) { lastDecline = t || ""; }   // holo-scroll-check: force longest decline into the panel
+export function _holoTestShowScene(pid, res) { showScene(pid, res); }
 function showScene(pid, res) {
   const m = modal("holoScene");
   m.className = "modal holoscene";
   const who = res.who.filter(x => x !== "lt").map(x => occ(x).short);
   const beats = (res.beats && res.beats.length ? res.beats : [res.blurb]).map(t => `<p class="holobeat">${esc(t)}</p>`).join("");
   const talk = (res.talk || []).map(([w, line]) => `<div class="holotalk"><b>${esc(w)}</b> ${esc(line)}</div>`).join("");
-  m.innerHTML = `<div class="holoframe" data-holo-scene-close="1"><img src="assets/holodeck/holo_${pid}.webp" alt="${esc(HD.PROGS[pid].name)}"><div class="holoblurb"><b>${esc(HD.PROGS[pid].name.toUpperCase())}${who.length ? ` · ${esc(who.join(", "))}` : ""}</b><div class="holostory">${beats}${talk ? `<div class="holotalks">${talk}</div>` : ""}</div><small>Tap to close${res.loved ? " · they loved it" : ""}</small></div></div>`;
+  // title + scrollable story (beats + co-star talk) + sticky foot so "Tap to close" stays reachable
+  m.innerHTML = `<div class="holoframe" data-holo-scene-close="1"><img src="assets/holodeck/holo_${pid}.webp" alt="${esc(HD.PROGS[pid].name)}"><div class="holoblurb"><b class="holotitle">${esc(HD.PROGS[pid].name.toUpperCase())}${who.length ? ` · ${esc(who.join(", "))}` : ""}</b><div class="holostory">${beats}${talk ? `<div class="holotalks">${talk}</div>` : ""}</div><div class="holofoot"><small>Tap to close${res.loved ? " · they loved it" : ""}</small></div></div></div>`;
   m.hidden = false;
   const bl = m.querySelector(".holoblurb"), st = bl.querySelector(".holostory");
   bl.classList.toggle("more", st && st.scrollHeight > st.clientHeight + 1);   // P30: scroll cue when the multi-beat text overflows
+  // stop scroll gestures on the story from closing the scene
+  if (st) st.addEventListener("click", e => e.stopPropagation(), { passive: true });
 }
 function act(e) {
   const t = e.target.closest("[data-holo-open],[data-holo-book],[data-holo-close],[data-holo-scene-close],[data-holo-invite],[data-holo-solo],[data-shore],[data-care-tool]");
@@ -94,9 +101,9 @@ function act(e) {
   if (D.holoInvite) {
     const r = HD.invite(D.holoInvite);
     if (!r.ok) { toast(r.why, "warn"); renderPanel(); return; }
-    if (r.yes) toast(`${occ(r.guest).short} said yes.`, "good");
-    else if (r.line) toast(r.line, r.forced ? "warn" : "info");
-    else if (r.forced) toast("Two declines — going solo.", "warn");
+    if (r.yes) { lastDecline = ""; toast(`${occ(r.guest).short} said yes.`, "good"); }
+    else if (r.line) { lastDecline = r.line; toast(r.line, r.forced ? "warn" : "info"); }
+    else if (r.forced) { lastDecline = "Two declines — going solo."; toast(lastDecline, "warn"); }
     renderPanel(); return;
   }
   if (D.holoBook) {

@@ -938,6 +938,7 @@ export function speakerPresence(id) {
   const o = P().crew && P().crew.occ[id]; if (!o) return { mode: "skip", reason: "not aboard" };
   if (injuredIds().has(id)) return { mode: "comm", reason: "injured" };
   if (G.sp && G.sp.battle) return { mode: "comm", reason: "battle" };
+  if (G.sp && G.sp.alert) return { mode: "comm", reason: "alert" };
   const mod = NASync();
   if (!mod) return { mode: "comm", reason: "ambient-unready" };
   const n = mod.ambient.find(a => a.occId === id && a.x != null);
@@ -967,6 +968,26 @@ export function endApproach(id, reason = "end") {
       if (n._talkApproach) delete n._talkApproach;
       if (n.mode === "walk" || n.mode === "chat") { n.mode = "dwell"; n.t = 1; n.chatWith = null; }
     }
+  }
+}
+
+/** Red alert raised (G.sp.alert set): clear every mid-approach walker to their battle station and flip pending to COMM. */
+export function endApproachesOnAlert() {
+  const talk = (() => { try { return T(); } catch (e) { return null; } })();
+  if (talk && talk.pending && talk.pending.mode === "approaching") {
+    endApproach(talk.pending.who, "alert");
+    talk.pending.mode = "comm"; talk.pending.reason = "alert";
+  }
+  try {
+    const b = P().insight && P().insight.beat && P().insight.beat.pending;
+    if (b && b.mode === "approaching") {
+      endApproach(b.id, "alert");
+      b.mode = "comm"; b.reason = "alert";
+    }
+  } catch (e) { /* insight may be mid-boot */ }
+  const mod = NASync();
+  if (mod) for (const a of mod.ambient) {
+    if (a && (a._talkApproach || a.next === "crewTalk")) mod.returnToDuty(a.occId);
   }
 }
 
@@ -1077,9 +1098,10 @@ export function tickApproach(rec, dt) {
   const frozen = idlePaused() || !isPresent() || !!(typeof document !== "undefined" && document.hidden) || !!(PACE_RT && PACE_RT.hidden);
   if (!frozen) rec.wait = (rec.wait || 0) + dt;
 
-  if (G.sp && G.sp.battle) {
-    rec.mode = "comm"; rec.reason = "battle";
-    endApproach(id, "battle");
+  if (G.sp && (G.sp.battle || G.sp.alert)) {
+    const why = G.sp.battle ? "battle" : "alert";
+    rec.mode = "comm"; rec.reason = why;
+    endApproach(id, why);
     toast(`📶 ${P().crew.occ[id].short} on comm instead`, "info");
     return "comm";
   }
