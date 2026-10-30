@@ -3,7 +3,9 @@
 // crew-safety prompt, romance disclosure. Per case: stage the owed prompt, start a battlecruiser fight, check the prompt is hidden
 // under the card, dismiss the card, finish the fight (enemy hull -> 1, the next hit wins), then count re-opens (100 ms sampling).
 // Sizes 390x844 + 844x390 + 1280x800. Report shots/p17-prompt-return.json.   usage: node tools/p17-prompt-return.js [url]
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 const PANEL = { spec: 'specPanel', board: 'boardPanel', safety: 'safetyPanel', disc: 'romPanel' };
 (async () => {
@@ -35,10 +37,10 @@ const PANEL = { spec: 'specPanel', board: 'boardPanel', safety: 'safetyPanel', d
     const after = await p.evaluate(id => { clearInterval(window.__samp); return { open: !document.getElementById(id).hidden, opens: window.__opens }; }, PANEL[cs]);
     rep[`${vp} ${cs}`] = { pre: pre.open, hiddenUnderCard: !during, openAfterCardMidFight: afterCard.open, reShown: after.open, reOpens: after.opens };
     if (!pre.open || during || !after.open || after.opens !== 1) errs.push(`${vp} ${cs} ${JSON.stringify(rep[`${vp} ${cs}`])}`);
-    if (cs === 'spec' && vp === '390x844') await p.screenshot({ path: 'shots/p17-prompt-return-spec-390x844.png' });
+    if (cs === 'spec' && vp === '390x844') await p.screenshot({ path: OUT + 'p17-prompt-return-spec-390x844.png' });
     await ctx.close();
   }
-  rep.errors = errs; fs.writeFileSync('shots/p17-prompt-return.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'p17-prompt-return.json', JSON.stringify(rep, null, 1));
   for (const [k, v] of Object.entries(rep)) if (k !== 'errors') console.log(k.padEnd(16), JSON.stringify(v));
   console.log(errs.length ? 'P17 PROMPTS FAIL' : 'P17 PROMPTS PASS', errs.length, errs.slice(0, 6)); await b.close();
 })();

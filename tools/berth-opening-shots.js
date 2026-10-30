@@ -2,7 +2,9 @@
 // new opening (744,534,42,61 design px): findPath from the lift node to the bay must pass it, and nothing walks over the
 // squashed bench / alcove wall end. Shots of the Lt standing in the opening: shots/berth-opening-<vp>.png; report
 // shots/berth-opening.json.   node tools/berth-opening-shots.js [url]
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await L.launch(); const rep = { vp: {}, shots: [] }; const errs = [];
@@ -31,7 +33,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
         return { x, y, width: Math.max(8, Math.min((X1 - X0) * s, rc.right - x)), height: Math.max(8, Math.min((Y1 - Y0) * s, rc.bottom - y)) }; });
       const f = `shots/berth-opening-${pose}-${vp}.png`; await p.screenshot({ path: f, clip: cl }); rep.shots.push(f); }
     await ctx.close(); }
-  rep.errors = errs; fs.writeFileSync('shots/berth-opening.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'berth-opening.json', JSON.stringify(rep, null, 1));
   for (const [vp, r] of Object.entries(rep.vp)) console.log(vp, JSON.stringify(r));
   console.log(errs.length ? 'BERTH OPENING FAIL' : 'BERTH OPENING PASS', errs.length, errs.slice(0, 6)); await b.close();
 })();

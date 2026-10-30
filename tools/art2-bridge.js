@@ -3,7 +3,9 @@
 // Live: the Lt sits in all 5 seats (fg occluders drawn for the right seat), walks lift -> each station / second lift
 // with every foot sample checked on the mask, T'Ren seated at home, the conn / ops crew seated (NPC seat hook).
 // Shots: shots/art2-bridge-<what>-<vp>.png; report shots/art2-bridge.json.   usage: node tools/art2-bridge.js [url]
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 const SEATS = ['chair', 'fo', 'counsel', 'conn', 'ops'], STATIONS = ['tactical', 'msd', 'science2', 'engineering', 'engineering2', 'mission_ops', 'environment', 'lift2'];
 (async () => {
@@ -78,7 +80,7 @@ const SEATS = ['chair', 'fo', 'counsel', 'conn', 'ops'], STATIONS = ['tactical',
     { const f = `shots/art2-bridge-full-${vp}.png`; await p.screenshot({ path: f }); rep.shots.push(f); }
     await ctx.close();
   }
-  rep.errors = errs; fs.writeFileSync('shots/art2-bridge.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'art2-bridge.json', JSON.stringify(rep, null, 1));
   const R = rep.vp['1280x800']; console.log('static', JSON.stringify(R.static.hip), 'offmask nodes', Object.entries(R.static.onMask).filter(([, v]) => !v).map(([k]) => k).join(',') || 'none', 'plate', R.static.plateLoaded, 'fg', R.static.fgLoaded, R.static.walkSrc);
   for (const [vp, V] of Object.entries(rep.vp)) { console.log(vp, 'seats', Object.entries(V.seats).map(([k, v]) => `${k}:${v.mode}/${v.blend}/fg[${v.fg}]`).join(' '));
     console.log(vp, 'walks', Object.entries(V.walks).map(([k, v]) => `${k}:${v.node || v.deck}/${v.offMask ?? ''}`).join(' ')); console.log(vp, 'npc', JSON.stringify(V.npc)); }

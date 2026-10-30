@@ -3,7 +3,9 @@
 // :8765); in engineering and the lounge Thelev and two male crew are parked in view (own sheet / male tint base).
 // Full viewport, composed side by side -> shots/art1-<room>-<size>.png, report shots/art1-shots.json
 // usage: node tools/art1-shots.js <beforeUrl> <afterUrl> [beforeLabel]
-const L = require('/workspace/playtest-scripts/lib.js'); const { execFileSync } = require('child_process'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const { execFileSync } = require('child_process'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const [BEFORE, AFTER, BLABEL = '9078b20'] = process.argv.slice(2);
 const ROOMS = { engineering: 'core', lounge: 'bar', berthing: 'bunk', bridge: 'chair', medical: 'biobed', quarters: 'rack' };
 const VPS = [['390x844', 390, 844, 1], ['844x390', 844, 390, 1], ['1280x800', 1280, 800, 0]];
@@ -38,7 +40,7 @@ b=Image.open('/tmp/a1-before-${room}-${vp}.png').convert('RGB'); a=Image.open('/
 if b.width>1400: b=b.resize((b.width//2,b.height//2)); a=a.resize((a.width//2,a.height//2))
 S=Image.new('RGB',(b.width+a.width+12,max(b.height,a.height)+34),(16,18,24)); S.paste(b,(0,34)); S.paste(a,(b.width+12,34))
 d=ImageDraw.Draw(S); d.text((6,6),'BEFORE ${BLABEL} (pre-art) · ${room} ${vp} · Lt ${a.mode} ${a.node}',fill=(255,210,120)); d.text((b.width+18,6),'AFTER art batch 1 · Lt ${c.mode} ${c.node}',fill=(140,230,255))
-S.save('shots/art1-${room}-${vp}.png')`]);
+S.save(OUT + 'art1-${room}-${vp}.png')`]);
   }
-  fs.writeFileSync('shots/art1-shots.json', JSON.stringify({ rep, errs }, null, 1)); console.log('errors', errs.length, errs.slice(0, 5)); await b.close();
+  fs.writeFileSync(OUT + 'art1-shots.json', JSON.stringify({ rep, errs }, null, 1)); console.log('errors', errs.length, errs.slice(0, 5)); await b.close();
 })();

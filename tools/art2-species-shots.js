@@ -2,7 +2,9 @@
 //   node tools/art2-species-shots.js [url]
 // Shots: shots/art2-species-{human-m2,human-f2,trill,vulcan}-{stand,walk}-<vp>.png; report shots/art2-species.json
 // (every roster crewmate's sheet, plus 40 synthetic transfer-ins per species/pronoun to show the variant spread).
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 const CASES = [['human-m2', 'hale', 'crew-human-m2-v1'], ['human-f2', 'seo', 'crew-human-f2-v1'], ['trill', 'orvin', 'crew-trill-v2'], ['vulcan', 'sorvan', 'crew-vulcan-m-v1']];
 (async () => {
@@ -39,6 +41,6 @@ const CASES = [['human-m2', 'hale', 'crew-human-m2-v1'], ['human-f2', 'seo', 'cr
     }
     await ctx.close();
   }
-  rep.errors = errs; fs.writeFileSync('shots/art2-species.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'art2-species.json', JSON.stringify(rep, null, 1));
   console.log(JSON.stringify(rep.vp['1280x800'].roster)); console.log(JSON.stringify(rep.vp['1280x800'].synthetic)); console.log('errors', errs.length, errs.slice(0, 5)); await b.close();
 })();

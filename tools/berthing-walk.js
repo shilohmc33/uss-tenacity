@@ -1,4 +1,7 @@
 const { chromium } = require('playwright-core');
+const path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { require('fs').mkdirSync(OUT, { recursive: true }); } catch (e) {}
 (async () => { const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const p = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', x => { if (x.type() === 'error') errs.push(x.text()); });
 await p.goto('http://127.0.0.1:8765/?reset=1&debug=1&walk=1'); await p.waitForFunction(() => window.__T && document.querySelector('#loading').classList.contains('done'), null, { timeout: 60000 });
@@ -6,5 +9,5 @@ const r = await p.evaluate(async () => { window.__noSave = true; document.queryS
   const P = await import('/js/path.js'), { DECKS } = await import('/js/data.js'); const Lt = __T.G.lt; Lt.deck = 'berthing'; Lt.lift = null; Lt.x = DECKS.berthing.lift.mx; Lt.y = DECKS.berthing.lift.my; Lt.mode = 'idle'; __T.cam.snap = true;
   const out = {}; for (const [id, n] of Object.entries(DECKS.berthing.nodes)) out[id] = !!P.findPath('berthing', Lt.x, Lt.y, n.x, n.y) && P.isWalkable('berthing', ...P.cellCenter(...P.nearestWalkable('berthing', n.x, n.y)));
   __T.sendUse('bunk'); return out; });
-await new Promise(r => setTimeout(r, 6000)); await p.screenshot({ path: 'shots/berthing-v2-walk-1280x800.png' });
+await new Promise(r => setTimeout(r, 6000)); await p.screenshot({ path: OUT + 'berthing-v2-walk-1280x800.png' });
 console.log(JSON.stringify({ paths: r, errs })); await b.close(); })();

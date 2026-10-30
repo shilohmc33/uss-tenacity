@@ -1,4 +1,4 @@
-// Wave A UI: meal / card night / personal quest panels (phone-first, sticky foot, scroll body).
+// Wave A–D UI: meal/cards/quest, duty/repair/mentor/log, show/spar, shore evening + away team.
 import { G } from "../state.js";
 import { toast } from "../bus.js";
 import * as LA from "../lt-act.js";
@@ -79,7 +79,8 @@ function renderQuestOffer() {
 function renderChat() {
   const meal = LA.mealView(), cards = LA.cardsView(), quest = LA.questView();
   const duty = LA.dutyView(), repair = LA.repairView(), mentor = LA.mentorView(), show = LA.showView(), spar = LA.sparView();
-  const v = meal || cards || duty || repair || mentor || show || spar || (quest && quest.here && quest.mode !== "wrong-deck" && quest.mode !== "approaching" ? quest : null);
+  const shore = LA.shoreView(), away = LA.awayView();
+  const v = meal || cards || duty || repair || mentor || show || spar || shore || away || (quest && quest.here && quest.mode !== "wrong-deck" && quest.mode !== "approaching" ? quest : null);
   const m = modal("ltActChat");
   if (!v) {
     if (quest && quest.mode === "approaching") {
@@ -99,7 +100,9 @@ function renderChat() {
   const tag = v.mode === "comm" ? "📶 " : "";
   const choices = (v.choices || []).map(c => `<button class="holoinv" data-ltact-ans="${c.j}" style="min-height:44px;width:100%;text-align:left">${esc(c.text)}</button>`).join("");
   const endBtn = v.end ? `<button class="close" data-ltact-ans="0" style="min-height:44px">Done</button>` : "";
+  const art = v.art ? `<div class="ltact-still" data-art="${esc(v.art)}"><img alt="" src="assets/story/${esc(v.art)}.webp" onerror="this.parentNode.classList.add('none')"></div>` : "";
   m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>${tag}${esc((v.title || v.kind || "CHAT").toString().toUpperCase())}</h3>
+    ${art}
     <p class="mline">${esc(v.q)}</p>
     <div class="holoinvs" style="flex-direction:column">${choices}</div>
   </div><div class="holofoot">${endBtn}<button class="close" data-ltact-dismiss="1" style="min-height:44px">NOT NOW</button></div></div>`;
@@ -232,7 +235,10 @@ export function openSpar() {
   if (LA.sparLeft() <= 0) { toast("Already sparred today", "warn"); return; }
   const s = LA.A().session;
   if (s && s.kind === "spar") { refreshLtAct(); return; }
-  if (G.lt.deck !== "lounge" && G.lt.deck !== "berthing") {
+  // MED: gymRoom ON → gym mat (stay if already there); else Mess/Berthing stand-in
+  if (LA.gymRoomOn()) {
+    if (G.lt.deck !== "gym") rideLiftTo("gym", { kind: "use", node: "mat" });
+  } else if (G.lt.deck !== "lounge" && G.lt.deck !== "berthing") {
     rideLiftTo("lounge", null);
   }
   renderSparInvite();
@@ -251,8 +257,60 @@ function renderSparInvite() {
 }
 
 
+export function openShore() {
+  const why = LA.blockedWhy(); if (why) { toast(why, "warn"); return; }
+  if (!LA.shoreGranted()) { toast("Request shore leave first", "warn"); return; }
+  if (LA.shoreLeft() <= 0) { toast("Already took a shore evening this visit", "warn"); return; }
+  const s = LA.A().session;
+  if (s && s.kind === "shore") { refreshLtAct(); return; }
+  renderShorePick();
+}
+
+function renderShorePick() {
+  const m = modal("ltActPanel");
+  const picks = LA.shorePicksList();
+  const targets = LA.inviteTargets("shore");
+  const inv = targets.map(t => `<button type="button" class="holoinv" data-ltact-ask="${esc(t.id)}" data-kind="shore" style="min-height:44px;width:100%;text-align:left">${esc(t.short)} · ${esc(t.word)}</button>`).join("");
+  const rows = picks.map(p => `<button type="button" class="holoinv" data-ltact-shore="${esc(p.id)}" style="min-height:44px;width:100%;text-align:left"><b>${esc(p.title)}</b><small style="display:block;opacity:.8">${esc(p.sub)}${p.needGuest ? " · invite first" : ""}</small></button>`).join("");
+  m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>SHORE EVENING · DS9</h3>
+    <p class="cnote">${LA.shoreLeft()} left this visit · present-only. Quark / Promenade reuse existing stills; temple art gated. Romance lines only if romance is on.</p>
+    <div class="plsec">EVENING</div>
+    <div class="holoinvs ltact-invlist">${rows}</div>
+    <div class="plsec">OPTIONAL COMPANION</div>
+    <div class="holoinvs ltact-invlist">${inv || "<p class='cnote'>Nobody free.</p>"}</div>
+    <p class="cnote" id="ltActNote"></p>
+  </div><div class="holofoot"><button class="close" data-ltact-close="1">CLOSE</button></div></div>`;
+  m.hidden = false;
+}
+
+export function openAway() {
+  const why = LA.awayReadyWhy(); if (why) { toast(why, "warn"); return; }
+  const s = LA.A().session;
+  if (s && s.kind === "away") { refreshLtAct(); return; }
+  renderAwayPick();
+}
+
+function renderAwayPick() {
+  const m = modal("ltActPanel");
+  const missions = LA.listAwayMissions();
+  const targets = LA.inviteTargets("away");
+  const inv = targets.map(t => `<button type="button" class="holoinv" data-ltact-ask="${esc(t.id)}" data-kind="away" style="min-height:44px;width:100%;text-align:left">${esc(t.short)} · ${esc(t.word)}</button>`).join("");
+  const rows = missions.map(p => `<button type="button" class="holoinv" data-ltact-away="${esc(p.id)}" style="min-height:44px;width:100%;text-align:left"><b>${esc(p.title)}</b><small style="display:block;opacity:.8">${esc(p.blurb)}</small></button>`).join("");
+  m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>AWAY TEAM</h3>
+    <p class="cnote">${LA.awayLeft()} left today · present-only · distinct from idle happenings. Invite 1+ teammate (or solo after two nos). War pacing: no ship kill. New stills gated (awayArt OFF).</p>
+    <div class="plsec">INVITE</div>
+    <div class="holoinvs ltact-invlist">${inv || "<p class='cnote'>Nobody free.</p>"}
+    <button type="button" class="holoinv solo" data-ltact-solo="away" style="min-height:44px;width:100%">Force solo (after declines)</button></div>
+    <p class="cnote" id="ltActNote"></p>
+    <div class="plsec">MISSION</div>
+    <div class="holoinvs ltact-invlist">${rows || "<p class='cnote'>No missions at this stop.</p>"}</div>
+  </div><div class="holofoot"><button class="close" data-ltact-close="1">CLOSE</button></div></div>`;
+  m.hidden = false;
+}
+
+
 function act(e) {
-  const t = e.target.closest("[data-ltact],[data-ltact-ask],[data-ltact-solo],[data-ltact-start],[data-ltact-close],[data-ltact-game],[data-ltact-accept],[data-ltact-ans],[data-ltact-dismiss],[data-ltact-goto],[data-ltact-repair],[data-ltact-mentor],[data-ltact-log],[data-ltact-logwrite],[data-ltact-showstart],[data-ltact-spar]");
+  const t = e.target.closest("[data-ltact],[data-ltact-ask],[data-ltact-solo],[data-ltact-start],[data-ltact-close],[data-ltact-game],[data-ltact-accept],[data-ltact-ans],[data-ltact-dismiss],[data-ltact-goto],[data-ltact-repair],[data-ltact-mentor],[data-ltact-log],[data-ltact-logwrite],[data-ltact-showstart],[data-ltact-spar],[data-ltact-shore],[data-ltact-away]");
   if (!t || t.disabled) return;
   const D = t.dataset;
   if (D.ltact === "meal") { openMeal(); return; }
@@ -266,6 +324,8 @@ function act(e) {
   if (D.ltact === "decor") { openDecorAct(); return; }
   if (D.ltact === "show") { openShow(); return; }
   if (D.ltact === "spar") { openSpar(); return; }
+  if (D.ltact === "shore") { openShore(); return; }
+  if (D.ltact === "away") { openAway(); return; }
   if (D.ltactClose) { closeAll(); return; }
   if (D.ltactGame) {
     const m = document.getElementById("ltActPanel"); if (m) m.dataset.game = D.ltactGame;
@@ -283,9 +343,15 @@ function act(e) {
     }
     else if (r.line) { toast(r.line, "info"); if (note) note.textContent = r.line; }
     else if (r.forced) { toast("Two declines — going solo.", "warn"); }
-    if (kind === "show") renderShowInvite(); else renderInvite(kind); return;
+    if (kind === "show") renderShowInvite();
+    else if (kind === "shore") renderShorePick();
+    else if (kind === "away") renderAwayPick();
+    else renderInvite(kind); return;
   }
-  if (D.ltactSolo) { LA.pickSolo(D.ltactSolo); toast("Going solo.", "info"); renderInvite(D.ltactSolo); return; }
+  if (D.ltactSolo) {
+    if (D.ltactSolo === "away") { LA.pickSoloAway(); toast("Away team solo.", "info"); renderAwayPick(); return; }
+    LA.pickSolo(D.ltactSolo); toast("Going solo.", "info"); renderInvite(D.ltactSolo); return;
+  }
   if (D.ltactStart) {
     const kind = D.ltactStart;
     const m = document.getElementById("ltActPanel");
@@ -323,6 +389,13 @@ function act(e) {
     } else if (s && s.kind === "spar") {
       const r = LA.answerSpar(+D.ltactAns);
       if (r && r.done) { closeAll(); toast(r.win ? "You took the bout" : "They took the bout", "good"); } else refreshLtAct();
+    } else if (s && s.kind === "shore") {
+      const r = LA.answerShore(+D.ltactAns);
+      if (r && r.done) { closeAll(); toast("Shore evening done", "good"); } else refreshLtAct();
+    } else if (s && s.kind === "away") {
+      const r = LA.answerAway(+D.ltactAns);
+      if (r && r.ok === false) toast(r.why, "warn");
+      else if (r && r.done) { closeAll(); toast("Away team returned", "good"); } else refreshLtAct();
     } else if (LA.A().quest.active) {
       const r = LA.answerQuest(+D.ltactAns);
       if (r && r.done) { closeAll(); toast(r.aborted ? "Ask dropped" : "Quest done", r.aborted ? "warn" : "good"); } else renderChat();
@@ -353,6 +426,29 @@ function act(e) {
     if (!r.ok) toast(r.why, "warn");
     else if (r.yes === false) toast(r.line || "Declined", "info");
     else { closeAll(); refreshLtAct(); }
+    return;
+  }
+  if (D.ltactShore) {
+    const r = LA.startShoreEvening(D.ltactShore);
+    if (!r.ok) { toast(r.why, "warn"); return; }
+    closeAll();
+    if (r.link === "holo") {
+      import("./holo.js").then(H => H.openHolo("lt"));
+      toast("Holosuite — evening counted", "good");
+      return;
+    }
+    if (r.link === "locker") {
+      import("./promenade.js").then(PM => { if (PM.promHooks.locker) PM.promHooks.locker(); });
+      toast("Gift locker — evening counted", "good");
+      return;
+    }
+    refreshLtAct();
+    return;
+  }
+  if (D.ltactAway) {
+    const r = LA.startAway(D.ltactAway);
+    if (!r.ok) { toast(r.why, "warn"); return; }
+    closeAll(); refreshLtAct();
     return;
   }
   if (D.ltactLogwrite) {

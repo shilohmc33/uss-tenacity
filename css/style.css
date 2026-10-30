@@ -412,6 +412,10 @@ body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height
 .holoinv.solo{background:var(--lc2)}.holoinv.done{opacity:.55;filter:grayscale(.4)}.holoinv:disabled{opacity:.55}
 .holoinvstat{margin:0 0 6px}
 .holocard select{min-height:44px;font:inherit;background:var(--lc3);color:#141a2a;font-weight:700;border:0;border-radius:8px;padding:4px 6px}
+.ltact-still{margin:0 0 8px;border-radius:10px;overflow:hidden;max-height:28vh;background:#0a1420}
+.ltact-still img{display:block;width:100%;height:auto;max-height:28vh;object-fit:cover;object-position:center top}
+.ltact-still.none{display:none}
+.chip.shoreevec,.chip.awayc{background:#1a3a4a;border-color:#5aa0b8}
 .holorow{gap:8px}.holorow.off{opacity:.6}
 .holothumb{width:40px;height:72px;object-fit:cover;border-radius:6px;flex:none}
 .holofit{color:#ff8fb1}

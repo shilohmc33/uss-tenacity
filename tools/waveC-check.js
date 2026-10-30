@@ -214,6 +214,46 @@ const ok = (c, m) => { if (!c) { fails++; console.error('FAIL', m); } else conso
     ok(R.chipGym === true && R.chipLounge === false, `${tag} spar chip gym-only when gymRoom ` + J({ chipGym: R.chipGym, chipLounge: R.chipLounge }));
     if (SHOTS) await p.screenshot({ path: `${OUT}waveC-art-spar-${tag}.png` });
 
+    // ---- MED: openSpar routes to gym (not lounge) when gymRoom ON ----
+    const GR = await p.evaluate(async () => {
+      const H = await import('/js/ui/lt-act.js');
+      const LA = await import('/js/lt-act.js');
+      const G = __T.G;
+      LA.A().spar = { d: '', n: 0, invite: null };
+      LA.A().session = null;
+      // From bridge: should start liftRide to gym
+      G.lt.deck = 'bridge'; G.lt.lift = null; G.lt.mode = 'idle'; G.lt.path = null; G.lt.intent = null;
+      H.openSpar();
+      const fromBridge = {
+        deck: G.lt.deck,
+        liftDest: G.lt.lift && G.lt.lift.dest,
+        intent: G.lt.intent && G.lt.intent.kind === 'liftRide' ? G.lt.intent.dest : (G.lt.intent && G.lt.intent.dest),
+        // rideLiftTo sends path intent with kind liftRide
+        ride: G.lt.intent ? { kind: G.lt.intent.kind, dest: G.lt.intent.dest, then: G.lt.intent.then && G.lt.intent.then.node } : null,
+        panel: !!(document.getElementById('ltActPanel') && !document.getElementById('ltActPanel').hidden),
+      };
+      // Close panel; already in gym → stay put (no lift)
+      const panel = document.getElementById('ltActPanel'); if (panel) panel.hidden = true;
+      G.lt.deck = 'gym'; G.lt.lift = null; G.lt.mode = 'idle'; G.lt.path = null; G.lt.intent = null;
+      G.lt.x = 0.5; G.lt.y = 0.5;
+      H.openSpar();
+      const fromGym = {
+        deck: G.lt.deck,
+        lift: G.lt.lift,
+        intent: G.lt.intent,
+        panel: !!(document.getElementById('ltActPanel') && !document.getElementById('ltActPanel').hidden),
+      };
+      if (panel) panel.hidden = true;
+      return { fromBridge, fromGym, gymOn: LA.gymRoomOn() };
+    });
+    const rideOk = GR.gymOn && GR.fromBridge.panel && (
+      (GR.fromBridge.ride && GR.fromBridge.ride.kind === 'liftRide' && GR.fromBridge.ride.dest === 'gym')
+      || GR.fromBridge.liftDest === 'gym'
+    );
+    ok(rideOk, `${tag} openSpar from bridge → gym lift ` + J(GR.fromBridge));
+    ok(GR.fromGym.deck === 'gym' && !GR.fromGym.lift && !GR.fromGym.intent && GR.fromGym.panel,
+      `${tag} openSpar already in gym stays put ` + J(GR.fromGym));
+
     // ---- Gym reachable via lift list ----
     const GYM = await p.evaluate(async () => {
       const { DECK_ORDER, DECKS } = await import('/js/data.js');

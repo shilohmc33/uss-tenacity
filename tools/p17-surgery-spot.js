@@ -3,7 +3,9 @@
 // CONSOLES work spot must lie on its deck's walk mask (pixel test, white = floor, 3 px edge tolerance). Live: a medical crewmember is sent to the
 // surgery spot, must arrive and dwell with feet on the mask, typing (console within 6 px). Shots shots/p17-surgery-<vp>.png
 // (crop around her, walk grid off) at 390x844, 844x390, 1280x800; report shots/p17-surgery.json.   usage: node tools/p17-surgery-spot.js [url]
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await L.launch(); const rep = { vp: {}, shots: [] }; const errs = [];
@@ -43,7 +45,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
     const f = `shots/p17-surgery-${vp}.png`; await p.screenshot({ path: f, clip: cl }); rep.shots.push(f);
     await ctx.close();
   }
-  rep.errors = errs; fs.writeFileSync('shots/p17-surgery.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'p17-surgery.json', JSON.stringify(rep, null, 1));
   for (const [vp, R] of Object.entries(rep.vp)) console.log(vp, 'spots', R.static.spots, 'off', R.static.off.length, 'consoles', R.static.consoles, 'off', R.static.consolesOff.length, 'surgery', JSON.stringify(R.static.surgery), 'live', JSON.stringify(R.live));
   console.log(errs.length ? 'P17 SURGERY FAIL' : 'P17 SURGERY PASS', 'errors', errs.length, errs.slice(0, 4)); await b.close();
 })();

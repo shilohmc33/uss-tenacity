@@ -4,7 +4,9 @@
 // (seat.at + hip offset) vs the painted cushion centre measured on deck-bridge (CUSHION below), in design px.
 // Shots: shots/art1-lie-<node>-<size>.png, shots/art1-patients-<size>.png, shots/art1-seat-chair-<size>.png; report
 // shots/art1-fit.json.   usage: node tools/lie-seat-fit.js [url]
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 const CUSHION = { chair: [0.499, 0.4234] };   // art batch 2: deck_bridge_v3 captain's chair hip (bridge_spots.json hip_px 479,271; was the v2-era cushion 0.495,0.4125)
 (async () => {
@@ -56,7 +58,7 @@ const CUSHION = { chair: [0.499, 0.4234] };   // art batch 2: deck_bridge_v3 cap
     { const { clip, ...rest } = st; const f = `shots/art1-seat-chair-${vp}.png`; await p.screenshot({ path: f, clip }); rep.shots.push(f); rep.seat[vp] = rest; if (st.mode !== 'use' || st.node !== 'chair') errs.push(`${vp} not seated`); }
     await ctx.close();
   }
-  rep.errors = errs; fs.writeFileSync('shots/art1-fit.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'art1-fit.json', JSON.stringify(rep, null, 1));
   for (const bd of rep.lie.beds) console.log(`${bd.bed.padEnd(34)} lieLen ${bd.lieLen}  fit ${bd.fit}  body ${bd.bodyDesign}  margin ${bd.margin}  ${bd.ok ? 'OK' : 'OVERHANG'}`);
   console.log('seat', JSON.stringify(rep.seat)); console.log('patients', rep['patients390x844'], rep['patients1280x800']); console.log('errors', errs.length, errs.slice(0, 5)); await b.close();
 })();

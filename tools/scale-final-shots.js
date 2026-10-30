@@ -1,7 +1,9 @@
 // Scale option A before|after per room: the Lt at a station in each room on the old tree (before, e.g. 84f79e0 on :8852)
 // and the new one (after, :8765), full viewport, composed side by side -> shots/scale-final-<room>-<size>.png
 // usage: node tools/scale-final-shots.js <beforeUrl> <afterUrl>
-const L = require('/workspace/playtest-scripts/lib.js'); const { execFileSync } = require('child_process'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const { execFileSync } = require('child_process'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const [BEFORE, AFTER] = process.argv.slice(2);
 const ROOMS = { engineering: 'core', lounge: 'bar', berthing: 'bunk', bridge: 'msd', medical: 'biobed', quarters: 'rack' };
 const VPS = [['390x844', 390, 844, 1], ['1280x800', 1280, 800, 0]];
@@ -31,7 +33,7 @@ b=Image.open('/tmp/sf-before-${room}-${vp}.png').convert('RGB'); a=Image.open('/
 if b.width>1400: b=b.resize((b.width//2,b.height//2)); a=a.resize((a.width//2,a.height//2))
 S=Image.new('RGB',(b.width+a.width+12,max(b.height,a.height)+34),(16,18,24)); S.paste(b,(0,34)); S.paste(a,(b.width+12,34))
 d=ImageDraw.Draw(S); d.text((6,6),'BEFORE 84f79e0 · ${room} ${vp} · figure ${a.figPx} css px',fill=(255,210,120)); d.text((b.width+18,6),'AFTER option A · figure ${c.figPx} css px',fill=(140,230,255))
-S.save('shots/scale-final-${room}-${vp}.png')`]);
+S.save('${OUT}scale-final-${room}-${vp}.png')`]);
   }
-  fs.writeFileSync('shots/scale-final.json', JSON.stringify({ rep, errs }, null, 1)); console.log('errors', errs.length, errs.slice(0, 5)); await b.close();
+  fs.writeFileSync(OUT + 'scale-final.json', JSON.stringify({ rep, errs }, null, 1)); console.log('errors', errs.length, errs.slice(0, 5)); await b.close();
 })();

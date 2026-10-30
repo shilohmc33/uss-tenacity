@@ -1,4 +1,4 @@
-// Wave A/B/C Lt activities (Oct 30): meals/cards/quests, duty/repair/mentor/log, quarters show-in + sparring.
+// Wave A/B/C/D Lt activities (Oct 30): meals/cards/quests, duty/repair/mentor/log, show-in/spar, DS9 shore evenings + away missions.
 // Real-day slots via localDate + badClock; never advances while away/idle; speakers use crew-talk presence.
 import { G } from "./state.js";
 import { PROG, addHardener, localDate, opinionOf, nudge, spend, canAfford, awardXP, addr } from "./progression.js";
@@ -14,7 +14,7 @@ import { holdAtSeat, clearLtActHold, seatWalkArrived, npcOf, seatedOn, ambient }
 import { NODEMAP, DECKS } from "./data.js";
 import { findPath } from "./path.js";
 import { sendUse } from "./crew.js";
-import { atDS9 } from "./crewcare.js";
+import { atDS9, C as careC } from "./crewcare.js";
 import { hasQ } from "./mood.js";
 import { fixKit } from "./crewlife.js";
 import { DECOR as decorOfMap } from "./cabin-data.js";
@@ -33,9 +33,12 @@ export const CARD_ANTE = { rations: 8 };
 export const MEAL_XP = 4, CARD_XP = 3, QUEST_XP = 12;
 export const DUTY_XP = 6, MENTOR_XP = 5, LOG_XP = 2, REPAIR_CALL_XP = 5;
 export const SHOW_XP = 4, SPAR_XP = 5;
+export const SHORE_XP = 8, AWAY_XP = 14;
 export const sparArtOn = () => !!(PROG.ltAct && PROG.ltAct.sparArt);
 export const gymRoomOn = () => !!(PROG.ltAct && PROG.ltAct.gymRoom);
 export const decorArtOn = () => !!(PROG.ltAct && PROG.ltAct.decorArt);
+export const awayArtOn = () => !!(PROG.ltAct && PROG.ltAct.awayArt);
+export const ds9ArtOn = () => !!(PROG.ltAct && PROG.ltAct.ds9Art);
 // Sparring stand-in: open floor west of Mess tables (lounge). Gym deck gated behind gymRoom.
 const SPAR_SPOT_LOUNGE = { deck: "lounge", x: 0.18, y: 0.58, face: "right", guestFace: "left" };
 // Gym mat centre (gym_spots.json spar_mat_px 288,212-622,488 → mid 455,350)
@@ -180,9 +183,11 @@ export const freshLtAct = () => ({
   log: { d: "", n: 0 },
   show: { d: "", n: 0, invite: null }, // quarters show-in
   spar: { d: "", n: 0, invite: null }, // sparring bout
+  shore: { d: "", n: 0, invite: null, pick: null, visitDone: false }, // DS9 shore evening
+  away: { d: "", n: 0, invite: null, mission: null }, // present away team
   writes: [],                         // Lt-authored log scraps
   everDS9: false,
-  n: { meals: 0, cards: 0, quests: 0, duty: 0, repairs: 0, mentor: 0, logs: 0, shows: 0, spars: 0 },
+  n: { meals: 0, cards: 0, quests: 0, duty: 0, repairs: 0, mentor: 0, logs: 0, shows: 0, spars: 0, shores: 0, aways: 0 },
   session: null,
 });
 
@@ -209,6 +214,8 @@ export function hardenLtAct(p) {
   f.meal = day(s.meal); f.cards = Object.assign(day(s.cards), { game: null });
   f.mentor = day(s.mentor); f.log = { d: dOf(s.log && s.log.d) || "", n: clamp(Math.floor(+(s.log && s.log.n) || 0), 0, 99) };
   f.show = day(s.show); f.spar = day(s.spar);
+  f.shore = Object.assign(day(s.shore), { pick: null, visitDone: !!(s.shore && s.shore.visitDone) });
+  f.away = Object.assign(day(s.away), { mission: null });
   f.duty = { d: dOf(s.duty && s.duty.d) || "", fams: {} };
   if (s.duty && s.duty.fams && typeof s.duty.fams === "object") {
     for (const [k, v] of Object.entries(s.duty.fams)) if (WATCH_NODES[k]) f.duty.fams[k] = clamp(Math.floor(+v || 0), 0, 9);
@@ -221,7 +228,8 @@ export function hardenLtAct(p) {
   const nn = s.n || {};
   f.n = { meals: clamp(Math.floor(+nn.meals || 0), 0, 1e6), cards: clamp(Math.floor(+nn.cards || 0), 0, 1e6), quests: clamp(Math.floor(+nn.quests || 0), 0, 1e6),
     duty: clamp(Math.floor(+nn.duty || 0), 0, 1e6), repairs: clamp(Math.floor(+nn.repairs || 0), 0, 1e6), mentor: clamp(Math.floor(+nn.mentor || 0), 0, 1e6), logs: clamp(Math.floor(+nn.logs || 0), 0, 1e6),
-    shows: clamp(Math.floor(+nn.shows || 0), 0, 1e6), spars: clamp(Math.floor(+nn.spars || 0), 0, 1e6) };
+    shows: clamp(Math.floor(+nn.shows || 0), 0, 1e6), spars: clamp(Math.floor(+nn.spars || 0), 0, 1e6),
+    shores: clamp(Math.floor(+nn.shores || 0), 0, 1e6), aways: clamp(Math.floor(+nn.aways || 0), 0, 1e6) };
   const done = {};
   if (s.quest && s.quest.done && typeof s.quest.done === "object") {
     for (const [k, v] of Object.entries(s.quest.done)) if (dOf(v)) done[k] = v;
@@ -248,6 +256,7 @@ export const cardsLeft = (at) => { const r = daySlot(A().cards, at); return Math
 
 export function tickLtAct() {
   if (atDS9()) A().everDS9 = true;
+  else if (A().shore) A().shore.visitDone = false;   // new dock visit gets a fresh evening
   // no offline accrual — present-only; session freezes when not present
 }
 
@@ -332,11 +341,15 @@ export function rollInvite(kind, id, rndFn = Math.random) {
     : kind === "mentor" ? daySlot(A().mentor)
     : kind === "show" ? daySlot(A().show)
     : kind === "spar" ? daySlot(A().spar)
+    : kind === "shore" ? daySlot(A().shore)
+    : kind === "away" ? daySlot(A().away)
     : daySlot(A().cards);
   if (kind !== "mentor" && (rec.n | 0) >= 1) return { ok: false, why: "already used today's slot" };
   if (kind === "mentor" && (rec.n | 0) >= 1) return { ok: false, why: "already mentored today" };
   if (kind === "show" && (rec.n | 0) >= 1) return { ok: false, why: "already showed someone in today" };
   if (kind === "spar" && (rec.n | 0) >= 1) return { ok: false, why: "already sparred today" };
+  if (kind === "shore" && ((rec.n | 0) >= 1 || A().shore.visitDone)) return { ok: false, why: "already took a shore evening" };
+  if (kind === "away" && (rec.n | 0) >= 1) return { ok: false, why: "already ran an away team today" };
   const st = ensureInvite(rec);
   if (st.guest) return { ok: false, why: st.guest === "solo" ? "going solo" : `${occ(st.guest).short} already said yes` };
   if ((st.nos | 0) >= 2) { st.guest = "solo"; return { ok: true, yes: false, forced: true, guest: "solo", line: null }; }
@@ -361,6 +374,11 @@ export function rollInvite(kind, id, rndFn = Math.random) {
 export function pickSolo(kind) {
   const rec = kind === "meal" ? daySlot(A().meal) : daySlot(A().cards);
   ensureInvite(rec).guest = "solo";
+  return { ok: true, guest: "solo" };
+}
+export function pickSoloAway() {
+  const st = ensureInvite(daySlot(A().away));
+  st.guest = "solo"; st.nos = Math.max(st.nos | 0, 2);
   return { ok: true, guest: "solo" };
 }
 
@@ -1152,6 +1170,8 @@ export function logPrompts() {
   if (n.duty) opens.push("Stood a quiet watch.");
   if (n.repairs) opens.push("Fixed a kit that should have been simple.");
   if (n.mentor) opens.push("Walked a junior through a drill.");
+  if (n.shores) opens.push("Spent an evening on the Promenade.");
+  if (n.aways) opens.push("Took an away team down.");
   if (G.sp && G.sp.battle) opens.push("Red alert still humming behind my eyes.");
   if (!opens.length) opens.push("Another shift on the Tenacity.");
   opens.push("The Dominion is still out there.");
@@ -1467,6 +1487,339 @@ export function cardTableProp() {
 }
 export function cardsLampHidden() { return !!cardTableProp(); }
 
+
+// ============================== Wave D: DS9 shore evenings + away missions ==============================
+export function shoreLeft(at) {
+  const r = daySlot(A().shore, at);
+  if (A().shore.visitDone) return 0;
+  return Math.max(0, 1 - (r.n | 0));
+}
+export function awayLeft(at) { return Math.max(0, 1 - (daySlot(A().away, at).n | 0)); }
+
+/** Shore leave already granted this DS9 visit (captain said yes). */
+export function shoreGranted() {
+  try { const c = careC(); return !!(atDS9() && c.shoreUsed && !c.shoreDenied); } catch (e) { return false; }
+}
+
+export function shoreChipOk() {
+  return !blockedWhy() && atDS9() && shoreGranted() && shoreLeft() > 0;
+}
+
+/** Away team: present, not traveling, not battle — docked or quiet stop. */
+export function awayReadyWhy() {
+  const w = blockedWhy(); if (w) return w;
+  if (!G.sp) return "no voyage";
+  if (G.sp.travel) return "wait until you arrive";
+  if (!G.sp.location) return "need a stop";
+  if (awayLeft() <= 0) return "already ran an away team today";
+  return null;
+}
+export function awayChipOk() { return !awayReadyWhy(); }
+
+// Shore evening picks — REUSE promenade/Quark; temple still gated by ds9Art
+export const SHORE_PICKS = {
+  quark: {
+    id: "quark", title: "Quark's", sub: "dabo · drink · noise",
+    art: "story_quarks", // always REUSE
+    needGuest: false,
+    beats: [
+      { q: "Quark's is loud enough to drown a war. {short} eyes the dabo wheel.", choices: [
+        { t: "Buy a round", op: 2 }, { t: "Watch one spin", op: 1 }, { t: "'Temple would have been quieter.'", op: 0 },
+      ]},
+      { q: "A Ferengi dealer grins. {short}: 'Do not bet the ship.'", choices: [
+        { t: "Small stake — for pride", op: 1 }, { t: "Sit this one out", op: 1 }, { t: "Bluff a smile", op: 0 },
+      ]},
+      { q: "{short}: 'We leave before Quark invents a third fee.'", end: true, op: 1 },
+    ],
+  },
+  temple: {
+    id: "temple", title: "Temple quiet hour", sub: "Bajoran air · hush",
+    art: "story_promenade", // NEW temple still waits on ds9Art; stand-in promenade
+    artNew: "story_temple", // gated
+    needGuest: false,
+    beats: [
+      { q: "The temple hush sits heavy after warp. {short} stands without fidgeting.", choices: [
+        { t: "Stand in silence", op: 1 }, { t: "Whisper a name you lost", op: 2 }, { t: "'Five minutes. Then Quark.'", op: 0 },
+      ]},
+      { q: "{short}: 'Bajoran air tastes like someone else's peace treaty. I will take a cup of it anyway.'", choices: [
+        { t: "'Temple first. Then Quark.'", op: 2 }, { t: "Nod and breathe", op: 1 }, { t: "'Civilization in the correct order.'", op: 1 },
+      ]},
+      { q: "You leave quieter than you arrived. The war waits outside.", end: true, op: 1 },
+    ],
+  },
+  walk: {
+    id: "walk", title: "Promenade walk", sub: "invite a companion",
+    art: "story_promenade",
+    needGuest: true,
+    beats: [
+      { q: "Promenade traffic parts around Starfleet gold. {short} keeps pace.", choices: [
+        { t: "Point out a shop", op: 1 }, { t: "Ask how they are — really", op: 2 }, { t: "Walk in companionable quiet", op: 1 },
+      ]},
+      { q: "{short}: 'Docked means we pretend the frontier has a sidewalk.'", choices: [
+        { t: "'I will take the sidewalk.'", op: 1 }, { t: "'Only if you are on it.'", op: 2, rom: true }, { t: "'Until the next order.'", op: 0 },
+      ]},
+      { q: "You loop back toward the airlock lighter by one evening.", end: true, op: 1 },
+    ],
+  },
+  holo: { id: "holo", title: "Holosuite", sub: "Quark's programs", art: null, needGuest: false, link: "holo" },
+  shop: { id: "shop", title: "Shopping", sub: "gift locker · Promenade", art: null, needGuest: false, link: "locker" },
+};
+
+export function shoreArtKey(pick) {
+  const PICK = SHORE_PICKS[pick]; if (!PICK) return null;
+  if (PICK.artNew && ds9ArtOn()) return PICK.artNew;
+  return PICK.art || null;
+}
+
+export function shorePicksList() {
+  return Object.values(SHORE_PICKS).map(p => ({
+    id: p.id, title: p.title, sub: p.sub, needGuest: !!p.needGuest, link: p.link || null,
+    art: shoreArtKey(p.id),
+  }));
+}
+
+export function startShoreEvening(pick, { skipInvite = false } = {}) {
+  const why = blockedWhy(); if (why) return { ok: false, why };
+  if (!atDS9()) return { ok: false, why: "only while docked at DS9" };
+  if (!shoreGranted()) return { ok: false, why: "request shore leave first" };
+  if (shoreLeft() <= 0) return { ok: false, why: "already took a shore evening this visit" };
+  const PICK = SHORE_PICKS[pick]; if (!PICK) return { ok: false, why: "unknown evening" };
+  const rec = daySlot(A().shore);
+  // Link-outs: holosuite / shopping mark the evening used and hand off
+  if (PICK.link) {
+    rec.n = 1; A().shore.visitDone = true; A().n.shores++;
+    A().shore.pick = pick; daySlot(A().shore).invite = null;
+    log(`Shore evening: ${PICK.title}.`, "good");
+    awardXP(Math.floor(SHORE_XP / 2), "manual", "shore-" + pick);
+    return { ok: true, link: PICK.link, pick };
+  }
+  let guest = null;
+  if (PICK.needGuest || !skipInvite) {
+    const st = ensureInvite(rec);
+    guest = st.guest && st.guest !== "solo" ? st.guest : null;
+    if (PICK.needGuest && !guest) return { ok: false, why: "invite a companion first" };
+  }
+  rec.n = 1; A().shore.visitDone = true; A().n.shores++;
+  A().shore.pick = pick;
+  A().session = {
+    kind: "shore", phase: "chat", pick, guest, step: 0,
+    mode: guest ? "near" : "solo",
+    art: shoreArtKey(pick),
+  };
+  toast(`Shore evening · ${PICK.title}${guest ? ` with ${occ(guest).short}` : ""}`, "info");
+  return { ok: true, pick, guest, art: shoreArtKey(pick) };
+}
+
+export function shoreView() {
+  const s = A().session; if (!s || s.kind !== "shore" || s.phase !== "chat") return null;
+  const PICK = SHORE_PICKS[s.pick]; if (!PICK || !PICK.beats) return null;
+  const beats = PICK.beats;
+  if ((s.step | 0) >= beats.length) {
+    return { kind: "shore", title: PICK.title, pick: s.pick, guest: s.guest, mode: s.mode, art: s.art,
+      q: "Evening done. Time to head back aboard.", choices: [], end: true, step: s.step };
+  }
+  const beat = beats[s.step | 0];
+  const id = s.guest || "lt";
+  const romOn = !!(P().romance && P().romance.opt === true && s.guest && P().romance.partner === s.guest);
+  const choices = (beat.choices || []).map((c, j) => {
+    let text = c.t;
+    if (c.rom && !romOn) text = "'Keep walking.'";
+    return { j, text, op: c.op };
+  });
+  return {
+    kind: "shore", title: PICK.title, pick: s.pick, guest: s.guest, mode: s.mode || "solo", art: s.art,
+    q: fill(beat.q, id), end: !!beat.end, step: s.step | 0, choices,
+  };
+}
+
+export function answerShore(j) {
+  const s = A().session; if (!s || s.kind !== "shore") return null;
+  const PICK = SHORE_PICKS[s.pick]; if (!PICK || !PICK.beats) return finishShore();
+  const beat = PICK.beats[s.step | 0];
+  if (!beat || beat.end) return finishShore();
+  const ch = (beat.choices || [])[j]; if (!ch) return null;
+  if (s.guest && ch.op) nudge(s.guest, ch.op, "shore-evening", true);
+  s.step = (s.step | 0) + 1;
+  if (PICK.beats[s.step] && PICK.beats[s.step].end) {
+    if (s.guest && PICK.beats[s.step].op) nudge(s.guest, PICK.beats[s.step].op, "shore-evening", true);
+    return finishShore();
+  }
+  return { done: false };
+}
+
+function finishShore() {
+  const s = A().session; if (!s) return { done: true };
+  awardXP(SHORE_XP, "manual", "shore-" + (s.pick || "eve"));
+  if (s.guest) {
+    nudge(s.guest, 3, "shore-done", true);
+    const r = needsOf(s.guest); r.n.fun = Math.min(100, r.n.fun + 25); r.n.social = Math.min(100, r.n.social + 25);
+    addEntry(s.guest, "note", "shore evening on DS9");
+    endApproach(s.guest, "finished");
+  }
+  const title = (SHORE_PICKS[s.pick] || {}).title || "Promenade";
+  log(`Shore evening on DS9 · ${title}${s.guest ? ` with ${occ(s.guest).short}` : ""}.`, "good");
+  daySlot(A().shore).invite = null;
+  A().session = null;
+  return { done: true };
+}
+
+// ---- Away missions (present-only 3-beat choice cards; war pacing; no ship destroy) ----
+export const AWAY_MISSIONS = {
+  listen: {
+    id: "listen", title: "Listening post",
+    blurb: "A quiet sweep of a sensor buoy the Dominion forgot to claim.",
+    art: "story_generic_space", artNew: "story_away_listen",
+    where: "any",
+    beats: [
+      { q: "Tricorders tick. {short}: 'Radiation before we glow — that is the deal.'", choices: [
+        { t: "Wide sweep, careful", op: 1, style: "care" },
+        { t: "Push the array closer", op: 1, style: "bold" },
+        { t: "Abort if the buoy sings wrong", op: 0, style: "care" },
+      ]},
+      { q: "A Dominion handshake ghost flickers and dies. {short} does not blink.", choices: [
+        { t: "Log and leave", op: 1, style: "care" },
+        { t: "Copy the fragment", op: 2, style: "bold" },
+        { t: "'Hale would shoot it.'", op: 0, style: "bold" },
+      ]},
+      { q: "Beam-up dust. No hull scrapes. The war is still out there — just not in your bones for one hour.", end: true, op: 1 },
+    ],
+    reward: { xp: AWAY_XP, parts: 1, rep: 1 },
+  },
+  supply: {
+    id: "supply", title: "Outpost drop",
+    blurb: "A short-range run to hand rations to an outpost that still answers Starfleet.",
+    art: "story_kestrel_b", artNew: "story_away_supply",
+    where: "any",
+    beats: [
+      { q: "{short}: 'Away team means I bring a type-2 and a bad attitude. You bring the diplomacy.'", choices: [
+        { t: "Diplomacy it is", op: 1, style: "care" },
+        { t: "Keep the type-2 holstered", op: 1, style: "care" },
+        { t: "'Bad attitude optional.'", op: 0, style: "bold" },
+      ]},
+      { q: "The outpost CO looks thinner than the manifests. {short} shoulders a crate.", choices: [
+        { t: "Hand over extra rations", op: 2, style: "care", costR: 15 },
+        { t: "Stick to the manifest", op: 1, style: "care" },
+        { t: "Ask for intel in trade", op: 1, style: "bold" },
+      ]},
+      { q: "Return pad hums. No chase. No heroics. A drop that stayed a drop.", end: true, op: 1 },
+    ],
+    reward: { xp: AWAY_XP, parts: 0, rep: 2 },
+  },
+  courtesy: {
+    id: "courtesy", title: "Courtesy call",
+    blurb: "A dockside handshake that keeps a thin alliance from fraying.",
+    art: "story_promenade", artNew: "story_away_courtesy",
+    where: "dock", // DS9 / homeworld flavour
+    beats: [
+      { q: "Dress uniforms itch. {short}: 'Smile like the treaty is thicker than it is.'", choices: [
+        { t: "Smile on cue", op: 1, style: "care" },
+        { t: "Lead with the truth", op: 1, style: "bold" },
+        { t: "Let them talk first", op: 2, style: "care" },
+      ]},
+      { q: "A toast that is not quite Latinum, not quite trust. {short} raises a cup anyway.", choices: [
+        { t: "Toast the crews", op: 2, style: "care" },
+        { t: "Toast the ceasefire that is not", op: 1, style: "bold" },
+        { t: "Keep it short", op: 0, style: "care" },
+      ]},
+      { q: "You leave with a thinner frown on their side of the table. That counts, this year.", end: true, op: 1 },
+    ],
+    reward: { xp: AWAY_XP, parts: 0, rep: 3 },
+  },
+};
+
+export function awayArtKey(mid) {
+  const M = AWAY_MISSIONS[mid]; if (!M) return null;
+  if (M.artNew && awayArtOn()) return M.artNew;
+  return M.art || null;
+}
+
+export function listAwayMissions() {
+  const dock = atDS9() || (G.sp && !G.sp.travel && G.sp.location && ["ds9", "earth", "vulcan", "qonos", "romulus"].includes(G.sp.location));
+  return Object.values(AWAY_MISSIONS).filter(m => m.where === "any" || (m.where === "dock" && dock)).map(m => ({
+    id: m.id, title: m.title, blurb: m.blurb, art: awayArtKey(m.id), where: m.where,
+  }));
+}
+
+export function startAway(missionId) {
+  const why = awayReadyWhy(); if (why) return { ok: false, why };
+  const M = AWAY_MISSIONS[missionId]; if (!M) return { ok: false, why: "unknown mission" };
+  const dock = atDS9() || (G.sp && !G.sp.travel && G.sp.location && ["ds9", "earth", "vulcan", "qonos", "romulus"].includes(G.sp.location));
+  if (M.where === "dock" && !dock) return { ok: false, why: "need a dock stop" };
+  const rec = daySlot(A().away), st = ensureInvite(rec);
+  const guest = st.guest && st.guest !== "solo" ? st.guest : null;
+  // Page: pick 1-2 crew — require at least one yes (solo only if forced after 2 nos)
+  if (!guest && st.guest !== "solo") return { ok: false, why: "invite at least one teammate" };
+  rec.n = 1; A().n.aways++;
+  A().away.mission = missionId;
+  A().session = {
+    kind: "away", phase: "chat", mission: missionId, guest: guest || null, step: 0,
+    mode: guest ? "near" : "solo", art: awayArtKey(missionId), bold: 0, care: 0,
+  };
+  toast(`Away team · ${M.title}${guest ? ` · ${occ(guest).short}` : " · solo"}`, "info");
+  return { ok: true, mission: missionId, guest, art: awayArtKey(missionId) };
+}
+
+export function awayView() {
+  const s = A().session; if (!s || s.kind !== "away" || s.phase !== "chat") return null;
+  const M = AWAY_MISSIONS[s.mission]; if (!M) return null;
+  const beats = M.beats;
+  if ((s.step | 0) >= beats.length) {
+    return { kind: "away", title: M.title, mission: s.mission, guest: s.guest, mode: s.mode, art: s.art,
+      q: "Pad locks. Team accounted for. No one left behind.", choices: [], end: true, step: s.step };
+  }
+  const beat = beats[s.step | 0];
+  const id = s.guest || "lt";
+  return {
+    kind: "away", title: M.title, mission: s.mission, guest: s.guest, mode: s.mode || "solo", art: s.art,
+    q: fill(beat.q, id), end: !!beat.end, step: s.step | 0,
+    choices: (beat.choices || []).map((c, j) => ({ j, text: c.t, op: c.op, style: c.style, costR: c.costR || 0 })),
+  };
+}
+
+export function answerAway(j) {
+  const s = A().session; if (!s || s.kind !== "away") return null;
+  const M = AWAY_MISSIONS[s.mission]; if (!M) return finishAway();
+  const beat = M.beats[s.step | 0];
+  if (!beat || beat.end) return finishAway();
+  const ch = (beat.choices || [])[j]; if (!ch) return null;
+  if (ch.costR && !canAfford({ rations: ch.costR })) return { ok: false, why: "not enough rations" };
+  if (ch.costR) spend({ rations: ch.costR }, "away-drop");
+  if (s.guest && ch.op) nudge(s.guest, ch.op, "away-beat", true);
+  if (ch.style === "bold") s.bold = (s.bold | 0) + 1;
+  if (ch.style === "care") s.care = (s.care | 0) + 1;
+  s.step = (s.step | 0) + 1;
+  if (M.beats[s.step] && M.beats[s.step].end) {
+    if (s.guest && M.beats[s.step].op) nudge(s.guest, M.beats[s.step].op, "away-beat", true);
+    return finishAway();
+  }
+  return { done: false };
+}
+
+function finishAway() {
+  const s = A().session; if (!s) return { done: true };
+  const M = AWAY_MISSIONS[s.mission] || { title: "Away", reward: { xp: AWAY_XP, parts: 0, rep: 1 } };
+  const rw = M.reward || { xp: AWAY_XP, parts: 0, rep: 1 };
+  awardXP(rw.xp || AWAY_XP, "manual", "away-" + (s.mission || "run"));
+  // War pacing: crumbs only — never hull / permadeath. Careful runs nudge a tiny parts scrap.
+  if (rw.parts) G.ship.parts = (G.ship.parts | 0) + rw.parts;
+  else if ((s.care | 0) >= 2) G.ship.parts = (G.ship.parts | 0) + 1;
+  if (rw.rep) {
+    try { P().fleetRep = (P().fleetRep | 0) + rw.rep; } catch (e) {}
+  }
+  if (s.guest) {
+    nudge(s.guest, 4, "away-done", true);
+    const r = needsOf(s.guest); r.n.fun = Math.min(100, r.n.fun + 15); r.n.social = Math.min(100, r.n.social + 20);
+    addEntry(s.guest, "note", "away team with you");
+    endApproach(s.guest, "finished");
+  }
+  log(`Away team · ${M.title}${s.guest ? ` with ${occ(s.guest).short}` : ""} — returned intact.`, "good");
+  daySlot(A().away).invite = null;
+  A().away.mission = null;
+  A().session = null;
+  return { done: true };
+}
+
+
 export function chipsHtml() {
   let h = "";
   if (mealChipOk()) h += `<button class="chip mealc hasart" data-ltact="meal"><img class="chipart" src="assets/chip-meal.webp" alt="">Share a meal ▸</button>`;
@@ -1481,6 +1834,8 @@ export function chipsHtml() {
   if (decorChipOk()) h += `<button class="chip decorc" data-ltact="decor">Decorate ▸</button>`;
   if (showChipOk()) h += `<button class="chip showc" data-ltact="show">Show someone in ▸</button>`;
   if (sparChipOk()) h += `<button class="chip sparc" data-ltact="spar">Sparring ▸</button>`;
+  if (shoreChipOk()) h += `<button class="chip shoreevec" data-ltact="shore">Shore evening ▸</button>`;
+  if (awayChipOk()) h += `<button class="chip awayc" data-ltact="away">Away team ▸</button>`;
   if (A().quest.active) {
     const q = QUESTS[A().quest.active.id];
     if (q) h += `<button class="chip questc" data-ltact="quest">Quest: ${q.title} ▸</button>`;

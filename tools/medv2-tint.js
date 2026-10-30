@@ -1,6 +1,9 @@
 // Medical v2 light A/B: the same crew under the old teal wash (120,255,215 @0.13), the artist's warm white (255,244,228 @0.08)
 // and no tint, on the new plate. shots/medv2-tint-<variant>.png (1280x800 @2x crop of the west aisle).   node tools/medv2-tint.js [url]
 const L = require('/workspace/playtest-scripts/lib.js');
+const path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { require('fs').mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await L.launch(), errs = [];
@@ -17,6 +20,6 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
     const cl = await p.evaluate(() => { const c = __T.cam, rc = document.querySelector('#deck').getBoundingClientRect(), s = c.scale; const X0 = 220, X1 = 380, Y0 = 170, Y1 = 400;
       const sx = rc.left + c.w / 2 + (X0 - c.x) * s, sy = rc.top + c.h / 2 + (Y0 - c.y) * s; const x = Math.max(rc.left, sx), y = Math.max(rc.top, sy);
       return { x, y, width: Math.min((X1 - X0) * s, rc.right - x), height: Math.min((Y1 - Y0) * s, rc.bottom - y) }; });
-    await p.screenshot({ path: `shots/medv2-tint-${v}.png`, clip: cl }); }
+    await p.screenshot({ path: `${OUT}medv2-tint-${v}.png`, clip: cl }); }
   console.log(errs.length ? 'TINT FAIL' : 'TINT PASS', errs); await b.close();
 })();

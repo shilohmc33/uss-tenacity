@@ -1,4 +1,7 @@
 const { chromium } = require('playwright-core');
+const path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { require('fs').mkdirSync(OUT, { recursive: true }); } catch (e) {}
 (async () => { const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const out = {};
 for (const [w, h, m] of [[390, 844, 1], [844, 390, 1], [1280, 800, 0]]) { const tag = w + 'x' + h;
@@ -9,6 +12,6 @@ const r = await p.evaluate(async () => { window.__noSave = true; document.queryS
   return { walkM: P.isWalkable('berthing', lf.mx, lf.my), path: !!P.findPath('berthing', 0.45, 0.6, lf.mx, lf.my) }; });
 await new Promise(r => setTimeout(r, 800));
 await p.evaluate(async () => { const { DECKS } = await import('/js/data.js'); const lf = DECKS.berthing.lift, Lt = __T.G.lt; Lt.x = lf.mx; Lt.y = lf.my + 0.01; __T.cam.snap = true; });
-await new Promise(r => setTimeout(r, 1200)); if (w === 1280) await p.screenshot({ path: 'shots/p22-berthing-lift-1280x800.png' });
+await new Promise(r => setTimeout(r, 1200)); if (w === 1280) await p.screenshot({ path: OUT + 'p22-berthing-lift-1280x800.png' });
 out[tag] = { ...r, errs }; await p.close(); }
 console.log(JSON.stringify(out)); await b.close(); })();

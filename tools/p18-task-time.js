@@ -2,7 +2,9 @@
 // the Lt starts at a node, sendUse(task node) is ordered; trip = seconds until he is using that node. Windows: voyage-event deck tasks
 // (distress locker 30, defector pads 30, anomaly msd 26, storm core 26), odd jobs 150 (example nodes), CRIT knock-on 150 (repair trip).
 //   node tools/p18-task-time.js [url]   -> shots/p18-task-time.json
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await L.launch(); const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } }); const p = await ctx.newPage(); const errs = [];
@@ -20,7 +22,7 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
       while (t < 120 && trip == null) { P.playerInput(); sim.stepSim(0.1); t += 0.1; if (Lt.mode === 'use' && Lt.node === node) trip = +t.toFixed(1); }
       const after = P.travelS(base); out.rows.push({ task: name, from: `${deck}/${from}`, trip, before: base, after, shareBefore: trip && +(trip / base * 100).toFixed(0), shareAfter: trip && +(trip / after * 100).toFixed(0) }); }
     return out; });
-  res.errors = errs; fs.writeFileSync('shots/p18-task-time.json', JSON.stringify(res, null, 1));
+  res.errors = errs; fs.writeFileSync(OUT + 'p18-task-time.json', JSON.stringify(res, null, 1));
   console.log(`TRAVEL_SCALE ${res.travelScale} jobs.expire ${res.jobsExpire} critKnockOnS ${res.critKnockOnS}`);
   for (const r of res.rows) console.log(`${r.task.padEnd(18)} from ${r.from.padEnd(18)} trip ${String(r.trip).padStart(5)} s  window ${r.before} -> ${r.after} s  share ${r.shareBefore}% -> ${r.shareAfter}%`);
   console.log('errors', errs.length, errs.slice(0, 3)); await b.close();

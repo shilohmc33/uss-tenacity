@@ -1,7 +1,9 @@
 // Pass 18 3b: per-frame occluder cost at 390x844 (phone, DPR 2). Per deck: Lt parked BEHIND one occluder (worst normal case:
 // that item draws every frame), ambient crew left running; OCCL_STATS reset after a 1.5 s warm-up (first draw uploads each cut),
 // then 5 s measured. Reports ms per frame for occluderCast + drawOccl, draws per frame. -> shots/occl-perf.json
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 const SPOTS = { bridge: [336, 266], medical: [470, 446], lounge: [222, 472], berthing: [480, 330], engineering: [450, 420] };
 (async () => {
@@ -18,5 +20,5 @@ const SPOTS = { bridge: [336, 266], medical: [470, 446], lounge: [222, 472], ber
     rep.decks[deck] = await p.evaluate(async () => { const O = await import('/js/render/occluders.js'), S = O.OCCL_STATS, fr = window.__fr.slice(5); window.__fr = [1e9];
       return { frames: S.frames, msPerFrame: +(S.ms / S.frames).toFixed(4), drawsPerFrame: +(S.draws / S.frames).toFixed(2), built: S.built, frameMsMedian: +fr.sort((a, b) => a - b)[fr.length >> 1].toFixed(2) }; });
   }
-  rep.errors = errs; fs.writeFileSync('shots/occl-perf.json', JSON.stringify(rep, null, 1)); console.log(JSON.stringify(rep.decks), 'errors', errs.length); await b.close();
+  rep.errors = errs; fs.writeFileSync(OUT + 'occl-perf.json', JSON.stringify(rep, null, 1)); console.log(JSON.stringify(rep.decks), 'errors', errs.length); await b.close();
 })();

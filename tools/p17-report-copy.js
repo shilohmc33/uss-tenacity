@@ -1,11 +1,13 @@
 // RETIRED in v18 (no offline quests, notes/2026-10-25-no-offline-quests-plan.md): this tool exercised the removed offline catch-up /
 // night crew / Shift Report (sim.catchUp, PACE_RT.offline, #report). The v18 behaviour is covered by tools/offline-check.js.
+const OUT = require('path').resolve(__dirname, '..', 'shots') + '/';
+try { require('fs').mkdirSync(OUT, { recursive: true }); } catch (e) {}
 if (!process.env.RUN_RETIRED) { console.log('RETIRED in v18 (offline catch-up removed): see tools/offline-check.js'); process.exit(0); }
 // Pass 17 P4: after a live fight that the player hid during (catch-up deferred, pass 16 B1), the deferred night report must name
 // the actual enemy and outcome, not "No contact with the Jem'Hadar". Per enemy (battlecruiser, Galor): live fight, catchUp(40)
 // while it is on (deferred), the fight is won, the report opens: its text is checked. Also a plain quiet catch-up still reads
 // "No contact with the Jem'Hadar." Shot shots/p17-report-bc-390x844.png; report shots/p17-report-copy.json.
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
 const URL = process.argv[2] || 'http://127.0.0.1:8765/';
 (async () => {
   const b = await L.launch(); const rep = {}; const errs = [];
@@ -29,10 +31,10 @@ const URL = process.argv[2] || 'http://127.0.0.1:8765/';
     rep[cs] = { ...(rep[cs] || {}), line: li };
     if (cs === 'quiet' && !/No contact with the Jem'Hadar/.test(li)) errs.push(`quiet: ${li}`);
     if (cs !== 'quiet') { const name = cs === 'galor' ? /Galor/i : /battlecruiser/i; if (/No contact with the Jem'Hadar/.test(li) || !name.test(li) || !/beaten off/.test(li)) errs.push(`${cs}: ${li}`); }
-    if (cs === 'jh_battlecruiser') await p.screenshot({ path: 'shots/p17-report-bc-390x844.png' });
+    if (cs === 'jh_battlecruiser') await p.screenshot({ path: OUT + 'p17-report-bc-390x844.png' });
     await ctx.close();
   }
-  rep.errors = errs; fs.writeFileSync('shots/p17-report-copy.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'p17-report-copy.json', JSON.stringify(rep, null, 1));
   for (const [k, v] of Object.entries(rep)) if (k !== 'errors') console.log(k, JSON.stringify(v));
   console.log(errs.length ? 'P17 REPORT FAIL' : 'P17 REPORT PASS', errs.length, errs.slice(0, 4)); await b.close();
 })();

@@ -12,6 +12,8 @@ import * as GF from "../gifts.js";
 import * as ST from "../story.js";
 import { artKey, artReady, picImg } from "./story.js";
 import { openHolo } from "./holo.js";
+import * as LA from "../lt-act.js";
+import { openShore, openAway } from "./lt-act.js";
 import { promUI } from "./next.js";
 
 export const PROM_ART = "story_promenade";
@@ -26,9 +28,12 @@ function el() {
 const alumni = () => (Array.isArray(G.prog.alumni) ? G.prog.alumni : []);
 export function promRows() {
   const st = CC.shoreState(), al = alumni(), okN = al.filter(a => GF.careState(a.id).ok).length, cur = PROG.currency.short;
+  const eveOk = LA.shoreChipOk(), awayOk = LA.awayChipOk(), awayWhy = LA.awayReadyWhy();
   return [
     { k: "gifts", label: "Gifts", sub: `Promenade shop · locker ${GF.lockerCount()}/${PROG.gifts.invMax}`, ok: true },
     { k: "shore", label: "Shore leave", sub: st.ok ? `${CARE.shoreRep} rep if granted · ${CC.shoreOdds()}` : st.why, ok: st.ok },
+    { k: "shoreEve", label: "Shore evening", sub: eveOk ? "Quark · temple · walk · holosuite · shop" : (LA.shoreGranted() ? "already used this visit" : "after shore leave is granted"), ok: eveOk },
+    { k: "away", label: "Away team", sub: awayOk ? "present landing-party beat · 1/day" : (awayWhy || "unavailable"), ok: awayOk },
     { k: "holo", label: "Holosuite", sub: `Quark's holosuites · programs in ${cur}`, ok: true },
     { k: "letters", label: "Letters home", sub: !al.length ? "no ex-shipmates yet" : okN ? `${okN} ex-shipmate${okN > 1 ? "s" : ""} would love a package` : "care packages · see who's due", ok: al.length > 0 },
   ];
@@ -56,7 +61,16 @@ document.addEventListener("click", e => {
   const b = e.target.closest("#promCard [data-prom]"); if (!b || b.disabled) return;
   const k = b.dataset.prom;
   if (k === "close") { hideProm(); return; }
-  if (k === "shore") { const r = CC.shoreLeave(); if (!r.ok && !r.denied && r.why) toast(r.why, "warn"); render(); return; }
+  if (k === "shore") {
+    const r = CC.shoreLeave();
+    if (!r.ok && !r.denied && r.why) toast(r.why, "warn");
+    render();
+    // If granted, fold into shore evening picker (Wave D)
+    if (r && r.ok) { hideProm(); openShore(); }
+    return;
+  }
+  if (k === "shoreEve") { hideProm(); openShore(); return; }
+  if (k === "away") { hideProm(); openAway(); return; }
   hideProm();
   if (k === "gifts" && promHooks.locker) promHooks.locker();
   else if (k === "holo") openHolo("lt");

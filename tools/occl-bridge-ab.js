@@ -6,7 +6,9 @@
 //  3) staged scenes on the old build and the new (Lt standing behind / in front of the conn console, seated in conn and fo,
 //     T'Ren seated, no ambient crew, app paused after one frame): shots/occl-bridge-ab-<scene>-<old|new>-<vp>.png + diff.
 //   node tools/occl-bridge-ab.js <newUrl> <oldUrl>
-const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs');
+const L = require('/workspace/playtest-scripts/lib.js'); const fs = require('fs'), path = require('path');
+const OUT = path.resolve(__dirname, '..', 'shots') + '/';
+try { fs.mkdirSync(OUT, { recursive: true }); } catch (e) {}
 const NEW = process.argv[2] || 'http://127.0.0.1:8765/', OLD = process.argv[3] || 'http://127.0.0.1:8855/';
 const SCENES = [['behind', { x: 0.36, y: 0.765, face: 'down' }], ['front', { x: 0.36, y: 0.83, face: 'up' }], ['seat-conn', { use: 'conn' }], ['seat-fo', { use: 'fo' }]];
 (async () => {
@@ -55,7 +57,7 @@ const SCENES = [['behind', { x: 0.36, y: 0.765, face: 'down' }], ['front', { x: 
       return { x, y, width: Math.min(220 * s, innerWidth - x), height: Math.min(170 * s, innerHeight - y) }; });
     await p.screenshot({ path: f, clip: cl }); (rep.scenes[`${scene}@${vp}`] = rep.scenes[`${scene}@${vp}`] || {})[lab] = { f, fg: await p.evaluate(async () => { const R = await import('/js/render/deck.js'); return [...R.fgDrawn]; }) };
     await ctx.close(); }
-  rep.errors = errs; fs.writeFileSync('shots/occl-bridge-ab.json', JSON.stringify(rep, null, 1));
+  rep.errors = errs; fs.writeFileSync(OUT + 'occl-bridge-ab.json', JSON.stringify(rep, null, 1));
   const px = rep.pixels.reduce((m, r) => Math.max(m, r.maxDiff), 0); console.log('pixels max channel diff', px, 'mean', Math.max(...rep.pixels.map(r => r.meanDiff)));
   console.log('decisions', rep.decisions.same, '/', rep.decisions.n, 'same', JSON.stringify(rep.decisions.diff), 'seats', JSON.stringify(rep.decisions.seats));
   for (const [k, v] of Object.entries(rep.scenes)) console.log(k, 'old fg', JSON.stringify(v.old && v.old.fg), 'new fg', JSON.stringify(v.new && v.new.fg));

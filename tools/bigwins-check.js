@@ -294,7 +294,7 @@ const PREP = () => { window.__noSave = true; const T = __T, G = T.G; T.PACE_RT.i
   const RP = L.report; ok(/story_report_rescue\.webp/.test(RP.head && RP.head.img || '') && /story_report_quiet\.webp/.test(RP.quiet && RP.quiet.img || ''), 'report headline real art ' + J([RP.head && RP.head.img, RP.quiet && RP.quiet.img]));
   ok(RP.head && RP.head.mk === 'rescue' && /RESCUE/.test(RP.head.tag) && RP.head.first && RP.reportT > 0, 'report headline ' + J(RP.head));
   ok(RP.quiet && RP.quiet.mk === 'quiet' && RP.quiet.txt === 'A quiet watch' && RP.manifestOk, 'quiet fallback ' + J(RP.quiet));
-  const PR = L.prom; ok(PR.due && PR.shown && PR.seen && J(PR.rows.map(r => r.replace('(off)', ''))) === J(['close', 'gifts', 'shore', 'holo', 'letters']) && /444/.test(PR.line), 'promenade shown ' + J(PR));
+  const PR = L.prom; ok(PR.due && PR.shown && PR.seen && J(PR.rows.map(r => r.replace('(off)', ''))) === J(['close', 'gifts', 'shore', 'shoreEve', 'away', 'holo', 'letters']) && /444/.test(PR.line), 'promenade shown ' + J(PR));
   ok(!PR.gifts.card && PR.gifts.plog && /GIFT LOCKER/.test(PR.gifts.h3 || ''), 'gifts button ' + J(PR.gifts));
   ok(PR.onceHidden && PR.goalAfter === 'ds9' && PR.reopen && !PR.holo.card && PR.holo.panel, 'reopen / holosuite ' + J([PR.onceHidden, PR.goalAfter, PR.reopen, PR.holo]));
   ok(PR.shore.used && PR.shore.card && PR.shore.off, 'shore leave ' + J(PR.shore));
