@@ -72,6 +72,7 @@ export function returnToDuty(id) {
   const n = npcOf(id); if (!n) return false;
   n.path = null; n.pathI = 0; n.next = null; n.target = null; n.chatNode = null; n.chatWith = null;
   if (n._talkApproach) delete n._talkApproach;
+  if (n._ltActHold) { delete n._ltActHold; if (n.visit && n.visit.spot && String(n.visit.spot.id || "").startsWith("ltact-")) n.visit = null; }
   if (n.x == null) return false;
   if (n.mode === "chat") { n.mode = "dwell"; n.t = 1; n.action = null; }
   const post = n.cfg && n.cfg.spots && n.cfg.spots[0];
@@ -268,6 +269,30 @@ function ltSocialNode(n) {
 const introPending = n => { if (n.deck !== n.cfg.deck) return false; const o = G.prog.crew.occ[n.occId]; return !!(o && o.intro); };
 function tickOne(n, dt) {
   if (n.x === null) { if (n.arrive) { if (G.ship.elapsed - (liftAt[n.deck] || -1e9) < 1.8) return; liftAt[n.deck] = G.ship.elapsed; arriveAt(n); } else home(n); }   // needs N1: one arrival per turbolift trip
+  // Wave A: pinned meal/cards guest — walk to seat then sit facing south; no ambient wander
+  if (n._ltActHold) {
+    const hold = n._ltActHold, nd = NODEMAP[hold.seat], st = nd && nd.seat && nd.seat.stand;
+    if (!st) { delete n._ltActHold; }
+    else if (n.mode === "walk" && n.next === "ltActSeat") {
+      const yi = yieldTo(n);
+      if (blockedAhead(n, yi) && (n.yieldT = (n.yieldT || 0) + dt) < AVOID.yieldMaxS) { /* give way */ }
+      else { if (!blockedAhead(n, yi)) n.yieldT = 0; walkStep(n, n.who, n.cfg.speed * 960, dt); }
+      if (!n.path || n.pathI >= n.path.length) {
+        n.path = null; n.x = st[0]; n.y = st[1]; n.mode = "dwell"; n.t = 1e9; n.dir = hold.face || "down";
+        n.spot = { id: "ltact-" + hold.seat, x: st[0], y: st[1], face: hold.face || "down", action: hold.action || "eat", seat: hold.seat, t: [1e9, 1e9] };
+        n.action = hold.action || "eat"; n.next = null; n.target = null;
+      }
+      n.swingAmp += clamp((n.moving ? 1 : 0) - n.swingAmp, -dt / 0.16, dt / 0.16);
+      walkSettle(n, dt); return;
+    } else {
+      n.path = null; n.mode = "dwell"; n.t = 1e9; n.dir = hold.face || "down"; n.action = hold.action || "eat";
+      n.x = st[0]; n.y = st[1];
+      n.spot = { id: "ltact-" + hold.seat, x: st[0], y: st[1], face: hold.face || "down", action: hold.action || "eat", seat: hold.seat, t: [1e9, 1e9] };
+      n.visit = { deck: n.deck, spot: n.spot };
+      n.swingAmp += clamp((0) - n.swingAmp, -dt / 0.16, dt / 0.16);
+      walkSettle(n, dt); return;
+    }
+  }
   const L = G.lt, so = n.cfg.social, node = ltSocialNode(n), now = G.ship.elapsed, R = PROG.roster;
   if (n.doneNode && node !== n.doneNode) n.doneNode = null;   // he left: may chat again next time
   n.moving = false; n.action = null; n.chatWith = null;
@@ -412,6 +437,40 @@ export const ambientOnDeck = deck => visibleOn(deck).filter(n => n.x !== null);
 export const ltChatPartner = () => ambient.find(n => n.mode === "chat" && n.chatWith === G.lt && n.deck === G.lt.deck) || null;
 export const npcOf = idOrSlot => { syncRoster(); return ambient.find(a => a.occId === idOrSlot || a.slot === idOrSlot) || null; };
 // debug / screenshots: send someone to a named spot
+
+/** Wave A fix: pin a crewmate on a lounge (or other) seat facing south for a meal/cards bout. */
+export function holdAtSeat(id, seatNodeId, action = "eat") {
+  const n = npcOf(id), nd = NODEMAP[seatNodeId];
+  if (!n || !nd || !nd.seat) return false;
+  const st = nd.seat.stand, face = nd.seat.face || nd.face || "down";
+  const spot = { id: "ltact-" + seatNodeId, x: st[0], y: st[1], face, action, seat: seatNodeId, t: [1e9, 1e9] };
+  n._ltActHold = { seat: seatNodeId, action, face };
+  n.hidden = false; n.visit = { deck: nd.deck || "lounge", spot }; // block needs wander
+  if (n.deck !== (nd.deck || n.deck)) {
+    n.deck = nd.deck || "lounge"; n.x = null; n.y = null; n.path = null; n.arrive = true;
+  }
+  if (n.x == null) { home(n); n.x = st[0]; n.y = st[1]; }
+  const dist = dDist(n.x, n.y, st[0], st[1]);
+  if (dist <= 24) {
+    n.x = st[0]; n.y = st[1]; n.path = null; n.mode = "dwell"; n.t = 1e9; n.dir = face; n.spot = spot; n.action = action; n.next = null; n.target = null;
+    if (n._talkApproach) delete n._talkApproach;
+    return { ok: true, arrived: true, seat: seatNodeId };
+  }
+  goTo(n, { x: st[0], y: st[1] }, "ltActSeat", spot);
+  return { ok: true, arrived: false, seat: seatNodeId };
+}
+export function clearLtActHold(id) {
+  const n = npcOf(id); if (!n) return;
+  if (n._ltActHold) delete n._ltActHold;
+  if (n.visit && n.visit.spot && String(n.visit.spot.id || "").startsWith("ltact-")) n.visit = null;
+}
+export function seatWalkArrived(id) {
+  const n = npcOf(id); if (!n || !n._ltActHold) return false;
+  const nd = NODEMAP[n._ltActHold.seat]; if (!nd || !nd.seat) return false;
+  const st = nd.seat.stand;
+  return n.mode === "dwell" && dDist(n.x, n.y, st[0], st[1]) <= 10;
+}
+
 export function ambientTo(id, spotId) {
   const n = npcOf(id); if (!n) return;
   if (n.x === null) home(n);

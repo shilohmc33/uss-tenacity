@@ -394,6 +394,9 @@ button.fo{white-space:nowrap}button.fo.on{background:#2e4a3a;color:#c9f5d8}
 .ltSkills small{opacity:.85}
 /* N4 holodeck + crew care */
 .chip.holoc{background:#7a5cc2}.chip.shorec{background:#3d8f8a}
+.chip.mealc{background:#8a6a3a}.chip.cardc{background:#3a6a8a}.chip.questc{background:#6a4a8a}
+.chip.dutyc{background:#4a6a5a}.chip.repairc{background:#8a5a3a}.chip.mentorc{background:#5a5a8a}.chip.logc{background:#5a7a6a}
+.chip.decorc{background:#7a6a4a}.chip.showc{background:#6a7a5a}.chip.sparc{background:#8a4a4a}
 .chip.shorec small{display:block;font-size:11px;opacity:.92;line-height:1.15}
 body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height:1.2;padding-top:4px;padding-bottom:4px;text-align:left}
 .card.holocard,.holocard{max-width:min(94vw,560px);max-height:min(85dvh,85vh);display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -401,6 +404,7 @@ body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height
 .holocard .holofoot{flex:none;position:sticky;bottom:0;padding-top:8px;background:var(--panel);box-shadow:0 -8px 12px var(--panel)}
 .holodecline{margin:6px 0 8px;padding:8px 10px;border-radius:8px;background:rgba(90,40,60,.35);border:1px solid #e79;color:#ffe2e8;font-size:13px;line-height:1.35;max-height:min(28dvh,28vh);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain}
 .holoinvs{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.holoinvs.ltact-invlist{flex-direction:column;flex-wrap:nowrap;max-height:min(42dvh,42vh);overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-right:2px}
 .holoinv{min-height:44px;min-width:44px;padding:6px 12px;border-radius:14px;background:var(--lc3);color:#141a2a;font-weight:700;font-size:12.5px}
 .holoinv.solo{background:var(--lc2)}.holoinv.done{opacity:.55;filter:grayscale(.4)}.holoinv:disabled{opacity:.55}
 .holoinvstat{margin:0 0 6px}

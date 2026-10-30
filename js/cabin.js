@@ -13,7 +13,10 @@ import { CABIN_TIERS, CABIN_ORDER, DECOR_ITEMS, DECOR, SLOT_NAMES } from "./cabi
 const P = () => G.prog, C = () => G.prog.cabin;
 export const tierIdFor = rank => CABIN_ORDER[Math.max(0, Math.min(CABIN_ORDER.length - 1, rank | 0))];
 export const tier = () => CABIN_TIERS[C().tier] || CABIN_TIERS.ltjg;
-export const slots = () => tier().slots.filter(s => !s.hidden);   // hidden = no decor art for that slot yet (cabin_v4)
+export const slots = () => {
+  const artOn = !!(PROG.ltAct && PROG.ltAct.decorArt);
+  return tier().slots.filter(s => !s.hidden || (artOn && (s.type === "large" || s.type === "window")));
+};   // Wave C: large/window stay hidden until PROG.ltAct.decorArt
 export const slotById = id => slots().find(s => s.id === id);
 const RANK_SHORT = ["Lt jg", "Lt", "Lt Cmdr", "Cmdr"];
 
@@ -141,7 +144,15 @@ export function placeItem(id, slotId) {
 }
 export function removeItem(slotId) { if (!C().placed[slotId]) return false; delete C().placed[slotId]; refreshRest(); return true; }
 export const slotsFor = type => slots().filter(s => s.type === type);
-export const itemsForSlot = type => DECOR_ITEMS.filter(d => d.slot === type);
+export const itemsForSlot = type => {
+  const artOn = !!(PROG.ltAct && PROG.ltAct.decorArt);
+  return DECOR_ITEMS.filter(d => {
+    if (d.slot !== type) return false;
+    // Wave C: large-slot catalogue + any item still lacking sprites for gated slot types wait on decorArt
+    if (!artOn && (type === "large" || (type === "window" && !d.art))) return false;
+    return true;
+  });
+};
 
 // ---------------- promotion: move quarters, remap decor ----------------
 export function moveQuarters(toId = tierIdFor(P().rank)) {

@@ -41,6 +41,7 @@ import { foe, shipOf, hullPct, combatantRows, FACTIONS } from "../ships.js";
 let hudRowsKey = "";
 import * as CC from "../crewcare.js";
 import { careHtml, holoChips } from "./holo.js";
+import { ltActChips } from "./lt-act.js";
 import { ltScreenFrac } from "../render/deck.js";
 
 const $ = s => document.querySelector(s);
@@ -280,6 +281,8 @@ export function updateHud() {
     lastDuty = dk;
     $("#dutyBody").innerHTML = items.length ? items.map(i => {
       if (i.kind === "job") { const j = i.job, there = L.node === j.node && L.mode === "use"; return `<div class="duty job"><span class="pri p4">${j.kind === "incident" ? "INCIDENT" : "ODD JOB"}</span><span class="what">${j.label}${j.deck !== L.deck ? " · " + DECKS[j.deck].name : ""}${j.kind === "incident" ? "" : ` · <b>+${Math.round(j.xp)} XP</b>`}${there ? ` · working ${Math.round(j.acc / j.need * 100)}%` : ""}</span><button data-task="${j.node}">GO</button></div>`; }
+      if (i.kind === "repair-call") return `<div class="duty"><span class="pri p3">CALL</span><span class="what">${esc(i.title)}</span><button data-ltact="repair">OPEN</button></div>`;
+      if (i.kind === "quest") return `<div class="duty"><span class="pri p2">ASK</span><span class="what">${esc(i.title)} · ${esc(i.who)}${i.deck ? " · " + (DECKS[i.deck]||{}).name : ""}</span><button data-ltact="quest">OPEN</button></div>`;
       if (i.kind === "task") return `<div class="duty"><span class="pri p1">CAPTAIN</span><span class="what">${i.task.label} · <b>${Math.ceil(i.task.t)}s</b></span><button data-task="${i.task.node}">GO</button></div>`;
       const f = G.ship.faults[i.id], s = SYSTEMS[i.id], busy = L.mode === "repair" && L.repairSys === i.id;
       const life = G.prog.med && G.prog.med.inj.find(x => x.state === "warning" && x.sys === i.id);   // phase 6: someone in sickbay depends on it
@@ -306,11 +309,11 @@ export function updateHud() {
   renderCareer();
   autoModals();
   // chips
-  const bp = IN.pending(), sg = RM.pendingSignal(), uk = upkeepState(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck) + (uk.unlocked ? uk.active ? "U" + uk.step : "u" : "-") + (VG.vigChip() ? "V" : "");
+  const bp = IN.pending(), sg = RM.pendingSignal(), uk = upkeepState(), ck = L.deck + L.mode + L.node + Object.keys(S.faults).join() + (bp ? bp.id : "") + (sg ? "s" + sg.id : "") + holoChips(L.deck) + ltActChips() + (uk.unlocked ? uk.active ? "U" + uk.step : "u" : "-") + (VG.vigChip() ? "V" : "");
   if (ck !== lastChips) {
     lastChips = ck;
     // Turbolift leads the row (and is pinned in FULL mode) so the deck-change button is never off-screen
-    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + VG.vigChip() + upkeepChip(uk) + holoChips(L.deck) + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">${bp.mode === "comm" ? "📶" : bp.mode === "approaching" ? "🚶" : "💬"} ${esc(G.prog.crew.occ[bp.id].short)}${bp.mode === "approaching" ? "…" : ""}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
+    const html = `<button class="chip lift" data-lift="1">Turbolift ▸</button>` + VG.vigChip() + upkeepChip(uk) + holoChips(L.deck) + ltActChips() + (sg ? `<button class="chip romc" data-rom-open="1">💌 ${esc(G.prog.crew.occ[sg.id].short)}</button>` : "") + (bp ? `<button class="chip beatc" data-beat-open="1">${bp.mode === "comm" ? "📶" : bp.mode === "approaching" ? "🚶" : "💬"} ${esc(G.prog.crew.occ[bp.id].short)}${bp.mode === "approaching" ? "…" : ""}</button>` : "") + Object.entries(DECKS[L.deck].nodes).filter(([, n]) => n.chip).map(([id, n], i) => {   // art batch 2: chip-less nodes (bridge side stations, seats) are tap-only
      
       const bad = n.system && S.faults[n.system];
       return `<button class="chip ${i % 2 ? "c2" : ""} ${L.mode === "use" && L.node === id ? "on" : ""} ${bad ? "bad" : ""}" data-node="${id}">${n.chip}</button>`;

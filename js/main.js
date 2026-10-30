@@ -10,6 +10,8 @@ import { ltNote } from "./crew.js";
 import { stepSim } from "./sim.js";
 import { tickTren, tren, trenTo } from "./npc.js";
 import { tickAmbient, ambient, ambientTo, npcOf, visibleOn, bindCrewTalk } from "./npc-ambient.js";
+import { tickLtAct, tickLtSession } from "./lt-act.js";
+import "./ui/lt-act.js";
 import * as CT from "./crew-talk.js";
 import * as CL from "./crewlife.js";
 import { drawDeck, resizeCam, hitTest, screenToDeck, setZoom, panBy, cam, deckFx } from "./render/deck.js";
@@ -155,7 +157,7 @@ function frame(now) {
   rt += dt;
   tickPlayDay(dt, isPresent());   // pass 07 (1): ~3 min of present play once a new play day is due
   let simDt = dt * app.timeScale;
-  while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); IN.tickBeats(s); VG.tickVig(s); simDt -= s; }
+  while (simDt > 0) { const s = Math.min(0.05, simDt); stepSim(s); tickTren(s); tickAmbient(s); IN.tickBeats(s); tickLtSession(s); tickLtAct(); VG.tickVig(s); simDt -= s; }
   seenT -= dt; if (seenT <= 0 && isPresent()) { seenT = 1; if (badClock()) clockCheck(); else { G.prog.lastSeen = Date.now(); G.prog.maxSeen = Math.max(+G.prog.maxSeen || 0, G.prog.lastSeen); } }   // R2: a bad clock stores no time; v18: the last moment on watch (BACK ON WATCH)
   if (app.view === "deck") drawDeck(dctx, rt, dt); else drawSpace(sctx, rt, dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.12; updateHud(); }

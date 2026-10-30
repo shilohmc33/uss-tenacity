@@ -1,3 +1,4 @@
+import { questDutyItem, repairDutyItem } from "./lt-act.js";
 import { G } from "./state.js";
 import { SYSTEMS, SEV_LABEL, SEV_RANK, OKAFOR_SHORT, GATE_SYSTEMS } from "./data.js";
 import { pick } from "./util.js";
@@ -39,6 +40,7 @@ export function dutyItems() {
   const act = G.sp.ev.active;
   if (act && act.task) items.push({ kind: "task", id: act.id, pri: 1, sev: null, t: 0, task: act.task });
   const job = activeJob(); if (job && !G.sp.battle && !G.sp.alert) items.push({ kind: "job", id: job.id, pri: job.kind === "incident" ? 3 : 4, sev: null, t: 0, job });   // pt04: odd jobs sit below every fault
+  try { const q = questDutyItem(); if (q) items.push(q); const rc = repairDutyItem(); if (rc) items.push(rc); } catch (e) {}
   items.sort((a, b) => a.pri - b.pri || (a.sev ? SEV_RANK[a.sev] : -1) - (b.sev ? SEV_RANK[b.sev] : -1) || b.t - a.t);
   return items;
 }
