@@ -41,6 +41,7 @@ export function applyTier() {
   const rack = dk.nodes.rack;
   Object.assign(rack, T.bed); rack.rest = rackRest();
   if (dk.nodes.desk && T.desk) Object.assign(dk.nodes.desk, T.desk);
+  if (dk.nodes.guest && T.guest) Object.assign(dk.nodes.guest, T.guest);
   reseatDecor();
   rack.name = id === "ltjg" ? "Your Rack (shared room)" : id === "cmdr" ? "Sleeping Alcove" : "Your Rack";
   dk.name = `Lt's Quarters`; dk._tier = id;

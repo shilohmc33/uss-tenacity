@@ -1,3 +1,6 @@
 
 # Proof / check screenshots (regenerated locally; never ship)
 shots/
+
+# Tool cwd mistake dumps (smoke used to write here when run from tools/)
+tools/shots/

@@ -37,7 +37,12 @@ export const sparArtOn = () => !!(PROG.ltAct && PROG.ltAct.sparArt);
 export const gymRoomOn = () => !!(PROG.ltAct && PROG.ltAct.gymRoom);
 export const decorArtOn = () => !!(PROG.ltAct && PROG.ltAct.decorArt);
 // Sparring stand-in: open floor west of Mess tables (lounge). Gym deck gated behind gymRoom.
-export const SPAR_SPOT = { deck: "lounge", x: 0.18, y: 0.58, face: "right", guestFace: "left" };
+const SPAR_SPOT_LOUNGE = { deck: "lounge", x: 0.18, y: 0.58, face: "right", guestFace: "left" };
+// Gym mat centre (gym_spots.json spar_mat_px 288,212-622,488 → mid 455,350)
+const SPAR_SPOT_GYM = { deck: "gym", x: 455 / 960, y: 350 / 640, face: "right", guestFace: "left" };
+export function sparSpot() { return gymRoomOn() ? SPAR_SPOT_GYM : SPAR_SPOT_LOUNGE; }
+/** @deprecated use sparSpot() — kept as live getter for checks that read .deck/.x */
+export const SPAR_SPOT = new Proxy({}, { get: (_, k) => sparSpot()[k] });
 
 /** Adjacent south-facing lounge seats for meal/cards guests (Lt keeps mess / their node). */
 export function pickGuestSeat(ltNode = "mess") {
@@ -69,6 +74,37 @@ function guestSeatReady(id) {
   const n = npcOf(id); if (!n || !n._ltActHold) return false;
   if (n.mode === "walk" && n.next === "ltActSeat") return false;
   return seatWalkArrived(id) || (n.mode === "dwell" && n.spot && n.spot.seat === n._ltActHold.seat);
+}
+
+
+/** Wave C: pin show-in guest on the quarters south-facing guest chair. */
+export function seatGuestForShow(id) {
+  const nd = NODEMAP.guest;
+  if (!nd || !nd.seat || nd.deck !== "quarters") return { mode: "comm", why: "no-seat" };
+  const st = nd.seat.stand;
+  const n = npcOf(id);
+  if (!n) return { mode: "comm", why: "missing" };
+  if (injured().has(id)) return { mode: "comm", why: "injured" };
+  // Bring onto quarters if needed
+  if (n.deck !== "quarters") { n.deck = "quarters"; n.x = null; n.y = null; }
+  const r = holdAtSeat(id, "guest", "talk");
+  if (!r || !r.ok) return { mode: "comm", why: "no-seat" };
+  if (r.arrived) return { mode: "near", seat: "guest" };
+  // Snap if already nearby
+  if (n.x != null) {
+    const dist = Math.hypot((n.x - st[0]) * 960, (n.y - st[1]) * 640);
+    if (dist <= 160) {
+      holdAtSeat(id, "guest", "talk");
+      const n2 = npcOf(id);
+      if (n2) {
+        n2.x = st[0]; n2.y = st[1]; n2.path = null; n2.mode = "dwell"; n2.t = 1e9; n2.dir = "down";
+        n2.spot = { id: "ltact-guest", x: st[0], y: st[1], face: "down", action: "talk", seat: "guest", t: [1e9, 1e9] };
+        n2.action = "talk"; n2.next = null;
+      }
+      return { mode: "near", seat: "guest" };
+    }
+  }
+  return { mode: "approaching", seat: "guest" };
 }
 
 /** Walk guest to a south-facing table seat; only COMM if unreachable (no path / injured / missing). */
@@ -547,10 +583,11 @@ export function tickLtSession(dt) {
     const who = s.guest || s.who; if (who) { clearLtActHold(who); endApproach(who, "alert"); }
     A().session = null; toast("Activity cancelled — red alert", "warn"); return;
   }
-  // Keep meal/cards guests pinned in their south-facing seats for the whole bout
-  if ((s.kind === "meal" || s.kind === "cards") && s.phase === "chat" && s.mode === "near" && s.guest && s.seat) {
+  // Keep meal/cards/show guests pinned in their south-facing seats for the whole bout
+  if ((s.kind === "meal" || s.kind === "cards" || s.kind === "show") && s.phase === "chat" && s.mode === "near" && s.guest && s.seat) {
     const n = npcOf(s.guest);
-    if (!n || !n._ltActHold || n._ltActHold.seat !== s.seat) holdAtSeat(s.guest, s.seat, s.kind === "cards" ? "talk" : "eat");
+    const act = s.kind === "meal" ? "eat" : "talk";
+    if (!n || !n._ltActHold || n._ltActHold.seat !== s.seat) holdAtSeat(s.guest, s.seat, act);
   }
   // Duty watch timer (present-only)
   if (s.kind === "duty" && s.phase === "watch") {
@@ -580,6 +617,25 @@ export function tickLtSession(dt) {
   const who = s.guest || s.who;
   if (s.phase !== "approach" || !who) return;
   s.wait = (s.wait || 0) + dt;
+
+  // Show-in: wait for quarters guest-chair arrival
+  if (s.kind === "show") {
+    if (!(npcOf(who) && npcOf(who)._ltActHold) && s.seat) holdAtSeat(who, s.seat, "talk");
+    const seated = guestSeatReady(who);
+    if (seated) {
+      const rec = daySlot(A().show); if (!(rec.n | 0)) { rec.n = 1; A().n.shows++; }
+      s.phase = "chat"; s.mode = "near"; s.step = 0;
+      toast(`Showing ${occ(who).short} in`, "info");
+      return;
+    }
+    if (s.wait >= 20) {
+      clearLtActHold(who); endApproach(who, "timeout");
+      const rec = daySlot(A().show); if (!(rec.n | 0)) { rec.n = 1; A().n.shows++; }
+      s.phase = "chat"; s.mode = "comm"; s.step = 0;
+      toast(`📶 ${occ(who).short} on COMM — could not reach the chair`, "info");
+    }
+    return;
+  }
 
   // Meals / cards: wait for south-facing seat arrival (not generic beside-Lt COMM)
   if (s.kind === "meal" || s.kind === "cards") {
@@ -1151,8 +1207,7 @@ export function nearSparSpot() {
 export function sparChipOk() {
   if (blockedWhy() || sparLeft() <= 0) return false;
   const L = G.lt; if (!L || L.lift) return false;
-  // Mess open floor (or berthing corridor) — never a new gym deck while gymRoom is off
-  if (gymRoomOn()) return L.deck === "lounge" || L.deck === "berthing";
+  if (gymRoomOn()) return L.deck === "gym";
   return L.deck === "lounge" || L.deck === "berthing";
 }
 
@@ -1192,20 +1247,24 @@ export function startShowIn() {
   const rec = daySlot(A().show), st = ensureInvite(rec);
   const guest = st.guest && st.guest !== "solo" ? st.guest : null;
   if (!guest) return { ok: false, why: "invite someone first" };
-  const pr = speakerPresence(guest);
-  if (pr.mode === "skip") return { ok: false, why: "guest not aboard" };
-  if (pr.mode === "approach" || pr.mode === "comm") {
-    const gate = beginSpeaker(guest);
-    if (gate.mode === "approaching") {
-      A().session = { kind: "show", phase: "approach", guest, step: 0, wait: 0 };
-      return { ok: true, approaching: true, guest };
-    }
-    if (gate.mode === "skip") return { ok: false, why: "guest unavailable" };
+  if (!NODEMAP.guest || !NODEMAP.guest.seat) return { ok: false, why: "no guest chair" };
+  const seat = seatGuestForShow(guest);
+  if (seat.mode === "approaching") {
+    A().session = { kind: "show", phase: "approach", guest, step: 0, wait: 0, seat: seat.seat };
+    toast(`${occ(guest).short} is walking to the chair…`, "info");
+    return { ok: true, approaching: true, guest, seat: seat.seat };
+  }
+  if (seat.mode === "comm") {
+    // injured / unreachable — COMM tour (no seat pin)
+    rec.n = 1; A().n.shows++;
+    A().session = { kind: "show", phase: "chat", guest, step: 0, mode: "comm" };
+    toast(`📶 Showing ${occ(guest).short} in on COMM`, "info");
+    return { ok: true, guest, mode: "comm" };
   }
   rec.n = 1; A().n.shows++;
-  A().session = { kind: "show", phase: "chat", guest, step: 0, mode: pr.mode === "near" ? "near" : "comm" };
+  A().session = { kind: "show", phase: "chat", guest, step: 0, mode: "near", seat: seat.seat };
   toast(`Showing ${occ(guest).short} in`, "info");
-  return { ok: true, guest };
+  return { ok: true, guest, seat: seat.seat };
 }
 
 export function showView() {
@@ -1252,7 +1311,7 @@ function finishShow() {
   awardXP(SHOW_XP, "manual", "show-in");
   const r = needsOf(s.guest); r.n.social = Math.min(100, r.n.social + 20); r.n.fun = Math.min(100, r.n.fun + 10);
   addEntry(s.guest, "note", "saw your quarters");
-  endApproach(s.guest, "finished");
+  clearLtActHold(s.guest); endApproach(s.guest, "finished");
   log(`Showed ${occ(s.guest).short} your quarters.`, "good");
   daySlot(A().show).invite = null;
   A().session = null;
@@ -1270,8 +1329,8 @@ export function sparTargets() {
 export function startSpar(id) {
   const why = blockedWhy(); if (why) return { ok: false, why };
   if (sparLeft() <= 0) return { ok: false, why: "already sparred today" };
-  if (!sparChipOk() && !(G.lt && (G.lt.deck === "lounge" || G.lt.deck === "berthing"))) {
-    return { ok: false, why: "meet in the Mess or Berthing" };
+  if (!sparChipOk()) {
+    return { ok: false, why: gymRoomOn() ? "meet in the Gym" : "meet in the Mess or Berthing" };
   }
   // invite roll
   const rec = daySlot(A().spar);
@@ -1294,7 +1353,11 @@ export function startSpar(id) {
   }
   if (gate.mode === "skip") return { ok: false, why: "unavailable" };
   rec.n = 1; A().n.spars++;
-  A().session = { kind: "spar", phase: "chat", who: guest, guest, step: 0, mode: gate.mode === "near" ? "near" : "comm", wins: 0, art: sparArtOn() };
+  const spot = sparSpot();
+  try {
+    if (G.lt && G.lt.deck === spot.deck) { G.lt.x = spot.x; G.lt.y = spot.y; G.lt.dir = spot.face; G.lt.mode = "idle"; G.lt.node = null; }
+  } catch (e) {}
+  A().session = { kind: "spar", phase: "chat", who: guest, guest, step: 0, mode: gate.mode === "near" ? "near" : "comm", wins: 0, art: sparArtOn(), pose: sparArtOn() ? "punch" : null };
   toast(`Sparring with ${occ(guest).short}${sparArtOn() ? "" : " · stand-in poses"}`, "info");
   return { ok: true, yes: true };
 }
@@ -1348,6 +1411,7 @@ export function answerSpar(j) {
   if (ch.style === "meas") pWin += 0.08;
   if (ch.style === "agg") pWin += 0.02;
   if (ch.style === "show") pWin -= 0.05;
+  if (s.art) s.pose = ch.style === "meas" ? "block" : "punch";
   // holodeck fitness buff synergy if present
   try {
     const buffs = (P().holo && P().holo.buffs && P().holo.buffs.lt) || (G.prog.holo && G.prog.holo.buffs && G.prog.holo.buffs.lt);
@@ -1379,10 +1443,34 @@ function finishSpar() {
 }
 
 
+/** Active card-night table prop (poker/tongo) centred on the round lounge table; covers the table lamp. */
+const TABLE_FG = {
+  table1: [346, 273, 411, 315], mess: [468, 273, 533, 315], table3: [590, 270, 655, 312],
+  table4: [353, 383, 418, 425], table5: [491, 380, 556, 422], table6: [631, 377, 696, 419],
+};
+export function cardTableProp() {
+  const s = A().session;
+  if (!s || s.kind !== "cards" || (s.phase !== "chat" && s.phase !== "approach")) return null;
+  const seat = s.seat || (G.lt && G.lt.node) || "mess";
+  const key = seat === "bar" ? "mess" : (TABLE_FG[seat] ? seat : "mess");
+  const box = TABLE_FG[key]; if (!box) return null;
+  const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
+  const src = s.game === "tongo" ? "prop-lounge-tongo" : "prop-lounge-poker";
+  // 112px wide props; height from native aspect (poker 81, tongo 88)
+  const pw = 112, ph = s.game === "tongo" ? 88 : 81;
+  return {
+    src, table: key,
+    box: [cx - pw / 2, cy - ph / 2, cx + pw / 2, cy + ph / 2],
+    baseY: box[3],
+    hideLamp: true,
+  };
+}
+export function cardsLampHidden() { return !!cardTableProp(); }
+
 export function chipsHtml() {
   let h = "";
-  if (mealChipOk()) h += `<button class="chip mealc" data-ltact="meal">Share a meal ▸</button>`;
-  if (cardsChipOk()) h += `<button class="chip cardc" data-ltact="cards">Card night ▸</button>`;
+  if (mealChipOk()) h += `<button class="chip mealc hasart" data-ltact="meal"><img class="chipart" src="assets/chip-meal.webp" alt="">Share a meal ▸</button>`;
+  if (cardsChipOk()) h += `<button class="chip cardc hasart" data-ltact="cards"><img class="chipart" src="assets/chip-cards.webp" alt="">Card night ▸</button>`;
   if (dutyChipOk()) h += `<button class="chip dutyc" data-ltact="duty">Stand this watch ▸</button>`;
   if (A().repair.active) h += `<button class="chip repairc" data-ltact="repair">Repair call ▸</button>`;
   else if (pendingKitCalls().length && repairLeft() > 0 && !blockedWhy()) h += `<button class="chip repairc" data-ltact="repair-offer">Repair call ▸</button>`;

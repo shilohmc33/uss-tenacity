@@ -328,12 +328,12 @@ export const PROG = {
     dinner: { cost: { rations: 150 }, cd: 3, guests: 3, opinion: 4, minRank: 1, noSeniors: true, sellBack: false },   // gifts phase (memo §2): opinion 2 -> 4 to stay competitive with gifts. repeatable rations sink: host the 3 crew who like you least (Lt+; every 3 ship's days)
     restOffline: false,                        // (future) let offline rest use the cabin rate
   },
-  // ---- Lt activities (Waves A–D): art / room gates stay OFF until Shiloh approves ----
+  // ---- Lt activities (Waves A–D): Wave C art batch 1 + gym ON (Shiloh approved) ----
   ltAct: {
     questsArt: false,   // Wave A: unique quest stills
-    decorArt: false,    // Wave C: new catalogue items + unhide large/window slots
-    sparArt: false,     // Wave C: spar pose sheet (idle/talk stand-in while off)
-    gymRoom: false,     // Wave C: dedicated gym deck (spar on lounge open floor while off)
+    decorArt: true,     // Wave C: art batch 1 approved — catalogue + large/window slots
+    sparArt: true,      // Wave C: lt-spar-v1 sheet approved
+    gymRoom: true,      // Wave C: deck_gym_v1 approved — spar on mat
   },
   // ---- phase 5: promotion boards. Near a rank threshold (readiness 100, early call-up or the Lt guarantee) the board sits
   // instead of a silent promotion: Okafor chairs the engineering-track boards, T'Ren the command one. The board never

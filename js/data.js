@@ -8,8 +8,8 @@ export const DW = 960, DH = 640;
 export const COLS = 60, ROWS = 40;
 const R = (x0, y0, x1, y1) => [x0, y0, x1, y1];
 
-export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "quarters", "lounge"];
-export const CREW_DECKS = ["bridge", "engineering", "medical", "berthing", "lounge"];   // decks with painted plates + walk masks
+export const DECK_ORDER = ["bridge", "engineering", "medical", "berthing", "quarters", "lounge", "gym"];
+export const CREW_DECKS = ["bridge", "engineering", "medical", "berthing", "lounge", "gym"];   // decks with painted plates + walk masks
 export const DECKS = {
   bridge: {
     // Bridge v4b (sprites/deck_bridge_v4b, assets/src/deck_bridge_v4b): the v4 plate with the lift interiors painted behind open
@@ -121,6 +121,7 @@ export const DECKS = {
     nodes: {
       rack: { name: "Your Rack", chip: "Rest (quarters)", ...CABIN_TIERS.ltjg.bed, rest: CABIN_TIERS.ltjg.rest, quarters: true },
       desk: { name: "Desk", chip: "Desk", ...CABIN_TIERS.ltjg.desk, quarters: true },   // art batch 2: cabin_v4 desk stand (applyTier re-points it per tier)
+      guest: { name: "Guest Chair", ...CABIN_TIERS.ltjg.guest, quarters: true },   // Wave C: south-facing show-in seat (applyTier re-points per tier)
     },
   },
   lounge: {
@@ -149,6 +150,19 @@ export const DECKS = {
       bar: { name: "Bar Counter", chip: "Bar Counter", x: 0.4425, y: 0.3375, mx: 0.4425, my: 0.27, rest: 2.5 },
     },
   },
+  // Gym (sprites/deck_gym_v1): same lobby/doors geometry as the lounge; spar mat 288,212-622,488; hanging bag blocked in mask; no seats.
+  gym: {
+    name: "Gym", plate: "deck-gym", glow: [0.40, 0.28, "255,200,140"],
+    lift: { x: 0.145, y: 0.6625, mx: 0.145, my: 0.555 },   // same lobby boarding spot as lounge
+    // coarse fallback until walk-gym.png loads (open floor + lobby; mat is walkable; bag blocked by mask)
+    base: [R(0.25, 0.20, 0.815, 0.945), R(0.035, 0.45, 0.235, 0.745), R(0.235, 0.615, 0.285, 0.685),
+      R(288 / 960, 212 / 640, 622 / 960, 488 / 640)],
+    blocks: [R(0.225, 0.205, 0.625, 0.36), R(0.25, 0.015, 0.645, 0.205), R(0.485, 0.73, 0.855, 0.955),
+      R(100 / 960, 120 / 640, 160 / 960, 200 / 640)],   // hanging bag approx (mask is authoritative)
+    nodes: {
+      mat: { name: "Sparring Mat", chip: "Sparring Mat", x: 455 / 960, y: 400 / 640, mx: 455 / 960, my: 350 / 640, face: "right" },
+    },
+  },
 };
 // Per-deck light on the crew (playtest-02 NEW-08 / S6). Retune here when the new deck art lands.
 //   tint:  "r,g,b" multiplied into crew sprites at strength a (0.10-0.15 = subtle cast of the room's light)
@@ -159,6 +173,7 @@ export const DECK_LIGHT = {
   medical:     { tint: "255,244,228", a: 0.08 },   // Medical v2: bright TNG sickbay, warm white (the teal wash greyed the cream plate)
   berthing:    { tint: "255,196,110", a: 0.14 },   // warm amber cabin light
   lounge:      { tint: "255,190,110", a: 0.15 },   // warm bar amber
+  gym:         { tint: "255,200,140", a: 0.12 },   // warm gym lights
   quarters:    { tint: "255,214,160", a: 0.10 },   // warm cabin lamp
 };
 export const NODEMAP = {};
@@ -392,7 +407,10 @@ export const SHEET_CELL = {
 // Adding a character = one asset + one entry here.
 export const CHAR_SHEETS = {
   ...Object.fromEntries(Object.entries(TINT_BASES).map(([k, b]) => [k, { [b.img]: b.actions || ["walk", "talk", "eat", "computer", "kneel", "weld"] }])),
-  lt: { "lt-v3": ["walk", "talk", "eat", "computer", "kneel", "weld"] },      // sprites/lt_topdown_v3; walk rows = lt_walkfix_v1 (tools/apply-walkfix.py)
+  lt: {
+    "lt-v3": ["walk", "talk", "eat", "computer", "kneel", "weld"],      // sprites/lt_topdown_v3; walk rows = lt_walkfix_v1
+    "lt-spar-v1": ["punch", "block"],   // Wave C: 640x2304, 160x384 cells, feet (80,376); rows punchA/M/B then blockA/M/B; play A,M,B,M
+  },
   tren: { "tren-v1": ["walk", "talk", "eat", "computer", "kneel", "weld"] },  // sprites/tren_topdown_v1 (Captain T'Ren); up/down walk = tren_walkfix_v1
   // Andorian crewwoman (mess hall ambient NPC, AMBIENT_NPCS below). STAND-IN: her art is delayed, so she borrows
   // T'Ren's sheet. When assets/andorian-v1.webp lands, change the key "tren-v1" on the next line to "andorian-v1"
@@ -435,6 +453,21 @@ for (const [who, sheets] of Object.entries(CHAR_SHEETS)) {
     });
   });
 }
+
+// Wave C spar sheet: right column shifted 12px left, left column 4px right (frames_info.json x_shift_by_dir).
+// ax' = ax - shift so feet stay planted when the cell content was nudged in the sheet.
+(function applySparXShift() {
+  const shift = { right: -12, left: 4 };
+  const F = CHAR_FRAMES.lt; if (!F) return;
+  for (const act of ["punch", "block"]) {
+    if (!F[act]) continue;
+    for (const [dir, dax] of Object.entries(shift)) {
+      if (!F[act][dir]) continue;
+      F[act][dir] = F[act][dir].map(fr => ({ ...fr, ax: fr.ax - dax }));
+    }
+  }
+})();
+
 // back-compat names for the Lieutenant
 export const LT2_SHEETS = CHAR_SHEETS.lt;
 export const LT2_FRAMES = CHAR_FRAMES.lt;
@@ -509,6 +542,10 @@ export const DECK_OCCL = {
   // hides the feet of a walker behind it (Lounge v2: the artist's hires cut, plus the six table fronts over the seated legs). Elsewhere the masks keep feet north of (or beside) the props: the six tables' carve
   // keeps feet off the tabletops (row 16 centres 4 px short of the top edge), the planters' leaves start ~12 px below the floor's
   // south edge, the bar stools and the lift-lobby pillar / door leaf are only ever beside a walker.
+  gym: { items: [
+    // same lobby doorway as lounge (deck_gym_v1 shares lobby geometry)
+    { id: "lobby_jamb", src: "fg-lounge-lobby_jamb", crop: true, box: [202, 459, 246, 502], baseY: 495 },
+  ] },
   lounge: { items: [
     { id: "lobby_jamb", src: "fg-lounge-lobby_jamb", crop: true, box: [202, 459, 246, 502], baseY: 495 },
     { id: "table1", src: "fg-lounge-table1", crop: true, box: [346, 273, 411, 315], baseY: 315, seats: ["table1"] },
@@ -561,6 +598,7 @@ export const CONSOLES = {
   engineering: [[420, 446, "up"], [500, 446, "up"], [196, 275, "right"], [722, 360, "left"], [288, 592, "up"], [652, 282, "up"]],   // final art: core W/E (facing the MSD), port console, stbd bank (artist 718 -> 722: the 718 grid cell is blocked), storage panel, NE console (new optional neCon)
   medical: [[288, 192, "left"], [288, 384, "left"], [576, 165, "up"], [404, 446, "up"], [691, 339, "up"]],   // bedsides, office desk, surgery terminal (Medical v2: the LCARS panel on the bay front, x 388-420), lab bench
   lounge: [[288, 230, "up"], [552, 440, "down"], [696, 440, "down"], [588, 224, "up"]],   // galley pass, hydroponics x2, replicator
+  gym: [],   // spar mat only; no typing consoles
   berthing: [],
 };
 
@@ -668,7 +706,8 @@ import { DOOR_IMAGES } from "./doors-data.js";
 import { SHIP_STATE_IMAGES } from "./ship-states.js";
 export const IMAGES = [...new Set([...DOOR_IMAGES, ...SHIP_STATE_IMAGES,
   "ship-bajoran_transport", "ship-bajoran_transport-damaged", "ship-ferengi_marauder", "ship-runabout", "ship-comet", "ship-comet-tail",   // Oct 27: vignettes_v1 (Shiloh approved)
-  "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge",
+  "deck-bridge", "fg-bridge", "deck-engineering", "deck-medical", "deck-berthing", "deck-lounge", "deck-gym",
+  "chip-meal", "chip-cards", "chip-tongo", "prop-lounge-poker", "prop-lounge-tongo",
   "crew-atlas", "crew-captain", "crew-engineer", "crew-science", "crew-security", "lt-walk-v2", "tren-walk-v2", "crew-gold-walk-v2", "crew-blue-walk-v2",
   "space-backdrop", "bg-ds9", "bg-convoy", "bg-derelict", "bg-travel", "bg-earth", "bg-qonos", "bg-romulus", "bg-vulcan",
   ...Object.values(SHIP_ART).map(a => a.img).filter(Boolean), ...Object.values(SHIP_PAINTED).map(a => a.img), ...Object.values(FX_SHEET.sheets).map(x => x.img), ...Object.values(CHAR_SHEETS).flatMap(o => Object.keys(o)),

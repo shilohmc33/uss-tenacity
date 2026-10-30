@@ -4,6 +4,7 @@ import { DECKS, NODEMAP, SYSTEMS, DW, DH, COLS, ROWS, CREW_FRAMES, FIG_H, FIG_K,
 import { occluderCast, occlDrawn } from "./occluders.js";
 import { updateDoors, drawDoors } from "./doors.js";
 import { actionFrame, animSeed, walkPose } from "../anim.js";
+import { cardTableProp, A as ltActA } from "../lt-act.js";
 import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
 import { SLOTMAP, DEPTS } from "../roster.js";
 import { tren, trenSeat } from "../npc.js";
@@ -126,6 +127,10 @@ export function hitTest(fx, fy) {
 function drawFrame(ctx, img, f, px, py, s) { ctx.drawImage(img, f.x, f.y, f.w, f.h, px - f.ax * s, py - f.ay * s, f.w * s, f.h * s); }
 // Which Lt action loop is playing right now; null = standing / walking (walk sheet).
 function ltAction(L, nd) {
+  try {
+    const s = ltActA && ltActA().session;
+    if (s && s.kind === "spar" && s.phase === "chat" && s.art && (s.pose === "punch" || s.pose === "block")) return s.pose;
+  } catch (e) {}
   if (L.mode === "use" && ltChatPartner()) return "talk";   // chatting with an ambient crew member (mess / bar)
   if (L.mode === "repair") { const sy = SYSTEMS[L.repairSys]; return (sy && sy.repairPose) || "weld"; }
   if (L.mode === "use" && nd) {
@@ -390,6 +395,17 @@ export function drawDeck(ctx, t, dt) {
   // pass 18: foreground props (data.js DECK_OCCL) join the sort at their footprint line (render/occluders.js)
   updateDoors(L.deck, dt, cast);   // sliding doors: every figure's feet (x, y fractions) so far; drawn next frame under the cast
   if (!L.lift && !dk.cabin) cast.push(...occluderCast(ctx, L.deck, cast));
+  // Wave C: card-night table prop (covers the table lamp on the plate)
+  if (!L.lift && L.deck === "lounge") {
+    const prop = cardTableProp();
+    if (prop && IMG[prop.src]) {
+      const [x0, y0, x1, y1] = prop.box;
+      cast.push({
+        y: prop.baseY / DH, x: (x0 + x1) / 2 / DW, id: "~cardprop",
+        draw: () => { ctx.drawImage(IMG[prop.src], x0, y0, x1 - x0, y1 - y0); },
+      });
+    }
+  }
   cast.sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).forEach(c => c.draw());
   if (!L.lift) for (const c of cast) if (c.id && c.id !== "lt" && G.prog && G.prog.needs && G.prog.needs[c.id]) { const b = bandOf(c.id); if (b >= 2) { const y0 = (c.y - HEAD_Y * (c.seat ? 0.78 : 1.02)) * DH, sx = (c.x * DW - cam.x) * cam.scale + cam.w / 2, res = sx < 260 ? 34 : 4, top = cam.y - (cam.h / 2 - res) / cam.scale + 9 * K;
     const yy = Math.max(y0, top), side = yy - y0 > 6 * K ? 13 * K : 0;   /* P30: clear of the deck label only where it is; still pushed onto the head -> sit beside it, never over the face */

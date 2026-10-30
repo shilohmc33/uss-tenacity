@@ -61,6 +61,8 @@ export const ACTION_TIMING = {
   computer: { frames: [[0.16, 0.30], [0.16, 0.30], [0.16, 0.30], [0.16, 0.30]], rest: { every: [3, 6], dur: [1.0, 3.0], frame: 1 } },
   weld: { frames: [[0.12, 0.18], [0.12, 0.18], [0.12, 0.18], [0.12, 0.18]] },
   kneel: { frames: [[0.2, 0.26], [0.2, 0.26], [0.2, 0.26], [0.2, 0.26]], rest: { every: [3, 5], dur: [0.6, 1.2], frame: 1 } },
+  punch: { frames: [[0.14, 0.2], [0.12, 0.18], [0.16, 0.22], [0.12, 0.18]] },   // Wave C spar A,M,B,M
+  block: { frames: [[0.18, 0.26], [0.2, 0.3], [0.18, 0.26], [0.2, 0.3]], rest: { every: [2, 3], dur: [0.4, 0.8], frame: 1 } },
   seated: { frames: [[1.4, 2.4], [1.4, 2.4]], order: [0, 1] },   // seated idle breathing A/B (art hook)
   lying: { frames: [[1.2, 1.6], [1.2, 1.6]], order: [0, 1] },    // lying breathing A/B (art hook)
 };

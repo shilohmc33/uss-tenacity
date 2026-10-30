@@ -397,6 +397,9 @@ button.fo{white-space:nowrap}button.fo.on{background:#2e4a3a;color:#c9f5d8}
 .chip.mealc{background:#8a6a3a}.chip.cardc{background:#3a6a8a}.chip.questc{background:#6a4a8a}
 .chip.dutyc{background:#4a6a5a}.chip.repairc{background:#8a5a3a}.chip.mentorc{background:#5a5a8a}.chip.logc{background:#5a7a6a}
 .chip.decorc{background:#7a6a4a}.chip.showc{background:#6a7a5a}.chip.sparc{background:#8a4a4a}
+.chip.hasart,.holoinv.hasart{display:inline-flex;align-items:center;gap:8px}
+.chip .chipart,.holoinv .chipart{width:44px;height:44px;object-fit:contain;flex:none;border-radius:8px;image-rendering:auto}
+.holoinv .chipart{width:40px;height:40px}
 .chip.shorec small{display:block;font-size:11px;opacity:.92;line-height:1.15}
 body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height:1.2;padding-top:4px;padding-bottom:4px;text-align:left}
 .card.holocard,.holocard{max-width:min(94vw,560px);max-height:min(85dvh,85vh);display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}

@@ -44,8 +44,8 @@ function renderInvite(kind) {
   const title = kind === "meal" ? "SHARE A MEAL" : "CARD NIGHT";
   const cost = kind === "meal" ? `${LA.MEAL_COST.rations} rations` : `${LA.CARD_ANTE.rations} rations ante`;
   const games = kind === "cards" ? `<p class="cnote">Game:
-    <button type="button" class="holoinv" data-ltact-game="poker">Poker</button>
-    <button type="button" class="holoinv${LA.tongoUnlocked() ? "" : " done"}" data-ltact-game="tongo" ${LA.tongoUnlocked() ? "" : "disabled"}>Tongo${LA.tongoUnlocked() ? "" : " · dock at DS9"}</button>
+    <button type="button" class="holoinv hasart" data-ltact-game="poker"><img class="chipart" src="assets/chip-cards.webp" alt="">Poker</button>
+    <button type="button" class="holoinv hasart${LA.tongoUnlocked() ? "" : " done"}" data-ltact-game="tongo" ${LA.tongoUnlocked() ? "" : "disabled"}><img class="chipart" src="assets/chip-tongo.webp" alt="">Tongo${LA.tongoUnlocked() ? "" : " · dock at DS9"}</button>
   </p>` : "";
   const btns = targets.map(t => `<button type="button" class="holoinv" data-ltact-ask="${esc(t.id)}" data-kind="${kind}" style="min-height:44px;width:100%;text-align:left">${esc(t.short)} · ${esc(t.word)}</button>`).join("");
   m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>${title}</h3>
@@ -244,7 +244,7 @@ function renderSparInvite() {
   const art = LA.sparArtOn();
   const rows = list.map(j => `<button type="button" class="holoinv" data-ltact-spar="${esc(j.id)}" style="min-height:44px">${esc(j.short)}${j.love ? " · keen" : ""} · ${esc(j.word)}</button>`).join("");
   m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>SPARRING</h3>
-    <p class="cnote">One bout per real day. Open floor in the Mess (stand-in idle/talk poses${art ? "" : " — spar sheet gated"}). No injuries.</p>
+    <p class="cnote">One bout per real day. ${art && LA.gymRoomOn() ? "On the Gym mat" : art ? "Spar poses on" : "Open floor in the Mess (stand-in)"}${art ? "" : " — spar sheet gated"}. No injuries.</p>
     <div class="holoinvs">${rows || "<p class='cnote'>No partners free.</p>"}</div>
   </div><div class="holofoot"><button class="close" data-ltact-close="1">CLOSE</button></div></div>`;
   m.hidden = false;
