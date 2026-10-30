@@ -50,6 +50,7 @@ const ok = (c, m) => { if (!c) { fails++; console.error('FAIL', m); } else conso
       const gymDeck = !!DECKS.gym;
       return {
         sparArt: !!PROG.ltAct.sparArt, gymRoom: !!PROG.ltAct.gymRoom, decorArt: !!PROG.ltAct.decorArt,
+        crewSparArt: !!PROG.ltAct.crewSparArt, phaserArt: !!PROG.ltAct.phaserArt,
         sparArtOn: LA.sparArtOn(), gymRoomOn: LA.gymRoomOn(),
         largeVisible: CB.slots().some(s => s.type === 'large'),
         windowExtra: CB.slots().filter(s => s.type === 'window').length >= 1,
@@ -60,6 +61,7 @@ const ok = (c, m) => { if (!c) { fails++; console.error('FAIL', m); } else conso
     });
     ok(F.sparArt && F.gymRoom && F.decorArt && F.sparArtOn && F.gymRoomOn,
       `${tag} gates ON (sparArt/gymRoom/decorArt) ` + J({ sparArt: F.sparArt, gymRoom: F.gymRoom, decorArt: F.decorArt }));
+    ok(!F.crewSparArt && !F.phaserArt, `${tag} crewSparArt/phaserArt OFF ` + J({ crewSparArt: F.crewSparArt, phaserArt: F.phaserArt }));
     ok(F.largeVisible && F.largeItems >= 1, `${tag} decor large slots visible + catalogue ` + J({ largeVisible: F.largeVisible, largeItems: F.largeItems }));
     ok(F.missing.length === 0, `${tag} Wave C assets load ` + J({ missing: F.missing, loaded: F.loaded }));
     ok(F.axR === 92 && F.axL === 76, `${tag} spar x offsets (right ax=92, left ax=76) ` + J({ axR: F.axR, axL: F.axL }));

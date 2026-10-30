@@ -143,12 +143,28 @@ const ok = (c, m) => { if (!c) { fails++; console.error('FAIL', m); } else conso
     ok(A1.startOk && A1.done && A1.n >= 1 && A1.left === 0 && !A1.awayArt,
       `${tag} away listen completes 1/day art gated ` + J(A1));
     ok(A1.art === 'story_generic_space', `${tag} away art REUSE generic_space ` + J({ art: A1.art }));
+    // Away abort when ship goes under way mid-mission
+    const AB = await p.evaluate(async () => {
+      const LA = await import('/js/lt-act.js'), G = __T.G;
+      const today = (await import('/js/progression.js')).localDate();
+      LA.A().away = { d: today, n: 0, invite: { rolls: { hale: true }, nos: 0, guest: 'hale' }, mission: null };
+      LA.A().session = null;
+      G.sp.location = 'ds9'; G.sp.travel = null;
+      const st = LA.startAway('listen');
+      G.sp.travel = { dest: 'convoy', t: 1, dur: 600, from: 'ds9' };
+      LA.tickLtAct();
+      const cleared = !LA.A().session;
+      G.sp.travel = null; G.sp.location = 'ds9'; // restore dock for later checks
+      return { start: !!(st && st.ok), cleared };
+    });
+    ok(AB.start && AB.cleared, `${tag} away abort under way ` + J(AB));
     if (SHOTS) await p.screenshot({ path: `${OUT}waveD-away-listen-${tag}.png` });
 
     // ---- Away blocked when already used; no hull damage path ----
     const A2 = await p.evaluate(async () => {
       const LA = await import('/js/lt-act.js'), G = __T.G;
       const hull0 = G.ship.hull;
+      G.sp.travel = null; G.sp.location = 'ds9'; G.sp.battle = null; G.sp.alert = null;
       const why = LA.awayReadyWhy();
       // Reset day slot for supply run (keep today's date so daySlot won't wipe invite)
       const today = (await import('/js/progression.js')).localDate();

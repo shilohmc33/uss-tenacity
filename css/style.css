@@ -415,6 +415,16 @@ body.mode-play #playbar .chip.shorec,.chip.shorec{white-space:normal;line-height
 .ltact-still{margin:0 0 8px;border-radius:10px;overflow:hidden;max-height:28vh;background:#0a1420}
 .ltact-still img{display:block;width:100%;height:auto;max-height:28vh;object-fit:cover;object-position:center top}
 .ltact-still.none{display:none}
+/* LOW: keep guest / spar partner on screen above the chat sheet (phone) */
+#ltActChat.modal{align-items:flex-end;background:rgba(0,0,0,.18)}
+#ltActChat .ltactcard{max-height:min(52dvh,52vh);width:100%;max-width:min(94vw,560px);border-radius:16px 16px 0 0;margin:0}
+#ltActChat.showin .ltactcard,#ltActChat.sparring .ltactcard{max-height:min(48dvh,48vh)}
+#ltActChat .ltact-still{max-height:18vh}
+#ltActChat .ltact-still img{max-height:18vh}
+@media (orientation:landscape) and (max-height:500px){
+  #ltActChat .ltactcard{max-height:min(62dvh,62vh)}
+}
+
 .chip.shoreevec,.chip.awayc{background:#1a3a4a;border-color:#5aa0b8}
 .holorow{gap:8px}.holorow.off{opacity:.6}
 .holothumb{width:40px;height:72px;object-fit:cover;border-radius:6px;flex:none}
@@ -613,3 +623,8 @@ body.mode-info:not([class*="itab-"]) #p-orders,body.mode-info:not([class*="itab-
 #vigBox .vbBonus{pointer-events:auto;align-self:flex-start;background:#1f4d7a;color:#fff;border:1px solid #8fc2ff;border-radius:14px;padding:6px 12px;font:600 12.5px inherit;cursor:pointer;min-height:44px}
 .chip.vigc{background:#173a5e;border-color:#6fb3ff}body.view-space .chip.vigc{display:none}
 @media (max-height:500px){#vigBox .vb{font-size:12px;padding:4px 9px}#vigBox{gap:3px;bottom:6px}}
+
+.chip.phaserc{background:#1a3a4a;border-color:#5aa0b8}
+.phaser-arena{border:1px solid #2a4a6a}
+.phaser-tgt{z-index:2}
+.phaser-beam{z-index:1}

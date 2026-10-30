@@ -11,7 +11,8 @@ import { addEntry } from "./plog.js";
 import { SLOTMAP } from "./roster.js";
 import { beginSpeaker, endApproach, speakerPresence, speakerNpc } from "./crew-talk.js";
 import { holdAtSeat, clearLtActHold, seatWalkArrived, npcOf, seatedOn, ambient } from "./npc-ambient.js";
-import { NODEMAP, DECKS } from "./data.js";
+import { NODEMAP, DECKS, CREW_SPAR_SHEETS, CREW_SPAR_XSHIFT, CHAR_FRAMES, LT2_DIRS, LT2_CELL, LT2_STAND_H, OWN_SHEETS, PHASER_SHEET, CHAR_SHEETS } from "./data.js";
+import { IMG } from "./assets.js";
 import { findPath } from "./path.js";
 import { sendUse } from "./crew.js";
 import { atDS9, C as careC } from "./crewcare.js";
@@ -33,12 +34,35 @@ export const CARD_ANTE = { rations: 8 };
 export const MEAL_XP = 4, CARD_XP = 3, QUEST_XP = 12;
 export const DUTY_XP = 6, MENTOR_XP = 5, LOG_XP = 2, REPAIR_CALL_XP = 5;
 export const SHOW_XP = 4, SPAR_XP = 5;
-export const SHORE_XP = 8, AWAY_XP = 14;
+export const SHORE_XP = 8, AWAY_XP = 14, PHASER_XP = 4;
 export const sparArtOn = () => !!(PROG.ltAct && PROG.ltAct.sparArt);
 export const gymRoomOn = () => !!(PROG.ltAct && PROG.ltAct.gymRoom);
 export const decorArtOn = () => !!(PROG.ltAct && PROG.ltAct.decorArt);
 export const awayArtOn = () => !!(PROG.ltAct && PROG.ltAct.awayArt);
 export const ds9ArtOn = () => !!(PROG.ltAct && PROG.ltAct.ds9Art);
+export const crewSparArtOn = () => !!(PROG.ltAct && PROG.ltAct.crewSparArt);
+export const phaserArtOn = () => !!(PROG.ltAct && PROG.ltAct.phaserArt);
+
+/** Register lt phaser CHAR_FRAMES when IMG[lt-phaser-v1] is loaded (no IMAGES preload — flag OFF until approved). */
+export function ensureLtPhaserFrames() {
+  const P = PHASER_SHEET; if (!P || !IMG[P.img] || !IMG[P.img].width) return false;
+  const F = CHAR_FRAMES.lt || (CHAR_FRAMES.lt = {});
+  if (F.phaser && F.phaser.down) return true;
+  const C = P.cell || LT2_CELL;
+  // Append as next action row index after existing lt actions on this sheet alone
+  F.phaser = {};
+  LT2_DIRS.forEach((dir, col) => {
+    F.phaser[dir] = [0, 1, 2].map(k => ({ img: P.img, x: col * C.w, y: k * C.h,
+      w: C.w, h: C.h, ax: C.ax, ay: C.ay, refH: LT2_STAND_H }));
+  });
+  // Also stash on CHAR_SHEETS for tooling (does not affect IMAGES — already built)
+  try { if (CHAR_SHEETS.lt && !CHAR_SHEETS.lt[P.img]) CHAR_SHEETS.lt[P.img] = [P.action]; } catch (e) {}
+  return true;
+}
+export function phaserMuzzle(dir = "down") {
+  const P = PHASER_SHEET; const m = P && P.muzzle_px && P.muzzle_px[dir];
+  return m ? { x: m[0], y: m[1] } : { x: 80, y: 200 };
+}
 // Sparring stand-in: open floor west of Mess tables (lounge). Gym deck gated behind gymRoom.
 const SPAR_SPOT_LOUNGE = { deck: "lounge", x: 0.18, y: 0.58, face: "right", guestFace: "left" };
 // Gym mat centre (gym_spots.json spar_mat_px 288,212-622,488 → mid 455,350)
@@ -185,9 +209,10 @@ export const freshLtAct = () => ({
   spar: { d: "", n: 0, invite: null }, // sparring bout
   shore: { d: "", n: 0, invite: null, pick: null, visitDone: false }, // DS9 shore evening
   away: { d: "", n: 0, invite: null, mission: null }, // present away team
+  phaser: { d: "", n: 0 }, // gym phaser range
   writes: [],                         // Lt-authored log scraps
   everDS9: false,
-  n: { meals: 0, cards: 0, quests: 0, duty: 0, repairs: 0, mentor: 0, logs: 0, shows: 0, spars: 0, shores: 0, aways: 0 },
+  n: { meals: 0, cards: 0, quests: 0, duty: 0, repairs: 0, mentor: 0, logs: 0, shows: 0, spars: 0, shores: 0, aways: 0, phasers: 0 },
   session: null,
 });
 
@@ -216,6 +241,7 @@ export function hardenLtAct(p) {
   f.show = day(s.show); f.spar = day(s.spar);
   f.shore = Object.assign(day(s.shore), { pick: null, visitDone: !!(s.shore && s.shore.visitDone) });
   f.away = Object.assign(day(s.away), { mission: null });
+  f.phaser = { d: dOf(s.phaser && s.phaser.d) || "", n: clamp(Math.floor(+(s.phaser && s.phaser.n) || 0), 0, 99) };
   f.duty = { d: dOf(s.duty && s.duty.d) || "", fams: {} };
   if (s.duty && s.duty.fams && typeof s.duty.fams === "object") {
     for (const [k, v] of Object.entries(s.duty.fams)) if (WATCH_NODES[k]) f.duty.fams[k] = clamp(Math.floor(+v || 0), 0, 9);
@@ -229,7 +255,8 @@ export function hardenLtAct(p) {
   f.n = { meals: clamp(Math.floor(+nn.meals || 0), 0, 1e6), cards: clamp(Math.floor(+nn.cards || 0), 0, 1e6), quests: clamp(Math.floor(+nn.quests || 0), 0, 1e6),
     duty: clamp(Math.floor(+nn.duty || 0), 0, 1e6), repairs: clamp(Math.floor(+nn.repairs || 0), 0, 1e6), mentor: clamp(Math.floor(+nn.mentor || 0), 0, 1e6), logs: clamp(Math.floor(+nn.logs || 0), 0, 1e6),
     shows: clamp(Math.floor(+nn.shows || 0), 0, 1e6), spars: clamp(Math.floor(+nn.spars || 0), 0, 1e6),
-    shores: clamp(Math.floor(+nn.shores || 0), 0, 1e6), aways: clamp(Math.floor(+nn.aways || 0), 0, 1e6) };
+    shores: clamp(Math.floor(+nn.shores || 0), 0, 1e6), aways: clamp(Math.floor(+nn.aways || 0), 0, 1e6),
+    phasers: clamp(Math.floor(+nn.phasers || 0), 0, 1e6) };
   const done = {};
   if (s.quest && s.quest.done && typeof s.quest.done === "object") {
     for (const [k, v] of Object.entries(s.quest.done)) if (dOf(v)) done[k] = v;
@@ -257,7 +284,22 @@ export const cardsLeft = (at) => { const r = daySlot(A().cards, at); return Math
 export function tickLtAct() {
   if (atDS9()) A().everDS9 = true;
   else if (A().shore) A().shore.visitDone = false;   // new dock visit gets a fresh evening
+  // LOW: undock / under way aborts an in-progress away mission cleanly
+  const s = A().session;
+  if (s && s.kind === "away") {
+    const underway = !!(G.sp && (G.sp.travel || G.sp.battle || G.sp.alert || !G.sp.location));
+    if (underway) abortAway("Ship under way — away team recalled.");
+  }
+  // Pin spar guest on the mat so they stay in frame with the Lt
+  if (s && s.kind === "spar" && s.phase === "chat" && s.mode === "near" && s.guest) pinSparGuest(s.guest);
   // no offline accrual — present-only; session freezes when not present
+}
+
+export function abortAway(why = "Away team recalled.") {
+  const s = A().session; if (!s || s.kind !== "away") return;
+  const who = s.guest; if (who) endApproach(who, "abort");
+  log(why, "warn"); toast(why, "warn");
+  daySlot(A().away).invite = null; A().away.mission = null; A().session = null;
 }
 
 function dayRec(rec, at = new Date()) {
@@ -596,6 +638,7 @@ function finishCards() {
 
 export function tickLtSession(dt) {
   const s = A().session; if (!s) return;
+  if (s.kind === "phaser" && s.phase === "range") { tickPhaserRange(dt); return; }
   if (!isPresent() || idlePaused() || badClock()) return;
   if (G.sp && (G.sp.battle || G.sp.alert)) {
     const who = s.guest || s.who; if (who) { clearLtActHold(who); endApproach(who, "alert"); }
@@ -1377,8 +1420,10 @@ export function startSpar(id) {
   try {
     if (G.lt && G.lt.deck === spot.deck) { G.lt.x = spot.x; G.lt.y = spot.y; G.lt.dir = spot.face; G.lt.mode = "idle"; G.lt.node = null; }
   } catch (e) {}
-  A().session = { kind: "spar", phase: "chat", who: guest, guest, step: 0, mode: gate.mode === "near" ? "near" : "comm", wins: 0, art: sparArtOn(), pose: sparArtOn() ? "punch" : null };
-  toast(`Sparring with ${occ(guest).short}${sparArtOn() ? "" : " · stand-in poses"}`, "info");
+  const gWho = guestSparWho(guest);
+  A().session = { kind: "spar", phase: "chat", who: guest, guest, step: 0, mode: gate.mode === "near" ? "near" : "comm", wins: 0, art: sparArtOn(), pose: sparArtOn() ? "punch" : null, guestSparWho: gWho, guestArt: !!gWho };
+  if (gate.mode === "near") pinSparGuest(guest);
+  toast(`Sparring with ${occ(guest).short}${sparArtOn() ? "" : " · stand-in poses"}${gWho ? "" : (crewSparArtOn() ? " · partner stand-in" : "")}`, "info");
   return { ok: true, yes: true };
 }
 
@@ -1403,11 +1448,11 @@ const SPAR_BEATS = [
 export function sparView() {
   const s = A().session; if (!s || s.kind !== "spar" || s.phase !== "chat") return null;
   if ((s.step | 0) >= SPAR_BEATS.length) {
-    return { kind: "spar", who: s.guest, mode: s.mode || "near", q: sparResultLine(s), choices: [], end: true, step: s.step, win: !!s.ltWin, art: !!s.art };
+    return { kind: "spar", who: s.guest, mode: s.mode || "near", q: sparResultLine(s), choices: [], end: true, step: s.step, win: !!s.ltWin, sparArt: !!s.art };
   }
   const beat = SPAR_BEATS[s.step | 0];
   return {
-    kind: "spar", who: s.guest, mode: s.mode || "near", art: !!s.art,
+    kind: "spar", who: s.guest, mode: s.mode || "near", sparArt: !!s.art,
     q: fill(beat.q, s.guest), end: false, step: s.step | 0,
     choices: beat.choices.map((c, j) => ({ j, text: c.t, style: c.style, op: c.op })),
   };
@@ -1432,6 +1477,7 @@ export function answerSpar(j) {
   if (ch.style === "agg") pWin += 0.02;
   if (ch.style === "show") pWin -= 0.05;
   if (s.art) s.pose = ch.style === "meas" ? "block" : "punch";
+  if (s.guest && s.mode === "near") pinSparGuest(s.guest);
   // holodeck fitness buff synergy if present
   try {
     const buffs = (P().holo && P().holo.buffs && P().holo.buffs.lt) || (G.prog.holo && G.prog.holo.buffs && G.prog.holo.buffs.lt);
@@ -1679,7 +1725,7 @@ export const AWAY_MISSIONS = {
       { q: "A Dominion handshake ghost flickers and dies. {short} does not blink.", choices: [
         { t: "Log and leave", op: 1, style: "care" },
         { t: "Copy the fragment", op: 2, style: "bold" },
-        { t: "'Hale would shoot it.'", op: 0, style: "bold" },
+        { t: "Stun the node — tap fire", op: 1, style: "bold", phaser: true },
       ]},
       { q: "Beam-up dust. No hull scrapes. The war is still out there — just not in your bones for one hour.", end: true, op: 1 },
     ],
@@ -1787,6 +1833,7 @@ export function answerAway(j) {
   if (s.guest && ch.op) nudge(s.guest, ch.op, "away-beat", true);
   if (ch.style === "bold") s.bold = (s.bold | 0) + 1;
   if (ch.style === "care") s.care = (s.care | 0) + 1;
+  if (ch.phaser) { s.phaserTap = (s.phaserTap | 0) + 1; toast("Phaser · stun — clean hit", "info"); }
   s.step = (s.step | 0) + 1;
   if (M.beats[s.step] && M.beats[s.step].end) {
     if (s.guest && M.beats[s.step].op) nudge(s.guest, M.beats[s.step].op, "away-beat", true);
@@ -1820,6 +1867,168 @@ function finishAway() {
 }
 
 
+
+// ============================== Crew spar sheets + phaser range ==============================
+/** Resolve crew spar sheet asset for roster id (personal → species → dept → null). */
+export function crewSparAsset(id) {
+  if (!id) return null;
+  const direct = CREW_SPAR_SHEETS[id];
+  if (direct) return direct;
+  try {
+    const o = occ(id); if (!o) return null;
+    const sp = o.species || (OWN_SHEETS[id] === "andorian" ? "andorian" : null);
+    if (sp && CREW_SPAR_SHEETS["_species_" + sp]) return CREW_SPAR_SHEETS["_species_" + sp];
+    const sl = SLOTMAP[o.slot];
+    const dept = sl && sl.dept;
+    if (dept === "command") return CREW_SPAR_SHEETS._dept_red || null;
+    if (dept === "ops" || dept === "eng" || dept === "sec" || dept === "svc") return CREW_SPAR_SHEETS._dept_gold || null;
+    if (dept === "sci" || dept === "med") return CREW_SPAR_SHEETS._dept_blue || null;
+  } catch (e) {}
+  return null;
+}
+
+/** Ensure CHAR_FRAMES["spar:"+asset] exists when IMG is loaded; return who key or null. */
+export function ensureCrewSparFrames(asset) {
+  if (!asset || !IMG[asset] || !IMG[asset].width) return null;
+  const who = "spar:" + asset;
+  if (CHAR_FRAMES[who] && CHAR_FRAMES[who].punch) return who;
+  const C = LT2_CELL;
+  const F = CHAR_FRAMES[who] = {};
+  ["punch", "block"].forEach((action, ai) => {
+    F[action] = {};
+    LT2_DIRS.forEach((dir, col) => {
+      F[action][dir] = [0, 1, 2].map(k => ({ img: asset, x: col * C.w, y: (ai * 3 + k) * C.h,
+        w: C.w, h: C.h, ax: C.ax, ay: C.ay, refH: LT2_STAND_H }));
+    });
+  });
+  const shift = CREW_SPAR_XSHIFT || { right: -12, left: 4 };
+  for (const act of ["punch", "block"]) {
+    for (const [dir, dax] of Object.entries(shift)) {
+      if (!F[act][dir]) continue;
+      F[act][dir] = F[act][dir].map(fr => ({ ...fr, ax: fr.ax - dax }));
+    }
+  }
+  return who;
+}
+
+export function guestSparWho(id) {
+  if (!crewSparArtOn()) return null;
+  const asset = crewSparAsset(id);
+  return asset ? ensureCrewSparFrames(asset) : null;
+}
+
+export function pinSparGuest(id) {
+  const n = npcOf(id); if (!n) return;
+  const spot = sparSpot();
+  if (n.deck !== spot.deck) { n.deck = spot.deck; }
+  const ox = spot.face === "right" ? 0.07 : -0.07;
+  n.x = spot.x + ox; n.y = spot.y; n.dir = spot.guestFace || "left";
+  n.mode = "idle"; n.path = null; n.next = null; n.action = null;
+  n.hidden = false;
+  // spar pose override consumed by renderer
+  const s = A().session;
+  if (s && s.kind === "spar" && s.guestSparWho) {
+    n._sparPose = s.pose === "punch" ? "block" : (s.pose === "block" ? "punch" : "talk");
+    n._sparWho = s.guestSparWho;
+  } else {
+    n._sparPose = "talk"; n._sparWho = null;
+  }
+}
+
+export function phaserLeft(at) { return Math.max(0, 1 - (dayRec(A().phaser, at).n | 0)); }
+export function phaserChipOk() {
+  if (blockedWhy() || phaserLeft() <= 0) return false;
+  const L = G.lt; if (!L || L.lift) return false;
+  if (gymRoomOn()) return L.deck === "gym";
+  return L.deck === "lounge" || L.deck === "berthing";
+}
+
+export function startPhaserRange() {
+  const why = blockedWhy(); if (why) return { ok: false, why };
+  if (phaserLeft() <= 0) return { ok: false, why: "already on the range today" };
+  if (!phaserChipOk()) return { ok: false, why: gymRoomOn() ? "meet in the Gym" : "training deck" };
+  const rec = dayRec(A().phaser); rec.n = 1; A().n.phasers++;
+  const artOn = phaserArtOn() && ensureLtPhaserFrames();
+  A().session = {
+    kind: "phaser", phase: "range", t: 0, dur: 25, hits: 0, miss: 0,
+    target: randTarget(), art: artOn, nextAt: 0.6, pose: "aim", xpPaid: 0,
+  };
+  if (A().session.target) A().session.target.born = 0;
+  toast("Phaser range · stun setting · tap targets", "info");
+  return { ok: true };
+}
+
+function randTarget() {
+  return { x: 18 + Math.random() * 64, y: 22 + Math.random() * 56, born: 0 };
+}
+
+export function tickPhaserRange(dt) {
+  const s = A().session; if (!s || s.kind !== "phaser" || s.phase !== "range") return;
+  if (!isPresent() || idlePaused() || badClock()) return;
+  if (G.sp && (G.sp.battle || G.sp.alert)) { finishPhaser(true); return; }
+  s.t = (s.t || 0) + dt;
+  if (s.poseUntil != null && s.t >= s.poseUntil) { s.pose = "aim"; s.poseUntil = null; }
+  if (!s.pose) s.pose = "aim";
+  if (s.t >= s.dur) { finishPhaser(false); return; }
+  // expire missed target
+  if (s.target && s.t - (s.target.born || 0) > 1.8) {
+    s.miss = (s.miss | 0) + 1; s.target = null; s.nextAt = s.t + 0.35;
+  }
+  if (!s.target && s.t >= (s.nextAt || 0)) {
+    s.target = randTarget(); s.target.born = s.t;
+  }
+  // Live UI: refresh ~8 Hz while range is open
+  s._uiAcc = (s._uiAcc || 0) + dt;
+  if (s._uiAcc >= 0.12) { s._uiAcc = 0; try { if (phaserUI.refresh) phaserUI.refresh(); } catch (e) {} }
+}
+
+export function phaserView() {
+  const s = A().session; if (!s || s.kind !== "phaser") return null;
+  if (s.phase === "done") {
+    return { kind: "phaser", end: true, q: s.summary || "Range closed.", hits: s.hits, miss: s.miss, left: 0 };
+  }
+  return {
+    kind: "phaser", end: false, phaserArt: !!s.art,
+    left: Math.max(0, Math.ceil((s.dur || 25) - (s.t || 0))),
+    hits: s.hits | 0, miss: s.miss | 0,
+    target: s.target ? { x: s.target.x, y: s.target.y } : null,
+    pose: s.pose || "aim",
+  };
+}
+
+export function phaserHit() {
+  const s = A().session; if (!s || s.kind !== "phaser" || s.phase !== "range") return null;
+  if (!s.target) { s.miss = (s.miss | 0) + 1; return { hit: false }; }
+  const tgt = s.target;
+  s.hits = (s.hits | 0) + 1; s.lastHit = tgt; s.pose = "fire"; s.poseUntil = (s.t || 0) + 0.35;
+  s.target = null; s.nextAt = (s.t || 0) + 0.25;
+  return { hit: true, target: tgt };
+}
+
+export function answerPhaser() {
+  const s = A().session; if (!s || s.kind !== "phaser") return null;
+  if (s.phase === "done") { A().session = null; return { done: true, line: s.summary }; }
+  return finishPhaser(false);
+}
+
+function finishPhaser(aborted) {
+  const s = A().session; if (!s || s.kind !== "phaser") return { done: true };
+  if (s.phase === "done") return { done: true, line: s.summary, xp: s.xpPaid || 0, hits: s.hits | 0 };
+  const hits = s.hits | 0;
+  const xp = aborted ? 0 : clamp(3 + Math.min(2, Math.floor(hits / 4)), 0, 5);
+  if (xp && !s.xpPaid) { awardXP(xp, "manual", "phaser-range"); s.xpPaid = xp; }
+  const line = aborted
+    ? "Phaser range cut short — red alert."
+    : `Phaser range: ${hits} hit${hits === 1 ? "" : "s"}, stun setting.`;
+  log(line, aborted ? "warn" : "good");
+  s.phase = "done"; s.summary = line + (xp ? ` · +${xp} XP` : ""); s.xpPaid = s.xpPaid || xp;
+  // Notify UI to flip to end card
+  try { if (typeof phaserUI !== "undefined" && phaserUI.refresh) phaserUI.refresh(); } catch (e) {}
+  return { done: true, line: s.summary, xp: s.xpPaid || 0, hits };
+}
+export const phaserUI = { refresh: null }; // set by ui/lt-act.js
+
+
 export function chipsHtml() {
   let h = "";
   if (mealChipOk()) h += `<button class="chip mealc hasart" data-ltact="meal"><img class="chipart" src="assets/chip-meal.webp" alt="">Share a meal ▸</button>`;
@@ -1836,6 +2045,7 @@ export function chipsHtml() {
   if (sparChipOk()) h += `<button class="chip sparc" data-ltact="spar">Sparring ▸</button>`;
   if (shoreChipOk()) h += `<button class="chip shoreevec" data-ltact="shore">Shore evening ▸</button>`;
   if (awayChipOk()) h += `<button class="chip awayc" data-ltact="away">Away team ▸</button>`;
+  if (phaserChipOk()) h += `<button class="chip phaserc" data-ltact="phaser">Phaser range ▸</button>`;
   if (A().quest.active) {
     const q = QUESTS[A().quest.active.id];
     if (q) h += `<button class="chip questc" data-ltact="quest">Quest: ${q.title} ▸</button>`;

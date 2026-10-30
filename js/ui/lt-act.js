@@ -100,12 +100,16 @@ function renderChat() {
   const tag = v.mode === "comm" ? "📶 " : "";
   const choices = (v.choices || []).map(c => `<button class="holoinv" data-ltact-ans="${c.j}" style="min-height:44px;width:100%;text-align:left">${esc(c.text)}</button>`).join("");
   const endBtn = v.end ? `<button class="close" data-ltact-ans="0" style="min-height:44px">Done</button>` : "";
-  const art = v.art ? `<div class="ltact-still" data-art="${esc(v.art)}"><img alt="" src="assets/story/${esc(v.art)}.webp" onerror="this.parentNode.classList.add('none')"></div>` : "";
+  const artKey = (typeof v.art === "string" && v.art) ? v.art : null;
+  const art = artKey ? `<div class="ltact-still" data-art="${esc(artKey)}"><img alt="" src="assets/story/${esc(artKey)}.webp" onerror="this.parentNode.classList.add('none')"></div>` : "";
   m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>${tag}${esc((v.title || v.kind || "CHAT").toString().toUpperCase())}</h3>
     ${art}
     <p class="mline">${esc(v.q)}</p>
     <div class="holoinvs" style="flex-direction:column">${choices}</div>
   </div><div class="holofoot">${endBtn}<button class="close" data-ltact-dismiss="1" style="min-height:44px">NOT NOW</button></div></div>`;
+  m.classList.toggle("showin", v.kind === "show");
+  m.classList.toggle("sparring", v.kind === "spar");
+  m.classList.toggle("phaser", v.kind === "phaser");
   m.hidden = false;
 }
 
@@ -116,6 +120,7 @@ export function openQuest() {
 
 export function refreshLtAct() {
   const s = LA.A().session;
+  if (s && s.kind === "phaser" && (s.phase === "range" || s.phase === "done")) { renderPhaser(); return; }
   if (s && s.phase === "chat") renderChat();
   else if (s && s.phase === "watch") renderChat();
   else if (s && s.phase === "approach") {
@@ -257,6 +262,116 @@ function renderSparInvite() {
 }
 
 
+export function openPhaser() {
+  const why = LA.blockedWhy(); if (why) { toast(why, "warn"); return; }
+  if (LA.phaserLeft() <= 0) { toast("Already on the range today", "warn"); return; }
+  if (!LA.phaserChipOk()) { toast(LA.gymRoomOn() ? "Meet in the Gym" : "Need a training deck", "warn"); return; }
+  const s = LA.A().session;
+  if (s && s.kind === "phaser") { refreshLtAct(); return; }
+  if (LA.gymRoomOn() && G.lt.deck !== "gym") rideLiftTo("gym", { kind: "use", node: "mat" });
+  const r = LA.startPhaserRange();
+  if (!r.ok) { toast(r.why, "warn"); return; }
+  renderPhaser();
+}
+
+function renderPhaser() {
+  const m = modal("ltActChat");
+  m.classList.add("phaser"); m.classList.remove("showin", "sparring");
+  const v = LA.phaserView();
+  if (!v) { m.hidden = true; return; }
+  if (v.end) {
+    m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3>PHASER RANGE · DONE</h3>
+      <p class="mline">${esc(v.q)}</p></div>
+      <div class="holofoot"><button class="close" data-ltact-phaser-done="1" style="min-height:44px">Done</button></div></div>`;
+    m.hidden = false; return;
+  }
+  // Rebuild body each refresh so countdown + target move; keep structure stable for taps
+  m.innerHTML = `<div class="card holocard ltactcard"><div class="holobody"><h3 id="phaserTitle">PHASER RANGE · ${v.left | 0}s</h3>
+    <p class="cnote" id="phaserNote">Tap targets (44px). Stun setting. ${v.hits | 0} hits · ${v.miss | 0} miss.</p>
+    <div id="phaserArena" class="phaser-arena" style="position:relative;height:min(36vh,220px);background:#0a1420;border-radius:12px;overflow:hidden;touch-action:manipulation"></div>
+  </div><div class="holofoot"><button class="close" data-ltact-dismiss="1" style="min-height:44px">LEAVE RANGE</button></div></div>`;
+  m.hidden = false;
+  const arena = m.querySelector("#phaserArena");
+  if (!arena) return;
+  paintPhaserArena(arena, v);
+}
+
+function paintPhaserArena(arena, v) {
+  arena.innerHTML = "";
+  // Optional Lt pose strip when phaserArt loaded (preview / future)
+  if (v.phaserArt) {
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = 80; canvas.height = 160;
+      canvas.style.cssText = "position:absolute;left:4px;bottom:4px;width:48px;height:96px;image-rendering:pixelated;pointer-events:none;opacity:.95";
+      canvas.className = "phaser-lt";
+      arena.appendChild(canvas);
+      drawPhaserLtPreview(canvas, v.pose || "aim");
+    } catch (e) {}
+  }
+  if (!v.target) return;
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "phaser-tgt"; b.setAttribute("aria-label", "Target");
+  b.style.cssText = `position:absolute;left:${v.target.x}%;top:${v.target.y}%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:2px solid #8cf;background:radial-gradient(circle at 40% 35%,#dff,#2a6ea8 55%,#0a2038);box-shadow:0 0 12px #4af8;min-width:44px;min-height:44px;padding:0;cursor:pointer;z-index:2`;
+  b.addEventListener("click", ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const r = LA.phaserHit();
+    if (r && r.hit) flashPhaserBeam(arena, v.target);
+    renderPhaser();
+  });
+  arena.appendChild(b);
+}
+
+function flashPhaserBeam(arena, tgt) {
+  if (!tgt || !arena) return;
+  const beam = document.createElement("div");
+  beam.className = "phaser-beam";
+  // from bottom-centre (stand-in muzzle) to target %
+  const x0 = 50, y0 = 100, x1 = tgt.x, y1 = tgt.y;
+  const dx = x1 - x0, dy = y1 - y0;
+  const len = Math.hypot(dx, dy);
+  const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  beam.style.cssText = `position:absolute;left:${x0}%;top:${y0}%;width:${len}%;height:3px;margin:0;transform-origin:0 50%;transform:rotate(${ang}deg);background:linear-gradient(90deg,#8cf,#fff 35%,#4af8);pointer-events:none;z-index:1;opacity:1;box-shadow:0 0 8px #4af`;
+  // If preview IMG has the beam sheet, overlay it stretched (no assets/ fetch)
+  try {
+    import("../assets.js").then(({ IMG }) => import("../data.js").then(({ PHASER_SHEET }) => {
+      const im = IMG[PHASER_SHEET.beam];
+      if (!im || !im.width) return;
+      beam.style.height = "8px";
+      beam.style.background = `url(${im.src}) left center / auto 100% no-repeat`;
+    }));
+  } catch (e) {}
+  arena.appendChild(beam);
+  setTimeout(() => { try { beam.remove(); } catch (e) {} }, 180);
+}
+
+async function drawPhaserLtPreview(canvas, pose) {
+  try {
+    const { IMG } = await import("../assets.js");
+    const { PHASER_SHEET, CHAR_FRAMES } = await import("../data.js");
+    LA.ensureLtPhaserFrames();
+    const img = IMG[PHASER_SHEET.img]; if (!img || !img.width) return;
+    const fi = pose === "fire" ? 2 : pose === "draw" ? 0 : 1;
+    const fr = CHAR_FRAMES.lt && CHAR_FRAMES.lt.phaser && CHAR_FRAMES.lt.phaser.down && CHAR_FRAMES.lt.phaser.down[fi];
+    if (!fr) return;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const scale = canvas.height / fr.h;
+    ctx.drawImage(img, fr.x, fr.y, fr.w, fr.h, canvas.width / 2 - fr.ax * scale, canvas.height - fr.ay * scale, fr.w * scale, fr.h * scale);
+  } catch (e) {}
+}
+
+// Wire live refresh from sim tick
+LA.phaserUI.refresh = () => {
+  const s = LA.A().session;
+  if (!s || s.kind !== "phaser") return;
+  const m = document.getElementById("ltActChat");
+  if (!m || m.hidden) return;
+  renderPhaser();
+};
+
+
+
 export function openShore() {
   const why = LA.blockedWhy(); if (why) { toast(why, "warn"); return; }
   if (!LA.shoreGranted()) { toast("Request shore leave first", "warn"); return; }
@@ -310,7 +425,7 @@ function renderAwayPick() {
 
 
 function act(e) {
-  const t = e.target.closest("[data-ltact],[data-ltact-ask],[data-ltact-solo],[data-ltact-start],[data-ltact-close],[data-ltact-game],[data-ltact-accept],[data-ltact-ans],[data-ltact-dismiss],[data-ltact-goto],[data-ltact-repair],[data-ltact-mentor],[data-ltact-log],[data-ltact-logwrite],[data-ltact-showstart],[data-ltact-spar],[data-ltact-shore],[data-ltact-away]");
+  const t = e.target.closest("[data-ltact],[data-ltact-ask],[data-ltact-solo],[data-ltact-start],[data-ltact-close],[data-ltact-game],[data-ltact-accept],[data-ltact-ans],[data-ltact-dismiss],[data-ltact-goto],[data-ltact-repair],[data-ltact-mentor],[data-ltact-log],[data-ltact-logwrite],[data-ltact-showstart],[data-ltact-spar],[data-ltact-shore],[data-ltact-away],[data-ltact-phaser-done]");
   if (!t || t.disabled) return;
   const D = t.dataset;
   if (D.ltact === "meal") { openMeal(); return; }
@@ -326,6 +441,7 @@ function act(e) {
   if (D.ltact === "spar") { openSpar(); return; }
   if (D.ltact === "shore") { openShore(); return; }
   if (D.ltact === "away") { openAway(); return; }
+  if (D.ltact === "phaser") { openPhaser(); return; }
   if (D.ltactClose) { closeAll(); return; }
   if (D.ltactGame) {
     const m = document.getElementById("ltActPanel"); if (m) m.dataset.game = D.ltactGame;
@@ -389,6 +505,9 @@ function act(e) {
     } else if (s && s.kind === "spar") {
       const r = LA.answerSpar(+D.ltactAns);
       if (r && r.done) { closeAll(); toast(r.win ? "You took the bout" : "They took the bout", "good"); } else refreshLtAct();
+    } else if (s && s.kind === "phaser") {
+      const r = LA.answerPhaser(+D.ltactAns);
+      if (r && r.done) { closeAll(); toast(r.line || "Range closed", "good"); } else refreshLtAct();
     } else if (s && s.kind === "shore") {
       const r = LA.answerShore(+D.ltactAns);
       if (r && r.done) { closeAll(); toast("Shore evening done", "good"); } else refreshLtAct();
@@ -457,6 +576,12 @@ function act(e) {
     const who = document.getElementById("ltLogWho")?.value || null;
     const r = LA.writeLog({ open, close, who: who || null });
     if (!r.ok) toast(r.why, "warn"); else { closeAll(); toast("Log filed", "good"); }
+    return;
+  }
+  if (D.ltactPhaserDone) {
+    const r = LA.answerPhaser();
+    closeAll();
+    if (r && r.line) toast(r.line, "good");
     return;
   }
   if (D.ltactDismiss) { LA.dismissSession(); closeAll(); return; }

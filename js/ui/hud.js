@@ -262,10 +262,26 @@ export function updateHud() {
     const top = items[0], rf = top.kind === "task" ? top.task.t / (top.task.dur || 1) : top.kind === "job" && top.job.dur > 0 ? top.job.t / top.job.dur : null;
     const rg = rf == null ? "" : `<i class="pring ${ringBand(rf)}" style="--f:${Math.max(0, Math.min(1, rf)).toFixed(3)}"></i>`;   // Q1: countdown ring (drains green -> amber -> red)
     // fix 1: two lines at most; a fault keeps its system name (the verb / priority word goes first, then the severity: fitPill)
-    const body = top.kind === "task" ? esc(`CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s`) : top.kind === "job" ? esc(`${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}`)
-      : `<span class="vb">${firstWatch() ? "TAP TO REPAIR: " : esc(PRI_LABEL[top.pri]) + " — "}</span><span class="nm">${esc(SYSTEMS[top.id].name)}</span><span class="sv"> · ${esc(SEV_LABEL[top.sev])}</span>`;   // #10: the first watch says what to do
-    setPill(pill, "alert-pill lc pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : ""), rg + `<span class="g1">${body}</span>`);
-    pill.onclick = () => top.kind === "task" ? sendUse(top.task.node) : top.kind === "job" ? sendUse(top.job.node) : sendRepair(top.id);
+    // LOW: quest / repair-call are not SYSTEMS — never read SYSTEMS[top.id].name (Diallo quest deck-switch crash)
+    let body;
+    if (top.kind === "task") body = esc(`CAPTAIN — Deck task · ${Math.ceil(top.task.t)}s`);
+    else if (top.kind === "job") body = esc(`${top.job.kind === "incident" ? "INCIDENT" : top.job.chain ? `ODD JOB ${top.job.chain.step}/${top.job.chain.of}` : "ODD JOB"} — ${top.job.label}`);
+    else if (top.kind === "quest") {
+      const dk = top.deck && DECKS[top.deck] ? DECKS[top.deck].name : "";
+      body = esc(`ASK — ${top.title}${top.who ? " · " + top.who : ""}${dk ? " · " + dk : ""}`);
+    } else if (top.kind === "repair-call") body = esc(`CALL — ${top.title || "Repair"}`);
+    else {
+      const sys = SYSTEMS[top.id];
+      body = `<span class="vb">${firstWatch() ? "TAP TO REPAIR: " : esc(PRI_LABEL[top.pri]) + " — "}</span><span class="nm">${esc(sys ? sys.name : top.id)}</span><span class="sv"> · ${esc(SEV_LABEL[top.sev] || "")}</span>`;
+    }
+    setPill(pill, "alert-pill lc pri-" + top.pri + (top.kind === "task" ? " sev-task" : "") + (top.kind === "job" ? " job" : "") + (top.kind === "quest" ? " quest" : ""), rg + `<span class="g1">${body}</span>`);
+    pill.onclick = () => {
+      if (top.kind === "task") sendUse(top.task.node);
+      else if (top.kind === "job") sendUse(top.job.node);
+      else if (top.kind === "quest") { try { document.querySelector('[data-ltact="quest"]')?.click(); } catch (e) {} import("./lt-act.js").then(H => H.openQuest && H.openQuest()); }
+      else if (top.kind === "repair-call") { try { import("./lt-act.js").then(H => H.openRepair && H.openRepair()); } catch (e) {} }
+      else sendRepair(top.id);
+    };
   } else if (G.sp.battle) {   // Q1 #6: in a fight with no faults the pill is the red alert and T'Ren's read (never a parked odd job)
     const tr = threatRead(); setRaPill(pill, tr, false); pill.className = "alert-pill pri-1 rapill"; pill.onclick = () => RA.openView();   // RA(a): the battle view (batch (b) hangs its call here)
   } else {   // Bigger wins #10: one goal at a time instead of "All systems nominal"

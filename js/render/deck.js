@@ -8,7 +8,7 @@ import { cardTableProp, A as ltActA } from "../lt-act.js";
 import { lieArt, seatArt, SEAT_COLS, ART_SCALE, isTintBase, tintedSheet } from "../art-hooks.js";
 import { SLOTMAP, DEPTS } from "../roster.js";
 import { tren, trenSeat } from "../npc.js";
-import { ambientOnDeck, ltChatPartner, seatedOn } from "../npc-ambient.js";
+import { ambientOnDeck, ltChatPartner, seatedOn, npcOf } from "../npc-ambient.js";
 import { IMG } from "../assets.js";
 import { clamp, dDist } from "../util.js";
 import { ZONE, LIFT_T, HEAD_Y } from "../crew.js";
@@ -92,6 +92,18 @@ export function updateCam(dt) {
   let tx = L.x * DW, ty = L.y * DH - FIG_H * 0.45;
   const nd = L.mode === "use" && L.node && NODEMAP[L.node];
   if (nd && nd.lie) { tx = nd.lie[0] * DW; ty = nd.lie[1] * DH; }
+  // LOW: keep spar partner / show-in guest in frame with the Lt
+  try {
+    const s = ltActA && ltActA().session;
+    if (s && (s.kind === "spar" || s.kind === "show") && s.phase === "chat" && s.mode === "near" && s.guest) {
+      const n = npcOf(s.guest);
+      if (n && n.deck === L.deck && n.x != null) {
+        tx = (L.x + n.x) * 0.5 * DW;
+        ty = (L.y + n.y) * 0.5 * DH - FIG_H * 0.55;
+        if (cam.h && cam.w && cam.h > cam.w) ty -= FIG_H * 0.15; // phone: clear of bottom chat sheet
+      }
+    }
+  } catch (e) {}
   if (cam.manualT > 0) cam.manualT -= dt;
   else if (cam.snap) { cam.x = tx; cam.y = ty; }
   else { const k = 1 - Math.exp(-dt * 5); cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; }
@@ -130,6 +142,10 @@ function ltAction(L, nd) {
   try {
     const s = ltActA && ltActA().session;
     if (s && s.kind === "spar" && s.phase === "chat" && s.art && (s.pose === "punch" || s.pose === "block")) return s.pose;
+    if (s && s.kind === "phaser" && s.phase === "range" && s.art) {
+      // Map pose → phaser frame set (draw/aim/fire as A/M/B of action "phaser")
+      return "phaser";
+    }
   } catch (e) {}
   if (L.mode === "use" && ltChatPartner()) return "talk";   // chatting with an ambient crew member (mess / bar)
   if (L.mode === "repair") { const sy = SYSTEMS[L.repairSys]; return (sy && sy.repairPose) || "weld"; }
@@ -388,7 +404,10 @@ export function drawDeck(ctx, t, dt) {
     if (L.deck === "bridge") { const ts = trenSeat();   // art batch 2: seated at home (first officer's seat), sorted by the hip
       cast.push(ts ? { y: ts.seat.at[1], x: tren.x, id: "tren", seat: ts.id, draw: () => drawSeated(ctx, t, ts, "tren", TREN_AS, tren.action === "talk") } : { y: tren.y, x: tren.x, id: "tren", draw: () => drawTren(ctx, t) }); }
     for (const n of ambientOnDeck(L.deck)) { const sn = seatedOn(n);
-      cast.push(sn ? { y: sn.seat.at[1], x: n.x, id: n.occId, seat: sn.id, draw: () => drawSeated(ctx, t, sn, n.who, n.anim, n.action === "talk") } : { y: n.y, x: n.x, id: n.occId, draw: () => drawWalker(ctx, n.who, n, n.action, t, n.anim) }); }
+      const sparAct = (n._sparWho && n._sparPose && (n._sparPose === "punch" || n._sparPose === "block")) ? n._sparPose : null;
+      const sparWho = sparAct ? n._sparWho : n.who;
+      const act = sparAct || n.action;
+      cast.push(sn ? { y: sn.seat.at[1], x: n.x, id: n.occId, seat: sn.id, draw: () => drawSeated(ctx, t, sn, n.who, n.anim, n.action === "talk") } : { y: n.y, x: n.x, id: n.occId, draw: () => drawWalker(ctx, sparWho, n, act, t, n.anim) }); }
     if (L.deck === "medical") patients().forEach((_, i) => cast.push({ y: PATIENT_BEDS[i][1], x: PATIENT_BEDS[i][0], id: "patient" + i, draw: () => drawPatient(ctx, t, i) }));   // phase 6: patients on the biobeds
   }
   // back to front by feet y; equal y breaks by x, then id, so the order never flickers (audit C5)

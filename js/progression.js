@@ -336,6 +336,8 @@ export const PROG = {
     gymRoom: true,      // Wave C: deck_gym_v1 approved — spar on mat
     awayArt: false,     // Wave D: brand-new away-mission stills (OFF — reuse existing)
     ds9Art: false,      // Wave D: temple/habitat stills (OFF — reuse promenade/Quark)
+    crewSparArt: false, // Crew spar sheets (punch/block); OFF — idle/talk stand-in
+    phaserArt: false,   // Lt/crew shoot poses + beam/target sprites; OFF — line beam + canvas targets
   },
   // ---- phase 5: promotion boards. Near a rank threshold (readiness 100, early call-up or the Lt guarantee) the board sits
   // instead of a silent promotion: Okafor chairs the engineering-track boards, T'Ren the command one. The board never

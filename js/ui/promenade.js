@@ -31,7 +31,7 @@ export function promRows() {
   const eveOk = LA.shoreChipOk(), awayOk = LA.awayChipOk(), awayWhy = LA.awayReadyWhy();
   return [
     { k: "gifts", label: "Gifts", sub: `Promenade shop · locker ${GF.lockerCount()}/${PROG.gifts.invMax}`, ok: true },
-    { k: "shore", label: "Shore leave", sub: st.ok ? `${CARE.shoreRep} rep if granted · ${CC.shoreOdds()}` : st.why, ok: st.ok },
+    { k: "shore", label: "Shore leave", sub: st.ok ? `${CARE.shoreRep} rep if granted · ${CC.shoreOdds()}` : `${CARE.shoreRep} rep · ${st.why}`, ok: st.ok },
     { k: "shoreEve", label: "Shore evening", sub: eveOk ? "Quark · temple · walk · holosuite · shop" : (LA.shoreGranted() ? "already used this visit" : "after shore leave is granted"), ok: eveOk },
     { k: "away", label: "Away team", sub: awayOk ? "present landing-party beat · 1/day" : (awayWhy || "unavailable"), ok: awayOk },
     { k: "holo", label: "Holosuite", sub: `Quark's holosuites · programs in ${cur}`, ok: true },

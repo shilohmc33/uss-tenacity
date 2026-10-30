@@ -388,7 +388,45 @@ export const CREW_SHEET_PICK = { hale: "human_m2", seo: "human_f2", diallo: null
 // Sheets packed from hi-res masters by tools/pack-masters.py use a larger cell (no clipped weld sparks), same draw scale
 // (standing ~252 cell px -> FIG_H): img -> { w, h, ax, ay }. Anything not listed uses LT2_CELL (160x384, feet 80,376).
 // crewmates with their OWN sheet, by roster id (checked before species / tint-base / uniform fallbacks; works for old saves too)
-export const OWN_SHEETS = { thelev: "andorian", okafor: "okafor" };   // art batch 1: Thelev sh'Zarath -> thelev-v1; art batch 2: Cmdr Okafor -> okafor-v2
+export const OWN_SHEETS = { thelev: "andorian", okafor: "okafor" };
+// Crew spar sheets (same layout as lt-spar-v1: 160×384, feet (80,376), cols up/down/right/left, rows punchA/M/B then blockA/M/B).
+// Per-crew asset when drawn; else department/species generic key. Flag PROG.ltAct.crewSparArt gates use; missing IMG → idle/talk.
+// x offsets applied like lt-spar (right −12, left +4) via applyCrewSparXShift below once frames exist.
+export const CREW_SPAR_SHEETS = {
+  // Named crew (artist delivering per-person sheets for Shiloh review)
+  hale: "hale-spar-v1",
+  okafor: "okafor-spar-v1",
+  thelev: "thelev-spar-v1",
+  diallo: "diallo-spar-v1",
+  orvin: "orvin-spar-v1",
+  tren: "tren-spar-v1",
+  // Department / species generics (fallback when no personal sheet)
+  _dept_gold: "crew-spar-gold-v1",
+  _dept_blue: "crew-spar-blue-v1",
+  _dept_red: "crew-spar-red-v1",
+  _species_andorian: "crew-spar-andorian-v1",
+  _species_vulcan: "crew-spar-vulcan-v1",
+  _species_bolian: "crew-spar-bolian-v1",
+  _species_trill: "crew-spar-trill-v1",
+  _species_betazoid: "crew-spar-betazoid-v1",
+};
+export const CREW_SPAR_XSHIFT = { right: -12, left: 4 }; // ax' = ax - shift (same as lt-spar-v1)
+// Lt phaser sheet (lt_phaser_v1 — Artist delivered, Shiloh not yet approved → phaserArt OFF, not in IMAGES).
+// 640×1152, 160×384 cells, cols U/D/R/L, 3 rows phaserA=draw / phaserM=aim / phaserB=fire. NO x shift.
+// muzzle_px: cell-local tip of the emitter (from frames_info.json). Beam emitter at x=0 of fx-phaser-beam (512×32).
+export const PHASER_SHEET = {
+  img: "lt-phaser-v1",
+  beam: "fx-phaser-beam",
+  hit: "fx-phaser-hit",
+  cell: { w: 160, h: 384, ax: 80, ay: 376 },
+  action: "phaser",           // single action, frames A=draw M=aim B=fire
+  xShift: null,               // none
+  muzzle_px: { up: [115, 129], down: [72, 148], right: [153, 138], left: [6, 138] },
+  beamSize: { w: 512, h: 32, emitterX: 0, centreY: 16 },
+  hitSize: { w: 96, h: 96, frames: 3, fps: 12, cx: 48, cy: 48 },
+};
+
+   // art batch 1: Thelev sh'Zarath -> thelev-v1; art batch 2: Cmdr Okafor -> okafor-v2
 export const SHEET_CELL = {
   "thelev-v1": { w: 240, h: 288, ax: 120, ay: 280 },
   "okafor-v2": { w: 240, h: 288, ax: 120, ay: 280 },
@@ -467,6 +505,7 @@ for (const [who, sheets] of Object.entries(CHAR_SHEETS)) {
     }
   }
 })();
+
 
 // back-compat names for the Lieutenant
 export const LT2_SHEETS = CHAR_SHEETS.lt;
